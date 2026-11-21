@@ -1000,6 +1000,9 @@ function state() {
   // How the side panel sits on a wide screen (board.panelMode, QA-1c Q5): read fresh and part of the cache key, so a
   // change in the gear reaches the open board on its next poll without a restart.
   const panelMode = KK.boardPanelMode(fresh);
+  // The display switches (roadmap 0ø J1, J3, J4: tab title count, shortcuts, quick filters), read fresh the same way.
+  const display = KK.boardDisplay(fresh);
+  const displayKey = JSON.stringify(display);
   // catalog.captureAnswers (roadmap 0z Z-A): read fresh and part of the cache key like panelMode, so `settings set`
   // shows or hides "Keep as design choice" on the next poll.
   const captureAnswers = CATALOG.setupOf(fresh).captureAnswers;
@@ -1015,6 +1018,7 @@ function state() {
     quick.zonesDetect === zonesDetect &&
     quick.listening === listening &&
     quick.panelMode === panelMode &&
+    quick.displayKey === displayKey &&
     quick.captureAnswers === captureAnswers &&
     quick.mtime === mtime &&
     quick.updateKey === updateKey &&
@@ -1111,6 +1115,8 @@ function state() {
     listening,
     // The side panel's mode on a wide screen: "float" (over the board, default) or "beside" (the board makes room).
     panelMode,
+    // board.titleCount, .shortcuts, .quickFilters (lib/queueConfig.js boardDisplay).
+    boardDisplay: display,
   };
   // Each step gets status and rests; a step with only rests shows them in the title and the label (the focus line
   // reads the label, the cards and the panel the title), not as an empty step.
@@ -1144,6 +1150,7 @@ function state() {
     stat: s?.version ?? null,
     listening,
     panelMode,
+    displayKey,
     captureAnswers,
     zonesDetect,
     notBuildingKey: notBuilding.key,

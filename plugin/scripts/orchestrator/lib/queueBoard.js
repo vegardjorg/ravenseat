@@ -217,6 +217,39 @@ function aging(o, ageLimits, now = Date.now()) {
 }
 
 /**
+ * When the task last changed, for the "Changed 24 h" quick filter (roadmap 0ø J4): the newest of the times the queue
+ * already writes on the task (added, picked, started, delivered, reviewed, done, a blocker opened or closed, the gate
+ * check). No new field or log file (owner answer 3, plans/jira-vurdering-2026-11-18.md). An owner edit of the title or
+ * the priority alone does not move it.
+ * @returns {string|null} ISO time, or null when the task has none
+ */
+const CHANGED_FIELDS = ['added_at', 'picked_at', 'started', 'delivered', 'review_at', 'done', 'archived_at'];
+function lastChanged(o) {
+  const times = CHANGED_FIELDS.map((f) => o?.[f]);
+  for (const b of Array.isArray(o?.blocks) ? o.blocks : []) times.push(b?.from, b?.to);
+  times.push(o?.gate_check?.at, o?.gate_check?.time);
+  let best = null;
+  let bestMs = -Infinity;
+  for (const x of times) {
+    const ms = typeof x === 'string' ? Date.parse(x) : NaN;
+    if (Number.isFinite(ms) && ms > bestMs) {
+      best = x;
+      bestMs = ms;
+    }
+  }
+  return best;
+}
+
+/**
+ * The "Red gate" quick filter (J4): an open task whose gates or done command failed, either as the open gate-red block
+ * `ravenseat merge` opens (lib/logic/monitor.js) or as the last gate check on the task (gate_check.ok false).
+ */
+function gateRed(o) {
+  if (!o || o.status === 'done' || o.status === 'cancelled') return false;
+  return L.openBlockOf(o)?.code === 'gate-red' || o.gate_check?.ok === false;
+}
+
+/**
  * Board: cards per column, WIP and project lanes, and "Next up" and "Waiting on you".
  * @param {object} queue queue (queue.json)
  * @param {{ now?: number, uncommitted?: string[], branches?: Record<string, { commits: number, lastCommit: string|null }>,
@@ -415,6 +448,9 @@ function buildBoard(
       start,
       old,
       aging: agingState,
+      // The quick filters "Changed 24 h" and "Red gate" (J4): the newest of the task's own times, and a failed gate.
+      changed_at: lastChanged(o),
+      gate_red: gateRed(o),
       // SILENT: running with an agent worktree but no sign of life (only running cards can be in the list).
       silent: silentFor.get(o.id) ?? null,
       // The merge gate as progress: the chosen reviewers that reported after receive, and any HIGH (only in Review).
@@ -2881,6 +2917,8 @@ module.exports = {
   unlocksOf,
   chain,
   aging,
+  lastChanged,
+  gateRed,
   nextUp,
   inbox,
   sortList,

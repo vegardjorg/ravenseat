@@ -1321,6 +1321,23 @@ const SETTINGS = Object.freeze([
     'float: on a wide screen the panel opens over the board, so nothing moves, and a click outside closes it. ' +
     'beside: the board makes room for the panel and rewraps while it is open. Below 1200 px it covers the board in ' +
     'both.', { ...BASIC, choices: ['float', 'beside'] }),
+  // Roadmap 0ø J1. Friction: none; the board often sits in a background tab, and the count is a quiet signal instead of
+  // desktop notifications (which stay off). It counts only what waits on the owner. Off: the plain title.
+  row('board.titleCount', 'board', 'onoff', 'Count in the tab title',
+    'The browser tab title starts with the number of decisions that wait on you, "(3) Queue board". Running tracks ' +
+    'are not counted. Off: the plain title.'),
+  // J3. Friction: none for most; a screen reader user may meet a clash with their own keys, so the shortcuts can be
+  // turned off here or from the ? overview. They never fire in text fields or dialogs, or with Ctrl, Alt or Cmd held,
+  // so the browser's own shortcuts are untouched. Not a guard.
+  row('board.shortcuts', 'board', 'onoff', 'Keyboard shortcuts',
+    'One-key shortcuts on the whole board: ? lists them, / goes to the search, g and a letter opens a tab, j and k ' +
+    'move between cards. Never in text fields or dialogs. Off: only the keys on a focused card and in Decisions.',
+    BASIC),
+  // J4. Friction: a row of three buttons over the columns takes a little room; off in lite so the first board stays
+  // simple (owner answer 6). They only filter what is shown, never what the queue does.
+  row('board.quickFilters', 'board', 'onoff', 'Quick filter buttons',
+    'Buttons over the columns: Changed 24 h, Older than usual and Red gate. Each filters the cards; several combine. ' +
+    'On in full mode, off in lite.', { defaultByMode: { lite: false, full: true } }),
   row('limits.autocompact', 'board', 'onoff', 'Automatic compaction',
     'On: Claude Code compacts the orchestrator session itself and the queue continues. Off: a ready /compact line; ' +
     'then also turn off auto-compaction in Claude Code ("autoCompactEnabled": false), or it compacts anyway.',
