@@ -71,6 +71,8 @@ function drawWaitingButton() {
   waitingButton.title = out
     ? `Opens Decisions. ${out} set aside on this board until it is reloaded; ravenseat decide still lists them`
     : 'Opens Decisions: questions, proposals to approve and checks that need you';
+  // The same number in the tab title (J1, board/route.js).
+  if (typeof drawTabTitle === 'function') drawTabTitle();
 }
 waitingButton?.addEventListener('click', () => openDecisions());
 

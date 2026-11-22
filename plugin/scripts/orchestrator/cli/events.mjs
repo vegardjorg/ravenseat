@@ -43,6 +43,30 @@ export function logLoad({ command, queue, load }) {
   }
 }
 
+/**
+ * The queue session's start and end (AW-5, lib/eventRows.js queueSessionStep): kind 'active' from start and fill,
+ * 'quiet' from a SILENT pulse-check. Writes the row and the small state file (QUEUE_SESSION_FILE) only when the step
+ * says so. Fail open, like every row here.
+ */
+export function logQueueSession({ kind, command = null, queue }) {
+  try {
+    const file = path.join(FOLDER, ER.QUEUE_SESSION_FILE);
+    let prev = null;
+    try {
+      prev = JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch {
+      prev = null; // no file yet, or a broken one: no open session
+    }
+    const running = (queue?.tasks ?? []).filter((o) => o.status === 'running').length;
+    const { row, next } = ER.queueSessionStep(prev, { kind, command, running });
+    if (!row) return;
+    fs.writeFileSync(file, `${JSON.stringify(next)}\n`);
+    logEvent(row);
+  } catch {
+    // error-ignored: measurement only
+  }
+}
+
 /** The file that remembers the newest push entry seen (ms) and its tips, so each push is logged once. */
 const PUSH_SEEN = path.join(FOLDER, 'push-seen.json');
 /** A first run (no state yet) logs the pushes in the reflog from this far back, at most PUSH_BACKFILL_MAX. */

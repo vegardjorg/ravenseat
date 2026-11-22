@@ -27,7 +27,7 @@ import {
   missionMark, reserveAttempt, runningAttempt, scratchpadFor, takenForMigr, trackReport, trackRoots,
 } from './tracks.mjs';
 import { askedLine, triageReason, triageState, writeTriageSteps } from './triage.mjs';
-import { detectPushes, logEvent, logLoad } from './events.mjs';
+import { detectPushes, logEvent, logLoad, logQueueSession } from './events.mjs';
 import { registerQuietly } from './reviewItem.mjs';
 
 // The accepted git baseline: recorded silently on first use, before anything starts (lib/gitSurfaceBaseline.js).
@@ -156,6 +156,7 @@ export function cmdStart() {
   const load = a.includes('--force') ? null : measureLoad();
   // One load row per start (cli/events.mjs), before the guards can stop it, so a stop (exit 7) is recorded too.
   logLoad({ command: 'start', queue: read(), load });
+  logQueueSession({ kind: 'active', command: 'start', queue: read() }); // AW-5: opens a queue session once
   const attemptLog = attemptRows(read().tasks.filter((x) => x.id === id));
   const r = edit((queue) => {
     const o = queue.tasks.find((x) => x.id === id);
@@ -285,6 +286,7 @@ export function cmdFill() {
   // One load row per fill (before the load guard can stop it with exit 7), and the pushes made since the last fill
   // (the reflog of the remote tracking ref). Both fail open (cli/events.mjs).
   logLoad({ command: 'fill', queue: read(), load });
+  logQueueSession({ kind: 'active', command: 'fill', queue: read() }); // AW-5: opens a queue session once
   detectPushes();
   const attemptLog = attemptRows(read().tasks.filter((x) => x.status === 'waiting' || x.status === 'running'));
   let quotaMessage = null;

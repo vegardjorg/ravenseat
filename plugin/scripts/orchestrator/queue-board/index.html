@@ -50,6 +50,8 @@
     <script src="/board/interact.js" defer></script>
     <script src="/board/top.js" defer></script>
     <script src="/board/cloud.js" defer></script>
+    <script src="/board/route.js" defer></script>
+    <script src="/board/keys.js" defer></script>
     <script src="/board/start.js" defer></script>
     <!-- The Plans room. The rules (queuePlanView.js) are the same file the tests use; plans.js draws. After
          the board (board/), so the key from the link is saved before Plans fetches the register. -->
@@ -291,6 +293,8 @@
          first state arrives (it stays empty until then). -->
     <div id="focusLine" class="focusLine" aria-label="Focus"></div>
     <div id="stripe" class="stripe" aria-label="Next up and the chain" hidden></div>
+    <!-- J4: the quick filter buttons (Changed 24 h, Older than usual, Red gate), drawn by board/views.js. -->
+    <div id="quick-filters" class="quick-filters" role="group" aria-label="Quick filters" hidden></div>
     <!-- Shown when the server answers 401 (restarted); polling stops until the key is in place. -->
     <div id="key-banner" class="key-banner" role="alert" hidden>
       <p class="key-banner-text">The board has been restarted. Run <code>ravenseat board open</code> for a tab with the new key, or paste a link with the key.</p>
@@ -336,6 +340,10 @@
         aria-labelledby="guard-title"
         aria-describedby="guard-text"
       ></div>
+    </div>
+    <!-- J3: the keyboard shortcut overview (?), drawn by board/keys.js. -->
+    <div id="keys-background" class="guard-background" hidden>
+      <div id="keys" class="guard keys" role="dialog" aria-modal="true" aria-labelledby="keys-title"></div>
     </div>
     <!-- The selection bar (shown when something is selected), the bulk action dialog and the "Undo" message. -->
     <div id="optionLine" class="optionLine" role="region" aria-label="Marked tasks" hidden></div>

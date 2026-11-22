@@ -828,6 +828,87 @@ const SPECIAL = {
 t.special = null;
 t.viewName = null;
 
+// ---- Quick filter buttons (roadmap 0ø J4) ----
+// Three buttons over the columns, each on and off with one click; several combine (a card must match each one that is
+// on). They apply to every column, unlike the quick filters in the Filter menu. board.quickFilters false (the default
+// in lite) hides the row and stops filtering, so a button left on in a browser cannot hide cards nobody can see why.
+// What is pressed is remembered per browser.
+const QUICK_STORAGE = 'queue-board-quick';
+const QUICK_DAY_MS = 86_400_000;
+const QUICK_FILTERS = [
+  {
+    id: 'changed24',
+    name: 'Changed 24 h',
+    title: 'Tasks that were added, started, delivered, blocked, checked or finished in the last 24 hours',
+    matches: (k) => !!k.changed_at && boardNow() - Date.parse(k.changed_at) <= QUICK_DAY_MS,
+  },
+  {
+    id: 'aging',
+    name: 'Older than usual',
+    title: 'Running or in review longer than 85 % of the tasks of the same class in the last 14 days',
+    matches: (k) => !!k.aging,
+  },
+  {
+    id: 'gateRed',
+    name: 'Red gate',
+    title: 'Open tasks whose gates or done command failed',
+    matches: (k) => k.gate_red === true,
+  },
+];
+t.quick = (() => {
+  try {
+    const x = JSON.parse(store.getItem(QUICK_STORAGE) ?? '[]');
+    return new Set(Array.isArray(x) ? x.filter((id) => QUICK_FILTERS.some((q) => q.id === id)) : []);
+  } catch {
+    return new Set();
+  }
+})();
+
+/** Does the card pass every quick filter button that is on? Always true while the row is switched off. */
+function quickMatch(k) {
+  if (!t.quick.size || !displayOn('quickFilters')) return true;
+  return QUICK_FILTERS.every((q) => !t.quick.has(q.id) || q.matches(k));
+}
+
+/** How many quick filter buttons filter now (the empty state counts them with the filters). */
+function quickCount() {
+  return displayOn('quickFilters') ? t.quick.size : 0;
+}
+
+/** Turns all quick filter buttons off (the empty state's "Clear filters"). */
+function clearQuick() {
+  t.quick.clear();
+  saveLocally(QUICK_STORAGE, []);
+}
+
+/** The row: shown in Flat, Project lanes and Dependencies with board.quickFilters on. Called from draw(). */
+function drawQuickFilters() {
+  const row = $('quick-filters');
+  if (!row) return;
+  row.hidden = !t.data || !displayOn('quickFilters') || !['flat', 'lanes', 'graph'].includes(t.view);
+  if (row.hidden) return;
+  const focused = row.contains(document.activeElement) ? document.activeElement.dataset.quick : null;
+  row.replaceChildren(
+    ...QUICK_FILTERS.map((q) =>
+      el('button', {
+        type: 'button',
+        class: `button button-outline quick-filter${t.quick.has(q.id) ? ' active' : ''}`,
+        'aria-pressed': t.quick.has(q.id) ? 'true' : 'false',
+        'data-quick': q.id,
+        title: q.title,
+        text: q.name,
+        onclick: () => {
+          if (t.quick.has(q.id)) t.quick.delete(q.id);
+          else t.quick.add(q.id);
+          saveLocally(QUICK_STORAGE, [...t.quick]);
+          draw();
+        },
+      }),
+    ),
+  );
+  if (focused) row.querySelector(`[data-quick="${focused}"]`)?.focus();
+}
+
 function ownViews() {
   try {
     const x = JSON.parse(store.getItem(VIEWS_STORAGE) ?? '[]');

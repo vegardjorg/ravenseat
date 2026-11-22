@@ -18,7 +18,7 @@ function emptyContent(text, searchHides) {
     text,
     searchHides,
     search: t.filter.search,
-    filters: countFilters(),
+    filters: countFilters() + (typeof quickCount === 'function' ? quickCount() : 0),
     selection: t.viewName ?? null,
   });
   const parts = [el('p', { text: g.text })];
@@ -53,6 +53,7 @@ function emptyAction(action) {
     search.focus();
   } else if (action === 'filter') {
     for (const set of Object.values(t.filter.selected)) set.clear();
+    if (typeof clearQuick === 'function') clearQuick(); // the quick filter buttons too (J4)
     changedFilter();
     $('filter-button').focus();
   } else if (action === 'selection') showAll();
@@ -461,6 +462,8 @@ function draw() {
   main.className = `board ${t.view}${t.marked.size ? ' has-option' : ''}`;
   // Search and filter apply to the cards, not the statistics (and not the plan, which shows areas and projects).
   $('search-filter').hidden = ['statistics', 'cloud', 'plan', 'decisions', 'checks'].includes(t.view);
+  // The quick filter buttons (J4, board/views.js) follow the view.
+  drawQuickFilters();
   // The grouping applies to Flat and Project lanes.
   $('grouping').hidden = !['flat', 'lanes'].includes(t.view);
   // Decisions (board/decide.js) draws its own list: no focus line, no stripe.

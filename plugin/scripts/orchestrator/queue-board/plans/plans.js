@@ -250,6 +250,8 @@
     // The Decisions tab (board/decide.js) sits in the same tab list: it sets Queue and Decisions from the view.
     if (typeof drawRoomTabs === 'function') drawRoomTabs();
     document.title = p ? 'Plans' : 'Work queue';
+    // The count of what waits on the owner goes back in front (J1, board/route.js).
+    window.QueueRoute?.drawTitle?.();
     const h1 = document.querySelector('.top .title');
     if (h1) h1.textContent = p ? 'Plans' : 'Work queue';
     if (p && !s.data) get();

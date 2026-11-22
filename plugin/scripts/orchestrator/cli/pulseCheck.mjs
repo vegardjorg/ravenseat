@@ -29,8 +29,9 @@
 // the morning. It does not change the exit code.
 //
 // Read-only apart from the orchestrator marker (the same update `orchestrator pulse` makes, so the session counts as
-// active). It never starts, receives, merges, accepts, collects, deletes or marks anything, and writes no cache the
-// pulse keeps. Runs in-process through ravenseat.mjs like every queue command.
+// active) and, on SILENT with no running track, one queue-idle time log row when a queue session is open (AW-5,
+// cli/events.mjs logQueueSession). It never starts, receives, merges, accepts, collects, deletes or marks anything, and
+// writes no cache the pulse keeps. Runs in-process through ravenseat.mjs like every queue command.
 // Exit codes: 0 SILENT, 13 ACTION, 2 usage error (nothing is written then).
 //
 // Used by: queue.mjs (dispatch). Tested in: __tests__/pulseCheckFlow.test.ts.
@@ -40,6 +41,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { cloudPulseItems } from './cloud.mjs';
+import { logQueueSession } from './events.mjs';
 import { conflictPulseItems } from './conflicts.mjs';
 import { a, autoAcceptIn, CLI, FOLDER, L, pulseCursor, read, readCursor, require, uncommittedPaths } from './context.mjs';
 import { inspectionDue } from './inspection.mjs';
@@ -261,6 +263,8 @@ export function cmdPulseCheck() {
     if (owner) lines.push(owner);
   }
   console.log(lines.join('\n'));
+  // AW-5: SILENT with no running track closes an open queue session (one queue-idle row; nothing when none is open).
+  if (!items.length) logQueueSession({ kind: 'quiet', queue });
   // exitCode, not process.exit: output to a pipe is written in full before the process ends.
   process.exitCode = items.length ? EXIT_ACTION : 0;
 }

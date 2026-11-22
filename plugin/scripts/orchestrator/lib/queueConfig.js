@@ -848,6 +848,15 @@ const STANDARD = Object.freeze({
     // The key stays out of Claude's view (0l bolk 5): the board opens itself in the browser with the key and prints
     // the link without it; `ravenseat board open` opens it again. false prints the link with the key (weakened).
     hideKey: true,
+    // The browser tab title starts with what waits on the owner, "(3) Queue board" (roadmap 0ø J1): the Decisions count
+    // only, not running tracks, so the number means "you are needed". false keeps the plain title. Read fresh.
+    titleCount: true,
+    // Keyboard shortcuts on the whole board (J3): ? lists them, / search, g and a letter for a tab, j and k between
+    // cards. Never in text fields or dialogs. false turns them all off (the Decisions keys and the card keys stay).
+    shortcuts: true,
+    // The quick filter buttons over the columns (J4): Changed 24 h, Older than usual, Red gate. Off in lite unless set
+    // (resolveOwn below), so the lite board stays simple.
+    quickFilters: true,
   },
   // The modules that can be switched off (FEATURES above): { "cloud": true } turns one on. Unknown keys are ignored.
   features: FEATURES,
@@ -952,6 +961,8 @@ function resolveOwn(k, own = {}) {
     if (own.scopeNotes?.drift === undefined) k.scopeNotes = { ...k.scopeNotes, drift: false };
     // Lite has no focus stages, so the Focus tab would stay empty.
     if (own.features?.focus === undefined) k.features = { ...k.features, focus: false };
+    // The lite board stays simple: no quick filter row (J4, owner answer 6).
+    if (own.board?.quickFilters === undefined) k.board = { ...k.board, quickFilters: false };
   }
   // learning.idleGuardDays is the one row for the idle guard line (0x L2); the old switch off still means off.
   if (own.learning?.idleGuardInfo === false) k.learning = { ...k.learning, idleGuardDays: 0 };
@@ -1068,6 +1079,24 @@ function boardPanelMode(cfg = config()) {
   return PANEL_MODES.includes(v) ? v : STANDARD.board.panelMode;
 }
 
+/** The board's display switches (roadmap 0ø J1, J3, J4), each a plain on/off in queue.config.json board. */
+const BOARD_DISPLAY = Object.freeze(['titleCount', 'shortcuts', 'quickFilters']);
+/**
+ * The display switches for the board's state: board.titleCount, .shortcuts and .quickFilters from the configuration
+ * (lite already resolved by resolveOwn), each a real boolean or its STANDARD default. Read fresh by the board server,
+ * so `settings set` reaches an open board on its next poll.
+ * @param {object|null} [cfg] the configuration (default: config())
+ * @returns {{ titleCount: boolean, shortcuts: boolean, quickFilters: boolean }}
+ */
+function boardDisplay(cfg = config()) {
+  const out = {};
+  for (const k of BOARD_DISPLAY) {
+    const v = cfg?.board?.[k];
+    out[k] = typeof v === 'boolean' ? v : STANDARD.board[k] === true;
+  }
+  return out;
+}
+
 /** The highest plans.roadmapFoldAfter (a larger number is taken as this; 0 already means never fold). */
 const ROADMAP_FOLD_MAX = 500;
 /**
@@ -1137,5 +1166,7 @@ module.exports = {
   boardSwitches,
   PANEL_MODES,
   boardPanelMode,
+  BOARD_DISPLAY,
+  boardDisplay,
   plansView,
 };

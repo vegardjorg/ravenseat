@@ -6542,3 +6542,108 @@ body.stale .summary.stuck::before {
 .focus-cover {
   margin: 0;
 }
+
+/* ---- Roadmap 0ø J4: the quick filter buttons over the columns (board/views.js drawQuickFilters) ---- */
+/* One row under the focus line; it wraps on a narrow screen instead of scrolling sideways. A pressed button takes the
+   same tonal fill as an active Filter button. */
+.quick-filters {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--distance-xs);
+  padding: var(--distance-xs) var(--distance-lg);
+  background: var(--color-surface-container-lowest);
+  border-bottom: 1px solid var(--color-outline-variant);
+}
+
+.quick-filters[hidden] {
+  display: none;
+}
+
+.quick-filter {
+  min-height: 28px;
+  padding: 0 var(--distance-sm);
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.quick-filter.active {
+  background: var(--color-secondary-container);
+  color: var(--color-on-secondary-container);
+  border-color: transparent;
+}
+
+@media (max-width: 720px) {
+  .quick-filters {
+    padding: var(--distance-xs) var(--distance-md);
+  }
+}
+
+/* ---- Roadmap 0ø J3: the keyboard shortcut overview (board/keys.js), the warning dialog's frame ---- */
+.guard.keys {
+  width: min(640px, 100%);
+  max-height: calc(100vh - 2 * var(--distance-md));
+  overflow-y: auto;
+}
+
+.keys-state {
+  margin: 0 0 var(--distance-md);
+  color: var(--color-on-surface-variant);
+}
+
+.keys-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--distance-md);
+  margin-bottom: var(--distance-md);
+}
+
+.keys-group-title {
+  margin: 0 0 var(--distance-xs);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.keys-list {
+  margin: 0;
+}
+
+.keys-row {
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  gap: var(--distance-sm);
+  padding: 2px 0;
+  font-size: var(--text-sm);
+}
+
+.keys-row dt,
+.keys-row dd {
+  margin: 0;
+}
+
+.keys-row dd {
+  color: var(--color-on-surface-variant);
+}
+
+/* The same key cap as the Decisions hint (.decide-keys kbd). */
+.keys-row kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 0 var(--distance-xs);
+  border: 1px solid var(--color-outline-variant);
+  border-bottom-width: 2px;
+  border-radius: var(--radius);
+  background: var(--color-surface-container-lowest);
+  color: var(--color-on-surface);
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  text-align: center;
+}
+
+@media (forced-colors: active) {
+  .quick-filter.active {
+    outline: 2px solid Highlight;
+  }
+}
