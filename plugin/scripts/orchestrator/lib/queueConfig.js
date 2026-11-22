@@ -896,6 +896,12 @@ const STANDARD = Object.freeze({
     timelineHorizonDays: 3,
     // The Timeline's rows: 'step' (one per focus step, what decides the order) or 'project'. A viewer can switch on the tab.
     timelineRows: 'step',
+    // T-B: drag a task bar up or down in its focus step (ravenseat rank) or a step row (focus save) to change the order.
+    // It writes only order, through the same server paths as the cards and the Focus tab, always with Undo.
+    timelineDrag: true,
+    // T-B: a drop first shows the dry run and what it does to the plan, then Save or Cancel. false saves at once, with
+    // Undo in the toast.
+    timelineDragPreview: true,
     // Demo mode (owner decision 22.11, lib/demoMode.js): an empty board that never had a task offers a made-up demo board
     // in its own folder, locked down on the server. On in lite and full; false hides the offer (Settings still opens it).
     demoOffer: true,
@@ -1163,10 +1169,11 @@ const TIMELINE_ROWS = Object.freeze(['step', 'project']);
 const TIMELINE_HORIZON = Object.freeze({ min: 1, max: 14 });
 /**
  * The Timeline tab (roadmap TIDSLINJE T-A): board.timeline, .timelineHorizonDays (a whole number, clamped to 1..14) and
- * .timelineRows, each a real value or its STANDARD default (lite already resolved by resolveOwn). Read fresh by the
- * board server, so `settings set` reaches an open board on its next poll.
+ * .timelineRows, and (T-B) .timelineDrag and .timelineDragPreview, each a real value or its STANDARD default (lite
+ * already resolved by resolveOwn). Read fresh by the board server, so `settings set` reaches an open board on its next
+ * poll.
  * @param {object|null} [cfg] the configuration (default: config())
- * @returns {{ on: boolean, horizonDays: number, rows: 'step'|'project' }}
+ * @returns {{ on: boolean, horizonDays: number, rows: 'step'|'project', drag: boolean, dragPreview: boolean }}
  */
 function boardTimeline(cfg = config()) {
   const b = isObject(cfg?.board) ? cfg.board : {};
@@ -1178,6 +1185,9 @@ function boardTimeline(cfg = config()) {
         ? Math.min(TIMELINE_HORIZON.max, Math.max(TIMELINE_HORIZON.min, Math.round(h)))
         : STANDARD.board.timelineHorizonDays,
     rows: TIMELINE_ROWS.includes(b.timelineRows) ? b.timelineRows : STANDARD.board.timelineRows,
+    // T-B: the drag for order and its preview (both on by default; a value that is not a boolean is the default).
+    drag: typeof b.timelineDrag === 'boolean' ? b.timelineDrag : STANDARD.board.timelineDrag,
+    dragPreview: typeof b.timelineDragPreview === 'boolean' ? b.timelineDragPreview : STANDARD.board.timelineDragPreview,
   };
 }
 

@@ -678,11 +678,18 @@ remembered per browser. `board.quickFilters`: on in full mode, off in lite.
 
 ## Timeline
 
-A read-only tab with the plan from `ravenseat schedule` (`GET /api/schedule`, cached a minute). What ran in the last day
+A tab with the plan from `ravenseat schedule` (`GET /api/schedule`, cached a minute). What ran in the last day
 and what runs come first, then one row per focus step (or per project). Bars give a rough band, never a promised time;
 a wait on you is hatched, a review is the thin end of a bar, and tasks that cannot start are listed with the reason.
 **Table** shows the same tasks with headers; the chart scrolls sideways inside its box. A click on a bar opens the card.
 `board.timeline` (on in full, off in lite), `board.timelineHorizonDays` (`3`) and `board.timelineRows` (`step`).
+
+Drag a planned bar up or down within its focus step to give it a new place (`ravenseat rank`), or a step row up or
+down to change the focus order. With the keyboard: Space lifts, the arrows move, Enter drops, Escape cancels; the
+table has **Move up** and **Move down**. Time is calculated, so a sideways drag, or a task dragged into another
+step, is refused with the reason. Marked tasks (Ctrl-click) in one step move as a block. A drop first shows the dry
+run and what it does to the plan in words, then **Save order** or **Cancel**; every save has **Undo**.
+`board.timelineDrag` (`true`) and `board.timelineDragPreview` (`true`; off saves at once with Undo), full only.
 
 ## Empty queue
 

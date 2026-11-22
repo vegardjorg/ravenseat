@@ -70,4 +70,130 @@ function cacheKey({ queueStamp, settings, now = Date.now() }) {
   return JSON.stringify([queueStamp, settings ?? null, Math.floor(now / 60_000)]);
 }
 
-module.exports = { RAN_WINDOW, timelineData, cacheKey };
+// ---- What a drop does to the plan (roadmap TIDSLINJE T-B; investigation section 3, "one new thing") -----------------
+// The board's preview before a drop is saved: the dry run's changes are put on a copy (applyChanges), both queues are
+// played forward with the same model, caps and moment (planEffect), and the two schedules are compared in words
+// (planChange). Pure reading: nothing here writes, and no text gives a clock time.
+
+/** A shift smaller than this many minutes is not named (the plan is rough; noise is not news). */
+const SHIFT_MIN = 10;
+/** At most this many steps are named; the rest are counted. */
+const STEPS_NAMED = 3;
+/** The sentence when nothing moves by SHIFT_MIN or more. */
+const PLAN_SAME = `The plan stays about the same: no step ends ${SHIFT_MIN} min or more earlier or later.`;
+
+/**
+ * A copy of the queue with a dry run's changes ({ id, field, after } for a task, { pid, field, after } for a
+ * project; after null removes the field), the form queueLogic.bulkDiff gives. The queue itself is never changed.
+ */
+function applyChanges(queue, changes) {
+  const copy = JSON.parse(JSON.stringify(queue ?? {}));
+  const perId = new Map((copy.tasks ?? []).map((o) => [o.id, o]));
+  for (const c of changes ?? []) {
+    let target = null;
+    if (c?.id != null) target = perId.get(c.id) ?? null;
+    else if (c?.pid != null) {
+      copy.projects = copy.projects ?? {};
+      copy.projects[c.pid] = copy.projects[c.pid] ?? {};
+      target = copy.projects[c.pid];
+    }
+    if (!target || typeof c.field !== 'string') continue;
+    if (c.after == null) delete target[c.field];
+    else target[c.field] = JSON.parse(JSON.stringify(c.after));
+  }
+  return copy;
+}
+
+const msOf = (v) => {
+  const x = Date.parse(v ?? '');
+  return Number.isFinite(x) ? x : null;
+};
+
+/** "step 2 (Beta)", "the rest" or "the whole queue". */
+function stepName(st) {
+  if (st.step == null) return st.title === 'the whole queue' ? 'the whole queue' : 'the rest';
+  return `step ${st.step + 1} (${st.title})`;
+}
+const stepKey = (st) => st.stage ?? `none:${st.title}`;
+const shiftText = (min) => `about ${SC.roughDuration(Math.abs(min))} ${min > 0 ? 'later' : 'earlier'}`;
+/** The planned (not running) rows, by start, then id. */
+const plannedRows = (s) =>
+  (s?.tasks ?? [])
+    .filter((r) => !r.running && msOf(r.start) != null)
+    .sort((a, b) => msOf(a.start) - msOf(b.start) || String(a.id).localeCompare(String(b.id)));
+
+/**
+ * Two schedules (queueSchedule.schedule) in words: { sentence, parts }.
+ *   - each step (matched by its key, named as after the change) whose expected end moves SHIFT_MIN or more, at most
+ *     STEPS_NAMED of them, then how many more;
+ *   - the task that now starts first: in the moved tasks' step (`moved`, a rank), or in the whole plan (a step move);
+ *   - otherwise the first moved task's own start, when it moves SHIFT_MIN or more.
+ * PLAN_SAME when nothing is named.
+ */
+function planChange(before, after, { moved = [] } = {}) {
+  const parts = [];
+  const old = new Map((before?.steps ?? []).map((st) => [stepKey(st), st]));
+  const shifted = [];
+  for (const st of after?.steps ?? []) {
+    const was = old.get(stepKey(st));
+    const a = msOf(st.p50_end);
+    const b = msOf(was?.p50_end);
+    if (a == null || b == null) continue;
+    const min = (a - b) / 60_000;
+    if (Math.abs(min) >= SHIFT_MIN) shifted.push(`${stepName(st)} done ${shiftText(min)}`);
+  }
+  parts.push(...shifted.slice(0, STEPS_NAMED));
+  const more = shifted.length - STEPS_NAMED;
+  if (more > 0) parts.push(`${more} more step${more === 1 ? ' moves' : 's move'} too`);
+
+  const pb = plannedRows(before);
+  const pa = plannedRows(after);
+  let firstId = null;
+  if (moved.length) {
+    const was = pb.find((r) => r.id === moved[0]) ?? pa.find((r) => r.id === moved[0]);
+    const step = was?.step ?? null;
+    const b0 = pb.find((r) => (r.step ?? null) === step);
+    const a0 = pa.find((r) => (r.step ?? null) === step);
+    if (a0 && b0 && a0.id !== b0.id) {
+      const st = (after?.steps ?? []).find((x) => (x.step ?? null) === step);
+      firstId = a0.id;
+      parts.push(`${a0.id} starts first${st ? ` in ${stepName(st)}` : ''}`);
+    }
+  } else if (pa[0] && pb[0] && pa[0].id !== pb[0].id) {
+    firstId = pa[0].id;
+    parts.push(`${pa[0].id} starts first`);
+  }
+  if (moved.length && firstId == null) {
+    const id = moved[0];
+    const a = msOf(pa.find((r) => r.id === id)?.start);
+    const b = msOf(pb.find((r) => r.id === id)?.start);
+    if (a != null && b != null && Math.abs(a - b) / 60_000 >= SHIFT_MIN) parts.push(`${id} starts ${shiftText((a - b) / 60_000)}`);
+  }
+  if (!parts.length) return { sentence: PLAN_SAME, parts };
+  const text = parts.join('; ');
+  return { sentence: `${text.charAt(0).toUpperCase()}${text.slice(1)}.`, parts };
+}
+
+/**
+ * Plays the queue and the changed copy forward with the same moment, model and caps, and says the difference
+ * (planChange). Neither queue is changed.
+ * @param {object} queue the queue as it is
+ * @param {object} copy the queue as the drop would leave it (applyChanges, or saveFocusPlan on a copy)
+ * @param {{ now?: number, quotaSlots?: number|null, loadSlots?: number|null, tz?: string, moved?: string[] }} [option]
+ */
+function planEffect(queue, copy, option = {}) {
+  const now = option.now ?? Date.now();
+  const model = SC.ratioModel(queue, { now });
+  const common = {
+    now,
+    model,
+    quotaSlots: option.quotaSlots ?? null,
+    loadSlots: option.loadSlots ?? null,
+    ...(option.tz ? { tz: option.tz } : {}),
+  };
+  const before = SC.schedule(queue, common);
+  const after = SC.schedule(copy, common);
+  return planChange(before, after, { moved: option.moved ?? [] });
+}
+
+module.exports = { RAN_WINDOW, SHIFT_MIN, PLAN_SAME, timelineData, cacheKey, applyChanges, planChange, planEffect };
