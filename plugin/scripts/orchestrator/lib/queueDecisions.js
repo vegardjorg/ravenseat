@@ -214,13 +214,19 @@
     const door = md.door === 'one-way' || md.door === 'two-way' ? md.door : null;
     const blast = typeof md.blast === 'string' && md.blast ? md.blast : null;
     const words = { door: 'door', blast: 'blast radius' };
+    // The line is one sentence that starts with who says it ("Reviewer says door one-way ..."), so the board and
+    // `ravenseat decide` show it as it is, with no "Reviewer:" before it (ms1 wording nit, owner 22.11).
+    const who = (type) => {
+      const t = typeof type === 'string' ? type.trim() : '';
+      return t ? t[0].toUpperCase() + t.slice(1) : 'A reviewer';
+    };
     const disagree = [];
     for (const r of Array.isArray(md.reviewers) ? md.reviewers : [])
       for (const field of ['door', 'blast']) {
         const said = r?.[field] ?? null;
         const own = field === 'door' ? door : blast;
         if (said && said !== own)
-          disagree.push(`${r.type ?? 'a reviewer'} says ${words[field]} ${said} (the track says ${own ?? DANGER_NOT_STATED})`);
+          disagree.push(`${who(r.type)} says ${words[field]} ${said} (the track says ${own ?? DANGER_NOT_STATED})`);
       }
     return {
       door,
@@ -737,9 +743,23 @@
     return groupItems(items).flatMap((g) => g.items);
   }
 
-  /** The decisions from the inbox, sorted: what `ravenseat decide` lists and the skill walks. */
+  /**
+   * The decisions from the inbox, sorted: what `ravenseat decide` lists and the skill walks. Like the board's groups
+   * (groupItems), a delivery with a one-way door comes first among its own kind: each kind keeps the places the impact
+   * order gives it, and inside those places the one-way ones go first. Display only; nothing jumps to another kind.
+   */
   function decisions(inbox) {
-    return sortItems(fromInbox(inbox));
+    const sorted = sortItems(fromInbox(inbox));
+    const oneWay = (x) => x.danger?.oneWay === true;
+    const places = new Map();
+    sorted.forEach((x, i) => places.set(x.verb, [...(places.get(x.verb) ?? []), i]));
+    const out = [...sorted];
+    for (const at of places.values()) {
+      const own = at.map((i) => sorted[i]);
+      const ordered = [...own.filter(oneWay), ...own.filter((x) => !oneWay(x))];
+      at.forEach((i, k) => (out[i] = ordered[k]));
+    }
+    return out;
   }
 
   /** One line about what the answer does: "unlocks 3 tasks (4 h) · in focus: 2 (step 1)". */
@@ -777,7 +797,7 @@
 
   /**
    * The `ravenseat` arguments for an action, or null for one that writes nothing (keep). The owner's actions carry
-   * --by owner where the command records who it was (resolve, approve, qa ok, cancel).
+   * --by owner where the command records who it was (resolve, approve, qa ok, qa deviation, cancel).
    */
   function cliArgs(action) {
     const a = action ?? {};
@@ -791,7 +811,7 @@
       case 'qa-ok':
         return ['qa', 'ok', a.id, '--by', 'owner'];
       case 'qa-deviation':
-        return ['qa', 'deviation', a.id, String(a.text ?? '')];
+        return ['qa', 'deviation', a.id, String(a.text ?? ''), '--by', 'owner'];
       case 'approve':
         return ['approve', a.id, '--by', 'owner'];
       case 'decline':

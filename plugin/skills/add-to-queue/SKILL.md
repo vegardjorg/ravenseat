@@ -16,7 +16,8 @@ with `ravenseat add "<short title>" --mission "<self-contained mission: what, wh
 only when the user gave a priority). No class,
 size, value, project, feature, splitting or packing; ids, class K and the defaults come by themselves, and nothing
 is refused for being small. A task that needs the owner's decision first still waits on a registered question: use
-`ravenseat add --json '{"tasks":[{"title":"…","mission":"…","waiting_on":["Q-1"]}],"question":{"Q-1":{"type":"question","text":"…","recommendation":"…"}}}'`.
+`ravenseat add --json '{"tasks":[{"title":"…","mission":"…","waiting_on":["Q-1"]}],"question":{"Q-1":{"type":"question","text":"…","category":"product","context":"<what it is about and why it came up now>","if_yes":"<what happens if the recommendation is followed>","if_no":"<what happens otherwise>","recommendation":"…"}}}'`
+(the category is one of the keys in `ask-catalog/categories.json`; a new question without the card fields is refused).
 Before adding, do step 0b when there are more than a few things. Then do step 7.
 
 0. **Plan entry as input.** If the argument is a plan entry (`PL-…`), or the work belongs to one
@@ -82,6 +83,8 @@ Before adding, do step 0b when there are more than a few things. Then do step 7.
        "owner_db": [], "shared_patch": [], "requires": [], "plan": "PL-EX-1", "source": "docs/plan.md § 3",
        "added_by": "<session>" }],
      "question": { "Q-EX-1": { "type": "question", "text": "The question, clear for the owner",
+       "category": "product", "context": "What it is about and why it came up now",
+       "if_yes": "What happens if the recommendation is followed", "if_no": "What happens otherwise",
        "recommendation": "…", "source": "docs/plan.md § 3" } } }
    ```
    `id`: unique, letters/digits/"."/"_"/"-". `waiting_on` takes ONLY registered question ids (with text and type,

@@ -87,7 +87,7 @@ one-off fixes in the same files are packed into one task). In lite mode title, m
   that adds the check (red on the current code) and then fixes the places found; when the fixes are separate tasks,
   they `depends_on` the gate task, so the check is shown red on the real bug first.
 - **Decision (architecture):** a registered owner question:
-  `ravenseat question Q-REV-<n> --text "…" --type question --choice "…" --choice "…" [--choice …] --recommendation "…"`
+  `ravenseat question Q-REV-<n> --text "…" --type question --category architecture --context "<what it is about and why now>" --if-yes "<what follows from the recommendation>" --if-no "<what follows otherwise>" --choice "<choice a>" --choice "<choice b>" [--choice …] --recommendation "<choice a>"`
   (2 to 4 choices of at most 60 characters, kept in the written order; `--recommendation` is the exact text of one). A larger design topic instead becomes a plan
   entry with `ravenseat plan new --file <json>` (`"maturity": "idea"`, `"priority": "owner"`, `"priority_set_by": "agent"`,
   a `priority_reason` and the question in `ownerQuestions`). Tasks that must wait on the answer get it in

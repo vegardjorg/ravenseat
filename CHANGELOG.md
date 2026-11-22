@@ -81,6 +81,9 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   stack entries reach the Checks tab and the dependency notes (`catalog.stackFacts`, on).
 - **A green gate where no tests ran ("No test files found", "0 passing", "collected 0 items") gets a NOTE at receive, a line in the review package and a "no tests ran" badge on the card; never a stop.**
 ### Changed
+- **`ravenseat decide` lists a one-way door first among its kind, as the board's groups do.** Display only, no setting.
+- **A reviewer who disagrees reads as one sentence, "Reviewer says door one-way (the track says two-way)", on the board and in `ravenseat decide`.** Display only, no setting.
+- **Lite mode refuses a new owner question without the card fields too, the same as full mode.** No setting: the owner chose the refusal.
 - **A new question from `ravenseat question` or `add` needs a category, context, a recommendation among its choices and
   what each answer leads to, and Decisions shows them on the card.** A question written as free text is marked "Not filled in by the agent".
 - **The README is rewritten around the board as a control center:** a before and after infographic (light and dark), a sharper with/without table, and a section on improving your checks.
@@ -102,6 +105,10 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **Plans: polish: clearer empty states, sticky Roadmap column headers, start lines in one Copy menu, and the deadline
   band only when there is a deadline.** On a phone the room tabs stay on one line.
 ### Fixed
+- **The owner-question examples in the add-to-queue, review and plans skills carry the card fields, so a copied example is no longer refused.** No setting: they are examples.
+- **Moving a card on the board counts as your edit and stamps `edited_at`, also with its dependencies.** No setting: it is a recorded timestamp.
+- **`edit-many` run by you stamps `edited_at` like a single edit, so bulk changes show in Changed 24 h.** No setting: it is a recorded timestamp; agents and track worktrees never stamp it.
+- **A QA deviation answered on the board records you as the one who answered, as QA ok and approve do.** No setting: it is a recorded actor.
 - A long answer button in Decisions wraps inside the card on a phone instead of running past its edge.
 - **A worktree is recognised under a short Windows path** (an 8.3 name such as `RUNNER~1`): commands on a queue branch no longer act as if they ran in the main checkout.
 - The red team result no longer shows one unexplained skip: the report runs its own self-check right after writing the page.

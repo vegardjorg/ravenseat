@@ -63,6 +63,19 @@ describe('the Decisions card of a delivery', () => {
     expect(groups.map((g: any) => g.verb)).toEqual(['decide', 'check']);
     expect(groups[1].items.map((x: any) => x.id)).toEqual(['T-2', 'T-1']);
     expect(D.walkOrder(D.fromInbox(inbox)).map((x: any) => x.id)).toEqual(['Q-1', 'T-2', 'T-1']);
+    // `ravenseat decide`'s flat list (decisions()) matches: the one-way delivery first among its own kind.
+    expect(D.decisions(inbox).map((x: any) => x.id)).toEqual(['Q-1', 'T-2', 'T-1']);
+  });
+
+  it('the flat list keeps the impact order across kinds: a one-way door only swaps places with its own kind', () => {
+    // Each kind keeps the slots the impact order gives it; inside a kind's slots the one-way check comes first.
+    const inbox = {
+      ...inboxWith([qaTask('T-1', { door: 'two-way', blast: 'small' }), qaTask('T-2', { door: 'one-way', blast: 'data' })]),
+      question: [{ sp: 'Q-1', type: 'question', text: 'Which?', choices: [], direct: [], count: 0, minutes: 0 }],
+    };
+    const plain = D.sortItems(D.fromInbox(inbox)).map((x: any) => x.verb);
+    expect(D.decisions(inbox).map((x: any) => x.verb)).toEqual(plain);
+    expect(D.decisions(inbox).filter((x: any) => x.verb === 'check').map((x: any) => x.id)).toEqual(['T-2', 'T-1']);
   });
 
   it('shows a reviewer who disagrees, and keeps the track values', () => {
@@ -71,7 +84,20 @@ describe('the Decisions card of a delivery', () => {
     );
     expect(item.danger.door).toBe('two-way');
     expect(item.danger.oneWay).toBe(false);
-    expect(item.danger.disagree).toEqual(['reviewer says door one-way (the track says two-way)']);
+    expect(item.danger.disagree).toEqual(['Reviewer says door one-way (the track says two-way)']);
+  });
+
+  it('reads as one sentence: the reviewer type leads, one without a type reads "A reviewer", the board adds no prefix', () => {
+    const [item] = D.fromInbox(
+      inboxWith([qaTask('T-1', { door: 'two-way', blast: 'small', reviewers: [{ type: 'security-reviewer', blast: 'data' }, { door: 'one-way' }] })]),
+    );
+    expect(item.danger.disagree).toEqual([
+      'Security-reviewer says blast radius data (the track says small)',
+      'A reviewer says door one-way (the track says two-way)',
+    ]);
+    // The board card shows the line as it is (queue-board/board/decide.js dangerBlock), with no "Reviewer:" before it.
+    const board = fs.readFileSync(path.join(__dirname, '..', '..', 'queue-board', 'board', 'decide.js'), 'utf8');
+    expect(board).not.toMatch(/Reviewer: \$\{/);
   });
 
   it('never changes what the card can do', () => {
@@ -129,7 +155,8 @@ describe('ravenseat decide', () => {
         encoding: 'utf8',
       });
       expect(out).toContain(`${D.ONE_WAY_BADGE}. Door: one-way · Blast radius: users`);
-      expect(out).toContain('Reviewer: reviewer says door two-way (the track says one-way)');
+      expect(out).toContain('   Reviewer says door two-way (the track says one-way)');
+      expect(out).not.toMatch(/Reviewer: reviewer/i);
     } finally {
       fs.rmSync(folder, { recursive: true, force: true });
     }
@@ -152,7 +179,7 @@ describe('"Decided for you" and the PR body', () => {
     };
     const [row] = D.decidedForYou(queue, { now: now });
     expect(row.danger).toMatchObject({ door: 'one-way', blast: 'data', oneWay: true });
-    expect(row.danger.disagree).toEqual(['reviewer says door two-way (the track says one-way)']);
+    expect(row.danger.disagree).toEqual(['Reviewer says door two-way (the track says one-way)']);
   });
 
   it('the PR fields come from the record, with the reviewer door when it differs', () => {

@@ -231,6 +231,44 @@ describe('queue.mjs cancel and edit --answer-json', () => {
     expect(r.status).toBe(1);
     expect(find('E-3').edited_at).toBeUndefined();
   }, 60_000);
+
+  // Owner 22.11 (rest1 question 2): edit-many run by the owner stamps edited_at like one owner edit; an agent's run, a
+  // task the file leaves as it was and a run from a track worktree do not.
+  it('edit-many by the owner stamps edited_at on the tasks it changed; another --by, a no-op and a track branch do not', async () => {
+    const q = readQueue();
+    q.tasks.push(task('M-1', 'waiting'), task('M-2', 'waiting', { priority_bonus: 3 }), task('M-3', 'waiting'), task('M-4', 'waiting'));
+    fs.writeFileSync(queueFile(), JSON.stringify(q, null, 2));
+    const file = (name: string, body: unknown) => {
+      const f = path.join(root, name);
+      fs.writeFileSync(f, JSON.stringify(body));
+      return f;
+    };
+    const before = Date.now();
+    const own = await ravenseat('edit-many', '--file', file('m1.json', [{ id: 'M-1', priority_bonus: 2 }, { id: 'M-2', priority_bonus: 3 }]), '--by', 'owner');
+    expect(own.status, own.stderr).toBe(0);
+    expect(Date.parse(String(find('M-1').edited_at))).toBeGreaterThanOrEqual(before - 1000);
+    expect(find('M-2').edited_at).toBeUndefined();
+    const agent = await ravenseat('edit-many', '--file', file('m3.json', [{ id: 'M-3', priority_bonus: 1 }]), '--by', 'EX-agent');
+    expect(agent.status, agent.stderr).toBe(0);
+    expect(find('M-3').priority_bonus).toBe(1);
+    expect(find('M-3').edited_at).toBeUndefined();
+    // A track worktree (the cwd on a queue/<id> branch): never the owner's edit, whatever --by says.
+    const wt = path.join(root, 'track');
+    fs.mkdirSync(wt);
+    const git = (...g: string[]) =>
+      new Promise<number | null>((done) => spawn('git', ['-c', 'user.name=t', '-c', 'user.email=t@t.invalid', ...g], { cwd: wt }).on('close', done));
+    expect(await git('init', '-q', '-b', 'queue/M-4')).toBe(0);
+    expect(await git('commit', '-q', '--allow-empty', '-m', 'x')).toBe(0);
+    const tr = await new Promise<number | null>((done) =>
+      spawn(process.execPath, [path.resolve(__dirname, '..', '..', 'queue.mjs'), 'edit-many', '--file', file('m4.json', [{ id: 'M-4', priority_bonus: 1 }]), '--by', 'theBoard'], {
+        cwd: wt,
+        env,
+      }).on('close', done),
+    );
+    expect(tr).toBe(0);
+    expect(find('M-4').priority_bonus).toBe(1);
+    expect(find('M-4').edited_at).toBeUndefined();
+  }, 60_000);
 });
 
 describe('the board server: POST /api/task-edit', () => {

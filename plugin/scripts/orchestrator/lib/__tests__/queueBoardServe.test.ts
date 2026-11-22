@@ -186,6 +186,59 @@ describe('the board server: an owner question answered with a choice button', ()
   }, 60_000);
 });
 
+describe('the board server: a QA deviation records the owner', () => {
+  it('POST /api/action { type: qa-deviation } runs qa deviation --by owner: the decision row says owner', async () => {
+    const queueFile = path.join(root, 'q', 'queue.json');
+    const q = JSON.parse(fs.readFileSync(queueFile, 'utf8'));
+    q.tasks.push({ id: 'T-QA', title: 'Login form', status: 'done', class: 'K', value: 2, domain: 'general', mission: 'm', qa_status: 'waiting' });
+    fs.writeFileSync(queueFile, JSON.stringify(q, null, 2));
+    const r = await fetch(`${base}/api/action`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: base, 'x-queue-key': key },
+      body: JSON.stringify({ type: 'qa-deviation', id: 'T-QA', text: 'The button is gone' }),
+    });
+    const body = (await r.json()) as { ok: boolean; message?: string };
+    expect(r.status, body.message).toBe(200);
+    const rows = fs
+      .readFileSync(path.join(root, 'times.jsonl'), 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map((l) => JSON.parse(l))
+      .filter((x) => x.event === 'decision' && x.key === 'check:T-QA');
+    expect(rows).toEqual([expect.objectContaining({ chosen: 'Deviation', by: 'owner', surface: 'board' })]);
+  }, 60_000);
+});
+
+describe('the board server: moving a card is an owner edit', () => {
+  it('POST /api/move (alone, and with its dependencies) runs with --by theBoard, so the moved tasks get edited_at', async () => {
+    const queueFile = path.join(root, 'q', 'queue.json');
+    const t = (id: string, extra: object = {}) => ({
+      id, title: `Task ${id}`, status: 'waiting', class: 'K', value: 5, content_min: 30, domain: 'general', mission: 'm', depends_on: [], waiting_on: [], ...extra,
+    });
+    const q = JSON.parse(fs.readFileSync(queueFile, 'utf8'));
+    q.tasks.push(t('MV-1'), t('MV-2'), t('MV-3', { depends_on: ['MV-2'] }));
+    fs.writeFileSync(queueFile, JSON.stringify(q, null, 2));
+    const move = async (body: object) => {
+      const r = await fetch(`${base}/api/move`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: base, 'x-queue-key': key },
+        body: JSON.stringify(body),
+      });
+      const answer = (await r.json()) as { ok: boolean; message?: string };
+      expect(r.status, answer.message).toBe(200);
+    };
+    const task = (id: string) => JSON.parse(fs.readFileSync(queueFile, 'utf8')).tasks.find((o: { id: string }) => o.id === id);
+    const before = Date.now();
+    await move({ id: 'MV-1', over: null, under: null, top: true });
+    expect(Date.parse(String(task('MV-1').edited_at))).toBeGreaterThanOrEqual(before - 1000);
+    expect(task('MV-2').edited_at).toBeUndefined();
+    // The dependency warning is confirmed, as the board's dialog does (confirm: true).
+    await move({ id: 'MV-3', over: null, under: null, top: true, boost: true, confirm: true });
+    expect(typeof task('MV-3').edited_at).toBe('string');
+    expect(typeof task('MV-2').edited_at).toBe('string');
+  }, 60_000);
+});
+
 describe('the board server: the Blocked column switch (board.blockedColumn)', () => {
   const post = async (body: object) => {
     const r = await fetch(`${base}/api/action`, {

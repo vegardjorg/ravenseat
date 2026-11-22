@@ -571,7 +571,7 @@
 //   node scripts/orchestrator/queue.mjs release <id>                    (picked -> waiting; warns when the branch has commits)
 //   node scripts/orchestrator/queue.mjs qa                            (QA list: finished with the label visual that are waiting)
 //   node scripts/orchestrator/queue.mjs qa ok <id> [...] [--by "<who>"]   (owner only; --by is kept as qa_ok_by)
-//   node scripts/orchestrator/queue.mjs qa deviation <id> "<text>"       (owner only; creates fixTask <id>-QA<n>)
+//   node scripts/orchestrator/queue.mjs qa deviation <id> "<text>" [--by]  (owner only; creates fixTask <id>-QA<n>; the board passes --by owner)
 //   node scripts/orchestrator/queue.mjs qa evidence <id> <type>[=<ref>]  (the types are config().qa.evidenceTypes, default
 //                                                                  screenshot|test|manual; receive otherwise reads the
 //                                                                  EVIDENCE line in track-result.md)

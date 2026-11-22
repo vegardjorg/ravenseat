@@ -2804,6 +2804,7 @@ async function write(filePath, b) {
     const v = guard(queue, { type: 'move', id, ...space }, {}, b);
     if (v.stop) return v.stop;
     info = v.info;
+    // A move is the owner's edit (owner 22.11): --by theBoard, so the moved tasks get edited_at (cli/taskEdit.mjs).
     // "Boost dependencies too": the card and the open dependencies are moved in one edit-many call.
     if (b.boost === true) {
       const l = T.boostBonus(queue, id, space);
@@ -2814,10 +2815,11 @@ async function write(filePath, b) {
           { tasks: changes.map(([oid, t]) => ({ id: oid, priority_bonus: t })) },
           run,
           `move ${id} with dependencies (${changes.map(([oid, t]) => `${oid} ${t}`).join(', ')})`,
+          ['--by', 'theBoard'],
         );
     }
     return run(
-      ['edit', id, '--json', JSON.stringify({ priority_bonus: r.bonus })],
+      ['edit', id, '--json', JSON.stringify({ priority_bonus: r.bonus }), '--by', 'theBoard'],
       `move ${id} (priority_bonus ${r.bonus})`,
     );
   }
@@ -3143,7 +3145,7 @@ async function write(filePath, b) {
     if (type === 'qa-deviation') {
       const text = cleanText(b.text, 2000);
       if (!text) return no('write what is wrong, and where');
-      return run(['qa', 'deviation', id, text], `qa deviation ${id}`);
+      return run(['qa', 'deviation', id, text, '--by', 'owner'], `qa deviation ${id}`);
     }
     return no(`unknown action ${type}`);
   }

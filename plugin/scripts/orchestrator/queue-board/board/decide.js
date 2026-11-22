@@ -471,7 +471,7 @@ function dangerBlock(item) {
     'div',
     { class: `decide-danger${d.oneWay ? ' one-way' : ''}` },
     el('p', { class: 'decide-danger-text', text: d.text }),
-    ...d.disagree.map((x) => el('p', { class: 'decide-danger-disagree', text: `Reviewer: ${x}` })),
+    ...d.disagree.map((x) => el('p', { class: 'decide-danger-disagree', text: x })),
   );
 }
 
