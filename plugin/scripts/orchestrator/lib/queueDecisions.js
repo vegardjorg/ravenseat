@@ -743,9 +743,23 @@
     return groupItems(items).flatMap((g) => g.items);
   }
 
-  /** The decisions from the inbox, sorted: what `ravenseat decide` lists and the skill walks. */
+  /**
+   * The decisions from the inbox, sorted: what `ravenseat decide` lists and the skill walks. Like the board's groups
+   * (groupItems), a delivery with a one-way door comes first among its own kind: each kind keeps the places the impact
+   * order gives it, and inside those places the one-way ones go first. Display only; nothing jumps to another kind.
+   */
   function decisions(inbox) {
-    return sortItems(fromInbox(inbox));
+    const sorted = sortItems(fromInbox(inbox));
+    const oneWay = (x) => x.danger?.oneWay === true;
+    const places = new Map();
+    sorted.forEach((x, i) => places.set(x.verb, [...(places.get(x.verb) ?? []), i]));
+    const out = [...sorted];
+    for (const at of places.values()) {
+      const own = at.map((i) => sorted[i]);
+      const ordered = [...own.filter(oneWay), ...own.filter((x) => !oneWay(x))];
+      at.forEach((i, k) => (out[i] = ordered[k]));
+    }
+    return out;
   }
 
   /** One line about what the answer does: "unlocks 3 tasks (4 h) · in focus: 2 (step 1)". */

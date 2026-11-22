@@ -81,6 +81,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   stack entries reach the Checks tab and the dependency notes (`catalog.stackFacts`, on).
 - **A green gate where no tests ran ("No test files found", "0 passing", "collected 0 items") gets a NOTE at receive, a line in the review package and a "no tests ran" badge on the card; never a stop.**
 ### Changed
+- **`ravenseat decide` lists a one-way door first among its kind, as the board's groups do.** Display only, no setting.
 - **A reviewer who disagrees reads as one sentence, "Reviewer says door one-way (the track says two-way)", on the board and in `ravenseat decide`.** Display only, no setting.
 - **Lite mode refuses a new owner question without the card fields too, the same as full mode.** No setting: the owner chose the refusal.
 - **A new question from `ravenseat question` or `add` needs a category, context, a recommendation among its choices and

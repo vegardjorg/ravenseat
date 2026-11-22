@@ -63,6 +63,19 @@ describe('the Decisions card of a delivery', () => {
     expect(groups.map((g: any) => g.verb)).toEqual(['decide', 'check']);
     expect(groups[1].items.map((x: any) => x.id)).toEqual(['T-2', 'T-1']);
     expect(D.walkOrder(D.fromInbox(inbox)).map((x: any) => x.id)).toEqual(['Q-1', 'T-2', 'T-1']);
+    // `ravenseat decide`'s flat list (decisions()) matches: the one-way delivery first among its own kind.
+    expect(D.decisions(inbox).map((x: any) => x.id)).toEqual(['Q-1', 'T-2', 'T-1']);
+  });
+
+  it('the flat list keeps the impact order across kinds: a one-way door only swaps places with its own kind', () => {
+    // Each kind keeps the slots the impact order gives it; inside a kind's slots the one-way check comes first.
+    const inbox = {
+      ...inboxWith([qaTask('T-1', { door: 'two-way', blast: 'small' }), qaTask('T-2', { door: 'one-way', blast: 'data' })]),
+      question: [{ sp: 'Q-1', type: 'question', text: 'Which?', choices: [], direct: [], count: 0, minutes: 0 }],
+    };
+    const plain = D.sortItems(D.fromInbox(inbox)).map((x: any) => x.verb);
+    expect(D.decisions(inbox).map((x: any) => x.verb)).toEqual(plain);
+    expect(D.decisions(inbox).filter((x: any) => x.verb === 'check').map((x: any) => x.id)).toEqual(['T-2', 'T-1']);
   });
 
   it('shows a reviewer who disagrees, and keeps the track values', () => {
