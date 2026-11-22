@@ -57,6 +57,8 @@ const RANK = new Map(KIND_ORDER.map((k, i) => [k, i]));
 const OWNER_BY = new Set(['owner', 'theBoard']);
 /** Status words that may be printed in a status change. */
 const STATUSES = new Set(['proposed', 'waiting', 'picked', 'running', 'review', 'done', 'cancelled', 'parked']);
+/** A changelog edit this close to edited_at is the same edit (the two times are taken a moment apart in one write). */
+const EDIT_MATCH_MS = 5000;
 /** Fixed `added_by` labels that are not free text. */
 const ADDED_BY_LABELS = new Set(['base gate', 'ci watch', 'orchestrator', 'qa']);
 
@@ -210,10 +212,18 @@ function taskHistory({ task, queue = null, rows = [], findings = [], now = Date.
       const a = sv(status.after);
       add(e.at, 'status', b && a ? `Status ${b} -> ${a}${by}` : `Status changed${by}`);
     }
-    const fields = [...new Set(changes.filter((c) => c.field !== 'status').map((c) => word(c.field) ?? 'a field'))];
+    // edited_at is the stamp an owner edit writes along with the fields (J14 follow-up), not a field the owner changed.
+    const fields = [
+      ...new Set(changes.filter((c) => c.field !== 'status' && c.field !== 'edited_at').map((c) => word(c.field) ?? 'a field')),
+    ];
     if (fields.length) add(e.at, 'edited', `Edited: ${fields.join(', ')}${by}`);
     if (isObj(e.undone)) add(e.undone.at, 'undone', `Change ${Number.isInteger(e.nr) ? `#${e.nr} ` : ''}undone${byYou(e.undone.by)}`);
   }
+  // The last owner edit (edited_at) when the changelog no longer has it (it keeps only the last 50 entries). Only the
+  // owner's edit stamps it (cli/taskEdit.mjs), so the step is "by you"; no field names, the stamp has none.
+  const editedAt = ms(task.edited_at);
+  if (editedAt != null && !steps.some((s) => s.kind === 'edited' && Math.abs(s.t - editedAt) <= EDIT_MATCH_MS))
+    add(task.edited_at, 'edited', 'Edited by you');
 
   steps.sort((a, b) => a.t - b.t || (RANK.get(a.kind) ?? 99) - (RANK.get(b.kind) ?? 99));
   const out = steps.map((s, i) => ({

@@ -657,7 +657,8 @@ last visit** filter uses the seen mark too (this browser's last visit when there
 
 ## Quick filter buttons
 
-A row over the columns with **Changed 24 h** (added, started, delivered, blocked, checked or finished in the last day),
+A row over the columns with **Changed 24 h** (added, edited by you, started, delivered, blocked, checked or finished in
+the last day; your edits on the board or with `ravenseat edit --by owner` stamp `edited_at`, an agent's do not),
 **Older than usual** and **Red gate** (an open task whose gates or done command failed). One click turns a button on or
 off; several combine. They filter every column, and the empty state's Clear filters turns them off too. What is pressed is
 remembered per browser. `board.quickFilters`: on in full mode, off in lite.

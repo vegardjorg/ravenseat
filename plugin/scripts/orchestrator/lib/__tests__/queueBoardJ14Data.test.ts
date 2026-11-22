@@ -108,6 +108,13 @@ describe('changed_at and gate_red on the cards', () => {
     expect(c.get('EX-5').changed_at).toBe(iso(8));
   });
 
+  it('an owner edit (edited_at) counts as a change, so "Changed 24 h" sees it', () => {
+    const q = { ...queue, tasks: [task('EX-9', { edited_at: iso(9) })] };
+    const b = T.board(q);
+    const card = Object.values(b.columns ?? {}).flat().find((k: any) => k.id === 'EX-9') as any;
+    expect(card.changed_at).toBe(iso(9));
+  });
+
   it('gate_red: an open gate-red block or a red gate check on an open task; a done task never', () => {
     const c = cards();
     expect(c.get('EX-1').gate_red).toBe(false);

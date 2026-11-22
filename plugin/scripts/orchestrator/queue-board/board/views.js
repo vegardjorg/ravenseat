@@ -843,7 +843,7 @@ const QUICK_FILTERS = [
   {
     id: 'changed24',
     name: 'Changed 24 h',
-    title: 'Tasks that were added, started, delivered, blocked, checked or finished in the last 24 hours',
+    title: 'Tasks that were added, edited by you, started, delivered, blocked, checked or finished in the last 24 hours',
     matches: (k) => !!k.changed_at && boardNow() - Date.parse(k.changed_at) <= QUICK_DAY_MS,
   },
   {

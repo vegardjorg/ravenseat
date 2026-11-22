@@ -161,6 +161,9 @@ beforeAll(async () => {
     task('W-1', 'waiting'),
     task('W-2', 'waiting'),
     task('W-3', 'waiting'),
+    task('E-1', 'waiting'),
+    task('E-2', 'waiting'),
+    task('E-3', 'waiting'),
     task('P-1', 'proposed', { added_by: 'X-9' }),
     task('P-2', 'proposed', { added_by: 'X-9' }),
     task('R-1', 'running', { branch: 'queue/R-1', started: '2026-10-31T08:00:00.000Z' }),
@@ -203,6 +206,31 @@ describe('queue.mjs cancel and edit --answer-json', () => {
     expect(typeof answer.log).toBe('number');
     expect(find('W-3').value).toBe(9);
   }, 30_000);
+
+  // J14 follow-up: an owner edit of a task's text or fields stamps edited_at, so "Changed 24 h" and History see it;
+  // an agent's or the machine's edit (any other --by) does not, and edited_at is never set through --json.
+  it('an owner edit (--by owner or theBoard) stamps edited_at; another --by, a no-op and --json edited_at do not', async () => {
+    const before = Date.now();
+    expect((await ravenseat('edit', 'E-1', '--json', '{"value":8}', '--by', 'owner')).status).toBe(0);
+    const stamped = Date.parse(String(find('E-1').edited_at));
+    expect(stamped).toBeGreaterThanOrEqual(before - 1000);
+    expect((await ravenseat('edit', 'E-2', '--description', 'new text', '--by', 'theBoard', '--answer-json')).status).toBe(0);
+    expect(typeof find('E-2').edited_at).toBe('string');
+    // An agent's edit leaves it as it was.
+    expect((await ravenseat('edit', 'E-3', '--json', '{"value":7}', '--by', 'EX-agent')).status).toBe(0);
+    expect(find('E-3').edited_at).toBeUndefined();
+    expect((await ravenseat('edit', 'E-3', '--json', '{"value":6}')).status).toBe(0);
+    expect(find('E-3').edited_at).toBeUndefined();
+    // An owner edit that changes nothing writes no stamp (and no changelog entry).
+    const log = readQueue().changelog.length;
+    expect((await ravenseat('edit', 'E-3', '--json', '{"value":6}', '--by', 'owner')).status).toBe(0);
+    expect(find('E-3').edited_at).toBeUndefined();
+    expect(readQueue().changelog.length).toBe(log);
+    // edited_at is the queue's own record: --json cannot set it.
+    const r = await ravenseat('edit', 'E-3', '--json', '{"edited_at":"2020-01-01T00:00:00.000Z"}', '--by', 'test');
+    expect(r.status).toBe(1);
+    expect(find('E-3').edited_at).toBeUndefined();
+  }, 60_000);
 });
 
 describe('the board server: POST /api/task-edit', () => {
