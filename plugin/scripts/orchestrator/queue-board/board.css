@@ -3285,17 +3285,31 @@ body.with-option-line .toaster {
   border-bottom: 1px solid var(--color-outline-variant);
 }
 
-.graph-tall {
+/* deps H3 step 1, M2: the lead sentence names the question that unlocks the most and the longest chain; the counts
+   follow, muted. A full row of its own, so it never squeezes the legend or the options. */
+.graph-lead {
+  flex-basis: 100%;
   margin: 0;
-  font-weight: 600;
   display: flex;
-  align-items: center;
-  gap: var(--distance-sm);
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--distance-xs) var(--distance-md);
+  color: var(--color-on-surface);
+}
+
+.graph-lead-text {
+  font-weight: 600;
+}
+
+.graph-lead-counts {
+  font-size: var(--text-sm);
+  color: var(--color-on-surface-variant);
 }
 
 .graph-draw {
   display: flex;
-  gap: var(--distance-md);
+  flex-wrap: wrap;
+  gap: var(--distance-xs) var(--distance-md);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -3303,13 +3317,16 @@ body.with-option-line .toaster {
   color: var(--color-on-surface-variant);
 }
 
+/* Each entry stays on one line (the legend wraps between entries, never inside one), and its sample keeps its size. */
 .graph-draw li {
   display: flex;
   align-items: center;
   gap: var(--distance-sm);
+  white-space: nowrap;
 }
 
 .graph-draw .draw {
+  flex: none;
   width: 14px;
   height: 14px;
   border-radius: 9999px;
@@ -3326,6 +3343,11 @@ body.with-option-line .toaster {
 
 .graph-draw .t-active {
   border: 3px solid var(--color-primary);
+}
+
+/* deps M4: review has its own ring colour; the word "in review" under the title says it too. */
+.graph-draw .t-review {
+  border: 3px solid var(--color-tertiary);
 }
 
 .graph-draw .t-sp {
@@ -3350,6 +3372,43 @@ body.with-option-line .toaster {
 
 .graph-draw .t-done {
   opacity: 0.45;
+}
+
+/* deps M3: the fill is the project (two project colours side by side, so it reads as "a colour per project"). */
+.graph-draw .t-project {
+  border-color: var(--color-outline);
+  background: linear-gradient(90deg, var(--color-category-teal) 50%, var(--color-category-plum) 50%);
+}
+
+/* The line samples (arrow direction, a line from a question, the longest chain): a short line instead of a dot. */
+.graph-draw .t-arrow,
+.graph-draw .t-sp-line,
+.graph-draw .t-critical {
+  position: relative;
+  width: 24px;
+  height: 0;
+  border: none;
+  border-radius: 0;
+  border-top: 1.5px solid var(--color-outline);
+  background: none;
+}
+
+.graph-draw .t-arrow::after {
+  content: '';
+  position: absolute;
+  right: -2px;
+  top: -5.5px;
+  border-left: 8px solid var(--color-outline);
+  border-top: 4.5px solid transparent;
+  border-bottom: 4.5px solid transparent;
+}
+
+.graph-draw .t-sp-line {
+  border-top-color: var(--color-secondary);
+}
+
+.graph-draw .t-critical {
+  border-top: 3px solid var(--color-on-surface-variant);
 }
 
 /* "faded" applies only while a chain is selected. Off, it keeps its slot (visibility, not display), so selecting a
@@ -3444,13 +3503,20 @@ body.with-option-line .toaster {
   marker-end: url(#graph-arrow);
 }
 
+/* A wait on a question: solid in the question colour, starting at its "?" square (deps M3: only a blocked ring is
+   dashed, so a dash never means two things). */
 .edge.sp {
   stroke: var(--color-secondary);
-  stroke-dasharray: 5 4;
 }
 
 .edge.muted {
   opacity: 0.35;
+}
+
+/* The longest chain named in the lead (deps H3 step 1): a little stronger than the other lines. */
+.edge.critical {
+  stroke: var(--color-on-surface-variant);
+  stroke-width: 2.4;
 }
 
 .edge.cycle {
@@ -3495,6 +3561,11 @@ body.with-option-line .toaster {
 
 .task.t-active .ring {
   stroke: var(--color-primary);
+  stroke-width: 3.5;
+}
+
+.task.t-review .ring {
+  stroke: var(--color-tertiary);
   stroke-width: 3.5;
 }
 
@@ -3581,11 +3652,6 @@ body.with-option-line .toaster {
   fill: var(--color-on-surface);
 }
 
-/* A question's id sits above its square: the alphabetic baseline, so the text ends above the edge. */
-.graph-svg .node .label.above {
-  dominant-baseline: auto;
-}
-
 .graph-svg .node .graph-locks {
   font-size: clamp(calc(var(--text-xs) / var(--graph-scale, 1)), var(--text-xs), calc(var(--text-sm) / var(--graph-scale, 1)));
   dominant-baseline: hanging;
@@ -3597,6 +3663,33 @@ body.with-option-line .toaster {
 .zoom-near .label,
 .node:hover .label,
 .node:focus-visible .label {
+  display: inline;
+}
+
+/* deps H1: core tasks and questions carry their title below them, always (small nodes too): what a node is reads
+   first, the id and state follow on a muted line. The font is fixed in graph units, so the space queueGraph reserves
+   for each line always holds (no overlap at any zoom); zoomed in it is capped at 14 px on screen. Zoomed so far out
+   that a title would be under 6 px (zoom-far), the titles wait for hover or focus. */
+.graph-svg .node .label.titled {
+  display: inline;
+  font-size: min(var(--text-xs), calc(var(--text-sm) / var(--graph-scale, 1)));
+}
+
+.graph-svg .node .label .label-meta {
+  fill: var(--color-on-surface-variant);
+}
+
+.graph-svg .node .label .graph-locks {
+  font-size: inherit;
+  fill: var(--color-primary);
+}
+
+.graph-svg.zoom-far .node .label.titled {
+  display: none;
+}
+
+.graph-svg.zoom-far .node:hover .label.titled,
+.graph-svg.zoom-far .node:focus-visible .label.titled {
   display: inline;
 }
 
@@ -3616,13 +3709,12 @@ body.with-option-line .toaster {
   stroke-width: 4;
 }
 
-.node.before .ring {
-  stroke: var(--color-secondary);
-  stroke-width: 3;
-}
-
+/* Before and after the selected task: one ring (deps M3). The two colours were hard to tell apart and the legend
+   never named them; the position (left or right of the selected task) and the status line ("waits on ..., unlocks
+   ...") say it in words. */
+.node.before .ring,
 .node.after .ring {
-  stroke: var(--color-tertiary);
+  stroke: var(--color-on-surface);
   stroke-width: 3;
 }
 

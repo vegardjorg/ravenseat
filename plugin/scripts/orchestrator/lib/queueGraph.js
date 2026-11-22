@@ -47,7 +47,81 @@
     compactBottom: 24, // below the bottom node (the id or "unlocks N")
     compactGap: 24, // between two components in the packing
     readablePx: 6, // smallest on-screen circle diameter (pixels) that counts as readable for "Customize"
+    // The title labels (deps track, H1 and M1): a node with `label` (core tasks and questions in the Tasks view) gets a
+    // block below it with up to labelLines lines of the title (about labelChars characters each) and one muted line
+    // with the id. The layout reserves that block, so labels never overlap. Plans' own graph has no `label` and keeps
+    // the measures above.
+    labelChars: 24,
+    labelLines: 2,
+    labelLine: 15, // line height in graph units (the label font is 12 units, board.css)
+    labelTop: 8, // from the node's centre + r to the label's top: clear of the thickest ring stroke
+    labelWidth: 160, // the column a label may use (24 characters at 12 units, about 150, with room to spare)
+    labelDistance: 190, // between layers when labels are drawn: the label column plus room for the edges
+    labelPage: 88, // from the frame to the first and last layer when labels are drawn (half a label and a margin)
+    labelReadablePx: 10, // smallest on-screen label font (pixels) that "Fit" aims for
+    labelFont: 12,
   };
+
+  /**
+   * A title cut for a node label: at most `lines` lines of at most `chars` characters, wrapped at spaces (a word longer
+   * than a line is cut hard), whitespace collapsed. When text is left out, the last line ends with "…" (and no
+   * trailing punctuation before it). The full title stays in the tooltip and the accessible name.
+   * @returns {string[]} the lines ([] for an empty title)
+   */
+  function clampLabel(text, { chars = MEASURE.labelChars, lines = MEASURE.labelLines } = {}) {
+    const words = String(text ?? '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .split(' ')
+      .filter(Boolean);
+    const out = [];
+    let i = 0;
+    while (i < words.length && out.length < lines) {
+      let line = '';
+      while (i < words.length) {
+        const next = line ? `${line} ${words[i]}` : words[i];
+        if (next.length <= chars) {
+          line = next;
+          i++;
+          continue;
+        }
+        if (!line) {
+          // One word longer than a line: cut it, the rest continues on the next line.
+          line = words[i].slice(0, chars);
+          words[i] = words[i].slice(chars);
+        }
+        break;
+      }
+      out.push(line);
+    }
+    if (i < words.length && out.length) {
+      let last = out[out.length - 1];
+      if (last.length > chars - 1) {
+        const space = last.lastIndexOf(' ', chars - 1);
+        last = space > chars / 2 ? last.slice(0, space) : last.slice(0, chars - 1);
+      }
+      out[out.length - 1] = `${last.replace(/[\s.,;:!?]+$/, '')}…`;
+    }
+    return out;
+  }
+
+  /** The height of a node's label block below it (0 without a label): the title lines and the id line. */
+  const labelHeight = (n) =>
+    n?.label ? MEASURE.labelTop + (n.label.length + 1) * MEASURE.labelLine : 0;
+
+  /**
+   * The box a node's label takes in graph coordinates (null without a label): centred under the node, labelWidth
+   * wide, from labelTop below the node's edge down to the end of the id line.
+   */
+  function labelBox(n) {
+    if (!n?.label) return null;
+    return {
+      left: n.x - MEASURE.labelWidth / 2,
+      right: n.x + MEASURE.labelWidth / 2,
+      top: n.y + n.r + MEASURE.labelTop,
+      bottom: n.y + n.r + labelHeight(n),
+    };
+  }
 
   /** Radius from estimated minutes: the area follows the minutes, with a min and max limit. */
   function radius(minutes) {
@@ -65,7 +139,9 @@
     if (col === 'batch') return 'batch';
     if (col === 'blocked') return 'blocked';
     if (col === 'queue') return k.ready ? 'ready' : 'blocked';
-    return 'active'; // running, picked, review, outside queue
+    // deps M4: review is its own state, so the graph never calls a task in review "in progress".
+    if (col === 'review' || k.status === 'review') return 'review';
+    return 'active'; // running, picked, outside queue
   }
 
   const compare = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
@@ -145,6 +221,9 @@
         color: k.color ?? null,
         estimate: Number(k.estimate) || 0,
         locks: k.unlocks?.count ?? 0,
+        // The title is what you read first (H1): core tasks get it as a label below the circle. Neighbors, done
+        // predecessors and standalone tasks keep the id on hover (they are context, drawn small or in a grid).
+        label: r === 'core' ? clampLabel(k.title ?? '') : undefined,
         r: small
           ? MEASURE.rSmall
           : r === 'free'
@@ -168,6 +247,7 @@
         type: s.type ?? 'question',
         text: s.text ?? null,
         title: s.text ?? s.sp,
+        label: clampLabel(s.text ?? s.sp),
         project: (s.projects ?? [])[0] ?? null,
         locks: Number(s.count) || 0,
         r: MEASURE.spSide / 2,
@@ -265,6 +345,11 @@
     const perId = new Map(all.map((n) => [n.id, n]));
     const ids = inGraph.map((n) => n.id).sort(compare);
     const { make, broken } = makeFor(ids, graph?.edges ?? []);
+    // With title labels (the Tasks view), the layers and the frame edges make room for the label column; without
+    // (Plans' graph), the old measures hold.
+    const labelled = inGraph.some((n) => n.label);
+    const distance = labelled ? MEASURE.labelDistance : MEASURE.makeDistance;
+    const page = labelled ? MEASURE.labelPage : MEASURE.compactPage;
 
     const laneSequence = new Map((graph?.projects ?? []).map((p, i) => [p.pid, i]));
     const laneFor = (id) => {
@@ -299,17 +384,21 @@
       groups.get(r).push(id);
     }
 
-    // y: the nodes are stacked in the layer (radius + gap + radius).
+    // y: the nodes are stacked in the layer (radius + its label block + gap + radius).
     const stable = (ids) => {
       const ys = [];
       let y = 0;
       ids.forEach((id, i) => {
         const r = perId.get(id).r;
-        if (i > 0) y += perId.get(ids[i - 1]).r + MEASURE.gap + r;
+        if (i > 0) {
+          const above = perId.get(ids[i - 1]);
+          y += above.r + labelHeight(above) + MEASURE.gap + r;
+        }
         ys.push(y);
       });
       const top = ids.length ? perId.get(ids[0]).r : 0;
-      const bottom = ids.length ? ys[ys.length - 1] + perId.get(ids[ids.length - 1]).r : 0;
+      const last = ids.length ? perId.get(ids[ids.length - 1]) : null;
+      const bottom = last ? ys[ys.length - 1] + last.r + labelHeight(last) : 0;
       return { ys, top, height: top + bottom };
     };
 
@@ -350,7 +439,7 @@
         const s = stacks[i];
         const start = MEASURE.compactTop + (highest - s.height) / 2 + s.top;
         l.forEach((id, j) =>
-          local.set(id, { x: MEASURE.compactPage + i * MEASURE.makeDistance, y: start + s.ys[j], make: i }),
+          local.set(id, { x: page + i * distance, y: start + s.ys[j], make: i }),
         );
       });
       // The lane per project: the project with the most nodes (gray neighbors count only when there are no others).
@@ -368,7 +457,7 @@
         ids,
         countMake,
         lane: perLane ? lane : 0,
-        width: 2 * MEASURE.compactPage + (countMake - 1) * MEASURE.makeDistance,
+        width: 2 * page + (countMake - 1) * distance,
         height: MEASURE.compactTop + highest + MEASURE.compactBottom,
       };
     };
@@ -422,8 +511,15 @@
       .filter((n) => n.role === 'core')
       .map((n) => 2 * n.r)
       .sort((a, b) => a - b);
-    const readableScale =
+    const circleScale =
       MEASURE.readablePx / (diameters[Math.floor(diameters.length * 0.1)] ?? 2 * MEASURE.rMin);
+    // With title labels, the first target is labels of at least labelReadablePx on screen (the label font is fixed in
+    // graph units, so the layout's reserved space always holds). A queue too large for that at the surface's width
+    // falls back to the circle target, as before labels: "Fit" then shows the overview and you zoom in to read.
+    const targets = labelled
+      ? [Math.max(circleScale, MEASURE.labelReadablePx / MEASURE.labelFont), circleScale]
+      : [circleScale];
+    let readableScale = targets[targets.length - 1];
     let selected = null;
     if (comps.length) {
       const from = Math.max(...comps.map((k) => k.width));
@@ -438,13 +534,21 @@
       }
       const inWidth = (m) => fb / (m.width + 20);
       const scale = (m) => Math.min(inWidth(m), fh / (m.height + 20));
-      for (const m of candidates) if (!selected || scale(m) > scale(selected) * (1 + 1e-9)) selected = m;
-      if (scale(selected) < readableScale) {
-        const readable = candidates.filter((m) => inWidth(m) >= readableScale);
-        selected = readable.length
-          ? readable.reduce((a, m) => (m.height < a.height - 1e-9 ? m : a))
-          : candidates[0];
+      let best = null;
+      for (const m of candidates) if (!best || scale(m) > scale(best) * (1 + 1e-9)) best = m;
+      // The first target that the best fit meets, or that a packing filling the width meets (the lowest one).
+      for (const target of targets) {
+        if (scale(best) >= target) selected = best;
+        else {
+          const readable = candidates.filter((m) => inWidth(m) >= target);
+          if (readable.length) selected = readable.reduce((a, m) => (m.height < a.height - 1e-9 ? m : a));
+        }
+        if (selected) {
+          readableScale = target;
+          break;
+        }
       }
+      if (!selected) selected = candidates[0];
     }
 
     // Shift each component to its place (per project: inside the lane, lane below lane).
@@ -532,6 +636,9 @@
       cycles,
       countMake: Math.max(0, ...comps.map((k) => k.countMake)),
       readableScale,
+      // Title labels are drawn (the Tasks view): "Fit" never zooms past 1 when it fills the width, the size the
+      // label font is designed for.
+      labelled,
       width: Math.max(width, freeWidth),
       height,
     };
@@ -653,5 +760,250 @@
     };
   }
 
-  return { COLUMNS, SP, MEASURE, radius, buildGraph, layer, graphNumber, criticalPath };
+  // ---- Words (deps track, H3 step 1 and M2): the view answers in words, title first, counts last ---------------------
+
+  /** A task's state in words: STATE_TEXT for names and tooltips, STATE_SHORT for the muted line under a title. */
+  const STATE_TEXT = {
+    ready: 'ready now',
+    blocked: 'blocked',
+    active: 'in progress',
+    review: 'in review',
+    qa: 'done, waiting for QA',
+    done: 'done',
+    batch: 'in the batch queue: not started alone, packed into a track',
+  };
+  const STATE_SHORT = {
+    ready: 'ready',
+    blocked: 'blocked',
+    active: 'in progress',
+    review: 'in review',
+    qa: 'waiting for QA',
+    done: 'done',
+    batch: 'batch queue',
+  };
+
+  /** A question's kind in plain words, for its name and tooltip (deps L3). */
+  const SP_KIND = {
+    question: 'owner question',
+    condition: 'waiting on a condition',
+    lawyer: 'waiting on a lawyer',
+    'owner-task': 'owner task',
+  };
+
+  const plural = (n, one, more) => `${n} ${n === 1 ? one : more}`;
+
+  /** "A", "A and B", "A, B and C"; over `max` names: the first max - 1 and "and N more". */
+  function listText(names, max = 4) {
+    const list = [...(names ?? [])];
+    if (list.length > max) {
+      const shown = list.slice(0, max - 1);
+      return `${shown.join(', ')} and ${list.length - shown.length} more`;
+    }
+    if (list.length <= 1) return list.join('');
+    return `${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`;
+  }
+
+  /** A text cut at a word boundary to at most `max` characters, with "…" when cut (no trailing punctuation). */
+  function cutText(text, max) {
+    const t = String(text ?? '').replace(/\s+/g, ' ').trim();
+    if (t.length <= max) return t;
+    const space = t.lastIndexOf(' ', max - 1);
+    return `${t.slice(0, space > max / 2 ? space : max - 1).replace(/[\s.,;:!?]+$/, '')}…`;
+  }
+
+  /** How a node is named in a list of others: a task by its title, a question as the question "<text>". */
+  function refText(n) {
+    if (!n) return '';
+    if (n.art === 'question') return `the question "${cutText(n.text ?? n.sp, 80)}"`;
+    return n.title || n.id;
+  }
+
+  /**
+   * The words for one task node: `lines` for the tooltip and `name` for the accessible name, with the same facts in
+   * the same order: the title (a neighbor says why it is gray), the id, the state, what it waits on and what it
+   * unlocks, by title (a question by its text). "Unlocks" lists the direct successors drawn here and, when the task
+   * unlocks more in all (queueBoard's unlocks.count), the total.
+   * @param {object} n a task node from layer()
+   * @param {{ nodes: object[], edges: object[] }} o the layout (or the graph) it belongs to
+   */
+  function nodeWords(n, o) {
+    const perId = new Map((o?.nodes ?? []).map((x) => [x.id, x]));
+    const before = [];
+    const after = [];
+    for (const k of o?.edges ?? []) {
+      if (k.to === n.id && perId.has(k.from)) before.push(perId.get(k.from));
+      if (k.from === n.id && perId.has(k.to)) after.push(perId.get(k.to));
+    }
+    // Tasks first (by id), questions after them.
+    before.sort((a, b) => (a.art === b.art ? compare(a.id, b.id) : a.art === 'question' ? 1 : -1));
+    after.sort((a, b) => compare(a.id, b.id));
+    const waits = before.length ? `Waits on ${listText(before.map(refText))}` : null;
+    const more = (n.locks ?? 0) > after.length ? ` (${plural(n.locks, 'task', 'tasks')} in all)` : '';
+    const unlocks = after.length ? `Unlocks ${listText(after.map(refText))}${more}` : null;
+    const lower = (x) => (x === waits || x === unlocks ? x.charAt(0).toLowerCase() + x.slice(1) : x);
+    if (n.art === 'question') {
+      // deps L3: a question by its text first (a closing period dropped, so the joined name never says ".."), then
+      // its id, its kind in plain words and what answering it unlocks, the same order as a task.
+      const text = String(n.text ?? '').replace(/\s+/g, ' ').trim().replace(/\.+$/, '');
+      const lines = [text || null, n.sp ?? n.id, SP_KIND[n.type] ?? SP_KIND.question, unlocks].filter(Boolean);
+      return { lines, name: lines.map(lower).join(', ') };
+    }
+    const name = n.title || n.id;
+    const lines = [
+      n.role === 'neighbor' ? `${name}: hidden by the filter or search` : name,
+      n.title ? n.id : null,
+      STATE_TEXT[n.state] ?? n.status ?? null,
+      waits,
+      unlocks,
+    ].filter(Boolean);
+    return { lines, name: lines.map(lower).join(', ') };
+  }
+
+  /**
+   * The lead sentence above the graph (replaces the count line): which answer unlocks the most, named by the
+   * question's text, and the longest chain, named by its titles (queueGraph.criticalPath over the open tasks with the
+   * estimate as weight, as Plans' Dependencies does). The counts follow as a separate part, drawn muted.
+   * @returns {{ lead: string|null, counts: string, critical: { path: string[], sum: number, edges: string[] } }}
+   */
+  function graphLead(o, counts) {
+    const nodes = o?.nodes ?? [];
+    const parts = [];
+    const questions = nodes
+      .filter((n) => n.art === 'question')
+      .sort((a, b) => (b.locks ?? 0) - (a.locks ?? 0) || compare(a.id, b.id));
+    if (questions.length) {
+      const q = questions[0];
+      const text = cutText(q.text ?? q.sp, 90);
+      const many = plural(q.locks ?? 0, 'task', 'tasks');
+      parts.push(
+        questions.length > 1
+          ? `Answering "${text}" unlocks the most: ${many}.`
+          : `Answering "${text}" unlocks ${many}.`,
+      );
+    }
+    const critical = criticalPath(
+      nodes,
+      (o?.edges ?? []).filter((k) => k.art !== 'sp'),
+      {
+        with: (n) => n.art === 'task' && (n.role === 'core' || n.role === 'neighbor'),
+        weight: (n) => (Number(n.estimate) > 0 ? Number(n.estimate) : 1),
+      },
+    );
+    if (critical.path.length >= 2) {
+      const perId = new Map(nodes.map((n) => [n.id, n]));
+      parts.push(`Longest chain: ${listText(critical.path.map((id) => refText(perId.get(id))), 6)}.`);
+    }
+    const countText = nodes.length
+      ? [
+          plural(counts?.tasks ?? 0, 'task in chains', 'tasks in chains'),
+          counts?.question
+            ? `${plural(counts.question, 'owner question', 'owner questions')} hold${counts.question === 1 ? 's' : ''} back ${plural(counts.blockedByQuestion ?? 0, 'task', 'tasks')}`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : '';
+    return {
+      lead: parts.length ? parts.join(' ') : null,
+      counts: countText,
+      critical: critical.path.length >= 2 ? critical : { path: [], sum: 0, edges: [] },
+    };
+  }
+
+  /**
+   * The selection line in Dependencies (deps M5): the selected task by its title, the id in brackets, then how many
+   * tasks are before and after it in the chain. A task that is not drawn (hidden right now) is named by its id.
+   * The card views keep their own line (QueueA11y.chainLead); only the graph names the title.
+   */
+  function chainText(id, chain, o) {
+    const n = (o?.nodes ?? []).find((x) => x.id === id && x.art === 'task');
+    const title = n?.title ? `${cutText(n.title, 60)} (${id})` : id;
+    const before = new Set(chain?.before ?? []).size;
+    const after = new Set(chain?.after ?? []).size;
+    // "1 task before it, 2 after it": the noun only once, on the first count.
+    const side = (k, first) => (k ? (first ? plural(k, 'task', 'tasks') : String(k)) : 'nothing');
+    return `Showing the chain of ${title}: ${side(before, true)} before it, ${side(after, !before)} after it`;
+  }
+
+  /**
+   * The box (graph units) around the nodes `ids` of a laid-out graph: their circles and their title labels.
+   * null when none of them is drawn.
+   */
+  function chainBox(o, ids) {
+    const want = new Set(ids);
+    let box = null;
+    const add = (b) => {
+      if (!b) return;
+      box = box
+        ? {
+            left: Math.min(box.left, b.left),
+            right: Math.max(box.right, b.right),
+            top: Math.min(box.top, b.top),
+            bottom: Math.max(box.bottom, b.bottom),
+          }
+        : { ...b };
+    };
+    for (const n of o?.nodes ?? []) {
+      if (!want.has(n.id) || !Number.isFinite(n.x)) continue;
+      const r = n.r ?? 0;
+      add({ left: n.x - r, right: n.x + r, top: n.y - r, bottom: n.y + r });
+      add(labelBox(n));
+    }
+    return box;
+  }
+
+  /**
+   * Pan (and if needed zoom out) the view so `box` (graph units) lies inside `area` (surface pixels, e.g. the part
+   * left of the side panel), deps M5. `view` is { s, x, y }: screen = x + graph * s. Returns the new view, or null when
+   * the box is already inside. It never zooms in, and never below `minScale` (0.5: where titles still show, see
+   * zoom-far); a chain too big even then is centred on `focus` (the selected task) instead.
+   */
+  function panInto(box, view, area, opt = {}) {
+    const pad = opt.pad ?? 16;
+    const s0 = view.s;
+    const inside =
+      view.x + box.left * s0 >= area.left &&
+      view.x + box.right * s0 <= area.right &&
+      view.y + box.top * s0 >= area.top &&
+      view.y + box.bottom * s0 <= area.bottom;
+    if (inside) return null;
+    const aw = Math.max(1, area.right - area.left - 2 * pad);
+    const ah = Math.max(1, area.bottom - area.top - 2 * pad);
+    const bw = Math.max(1, box.right - box.left);
+    const bh = Math.max(1, box.bottom - box.top);
+    const floor = Math.min(s0, opt.minScale ?? 0.5);
+    const s = Math.max(floor, Math.min(s0, aw / bw, ah / bh));
+    const along = (lo, hi, a0, a, focus) => {
+      // Fits: centred in the free area. Too big: the selected task in the middle, or the start of the chain.
+      if ((hi - lo) * s <= a) return a0 + pad + (a - (hi - lo) * s) / 2 - lo * s;
+      if (Number.isFinite(focus)) return a0 + pad + a / 2 - focus * s;
+      return a0 + pad - lo * s;
+    };
+    return {
+      s,
+      x: along(box.left, box.right, area.left, aw, opt.focus?.x),
+      y: along(box.top, box.bottom, area.top, ah, opt.focus?.y),
+    };
+  }
+
+  return {
+    COLUMNS,
+    SP,
+    MEASURE,
+    chainBox,
+    panInto,
+    STATE_TEXT,
+    STATE_SHORT,
+    radius,
+    clampLabel,
+    labelBox,
+    listText,
+    nodeWords,
+    graphLead,
+    chainText,
+    buildGraph,
+    layer,
+    graphNumber,
+    criticalPath,
+  };
 });

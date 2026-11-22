@@ -18,28 +18,18 @@
 (function () {
   const NS = 'http://www.w3.org/2000/svg';
   const STORAGE = 'queue-board-graph';
-  const SP_TYPE = {
-    question: 'Question',
-    condition: 'Waiting on condition',
-    lawyer: 'Waiting on lawyer',
-    'owner-task': 'Owner-task',
-  };
-  const STATE = {
-    ready: 'ready now',
-    blocked: 'blocked',
-    active: 'in progress',
-    qa: 'done, waiting for QA',
-    done: 'done',
-    batch: 'in the batch queue: not started alone, packed into a track',
-  };
+  // The state in words lives in queueGraph.js (STATE_TEXT for names, STATE_SHORT for the muted line under a title,
+  // SP_KIND for a question's kind),
+  // so the names, the tooltips and the labels say the same thing.
+  const stateShort = (n) => window.QueueGraph?.STATE_SHORT?.[n.state] ?? n.status;
 
   // Where the ids sit (B33). A task's ring has radius r + RING_GAP, and its thickest stroke in board.css is
   // RING_STROKE_MAX (a selected node); half of that stroke lies outside the ring. The label hangs below that outer
   // edge with LABEL_GAP to spare (dominant-baseline: hanging in board.css, so the font size never moves its top).
-  // A question's square has a stroke of at most SP_STROKE_MAX (focus); its id sits above it, "unlocks N" below it.
+  // A question's label hangs at the same offset below its square (its stroke is at most 3, so it is clear too). The
+  // offset equals queueGraph's MEASURE.labelTop, the space the layout reserves (deps H1).
   const RING_GAP = 3;
   const RING_STROKE_MAX = 4;
-  const SP_STROKE_MAX = 3;
   const LABEL_GAP = 3;
   /** The y of a task's label (its top) below a circle with radius r: clear of the ring at every size. */
   const labelY = (r) => r + RING_GAP + RING_STROKE_MAX / 2 + LABEL_GAP;
@@ -47,7 +37,7 @@
   // The view's options (saved in the browser). Neighbors is on by default, the rest off.
   const option = readOption();
   // The layout for the last key (version + filter + option), and how many times it has been computed (for the check).
-  let cache = { key: null, setup: null, counts: null };
+  let cache = { key: null, setup: null, counts: null, lead: null };
   let calculations = 0;
   // The viewport: offset and scale. null = fit on the next render. Reset when the filter or an option changes.
   let snippet = null;
@@ -129,11 +119,10 @@
         showStandalone: option.freeOnes,
         neighbors: option.neighbors,
       });
-      cache = {
-        key,
-        setup: KG.layer(graph, { mode: option.mode, surface: measure }),
-        counts: KG.graphNumber(graph),
-      };
+      const o = KG.layer(graph, { mode: option.mode, surface: measure });
+      const counts = KG.graphNumber(graph);
+      // The lead sentence and the longest chain (deps H3 step 1) are computed with the layout, once per change.
+      cache = { key, setup: o, counts, lead: KG.graphLead(o, counts) };
       calculations++;
     }
     // New filter or new options: show everything again. A new version of the queue (same filter) keeps the viewport.
@@ -145,18 +134,19 @@
     return cache;
   }
 
-  // ---- The top of the view: recap, legend and options ----
-  function recap(counts, o) {
+  // ---- The top of the view: lead, legend and options ----
+  /**
+   * The lead (deps H3 step 1, M2): one sentence that names things, from queueGraph.graphLead ("Answering "<question>"
+   * unlocks the most: 4 tasks. Longest chain: A, B, C and D."), then the counts, muted. It replaces the count line,
+   * which led with numbers. A full row of its own.
+   */
+  function recap(lead, o) {
     const el = ctx.el;
-    const parts = [
-      plural(counts.tasks, 'task in chains', 'tasks in chains'),
-      `${plural(counts.question, 'owner question', 'owner questions')} block ${plural(counts.blockedByQuestion, 'task', 'tasks')}`,
-      `longest chain ${plural(counts.longestChain, 'link', 'links')}`,
-    ];
     return el(
       'p',
-      { class: 'graph-tall' },
-      parts.join(' · '),
+      { class: 'graph-lead' },
+      lead.lead ? el('span', { class: 'graph-lead-text', text: lead.lead }) : null,
+      lead.counts ? el('span', { class: 'graph-lead-counts', text: lead.counts }) : null,
       o.cycles.length
         ? el('span', {
             class: 'badge old',
@@ -193,9 +183,24 @@
       chunk('t-ready', 'ready now'),
       chunk('t-blocked', 'blocked'),
       chunk('t-active', 'in progress'),
+      // deps M4: review has its own ring and word, so it is never read as "in progress".
+      chunk('t-review', 'in review'),
       // The batch queue has its own badge (dotted ring and "S").
       chunk('t-batch', 'in the batch queue (packed into a track)'),
       chunk('t-sp', 'owner question'),
+      // deps M3: the signs the legend never named. The fill is the project, the arrows point from what must finish
+      // first to what waits, a line from a "?" square is a wait on that question (solid: only a blocked ring is
+      // dashed), and the longest chain from the lead is the thick line. Each sample repeats what its text says.
+      chunk('t-project', 'fill colour: the project', { 'data-legend': 'project' }),
+      chunk('t-arrow', 'arrows point from what must finish first to what waits', { 'data-legend': 'arrow' }),
+      o.edges.some((k) => k.art === 'sp')
+        ? chunk('t-sp-line', 'line from a ? square: waits on that question', {
+            'data-legend': 'question-line',
+          })
+        : null,
+      cache.lead?.critical?.edges?.length
+        ? chunk('t-critical', 'thick line: the longest chain', { 'data-legend': 'critical' })
+        : null,
       has('neighbor')
         ? chunk('t-neighbor', 'small gray: hidden by your filter or search', { 'data-legend': 'neighbor' })
         : null,
@@ -205,7 +210,8 @@
   }
 
   /**
-   * The chain status line (QA-1e Q6): "Showing the chain of <id> (<n> tasks) · Clear selection", with the chain
+   * The chain status line (QA-1e Q6, deps M5): "Showing the chain of <title> (<id>): 1 task before it, 2 after it ·
+   * Clear selection", with the chain
    * members that are hidden right now and their actions in between (from board.js, ctx.chainCauses). The element is
    * always in the graph top with a fixed height (board.css), so the text appearing never moves the graph, and it is
    * a polite live region that mark() updates in place: a screen reader hears the change, not a new element.
@@ -217,10 +223,8 @@
       return;
     }
     const el = ctx.el;
-    const n = 1 + new Set([...(chain.before ?? []), ...(chain.after ?? [])]).size;
-    const lead = window.QueueA11y?.chainLead
-      ? window.QueueA11y.chainLead(id, n)
-      : `Showing the chain of ${id} (${plural(n, 'task', 'tasks')})`;
+    // deps M5: the line names the selected task by its title (queueGraph.chainText); the card views keep chainLead.
+    const lead = window.QueueGraph.chainText(id, chain, cache?.setup);
     statusEl.replaceChildren(
       el('span', { class: 'graph-chain-text', text: lead }),
       ...(ctx.chainCauses?.() ?? []),
@@ -235,7 +239,8 @@
     );
   }
 
-  function optionRow() {
+  /** The option row. Empty graph (`empty`): only "Show standalone", the one switch that can make it non-empty. */
+  function optionRow(empty = false) {
     const el = ctx.el;
     const toggle = (key, text) =>
       el(
@@ -265,6 +270,7 @@
           ctx.drawOnNew();
         },
       });
+    if (empty) return el('div', { class: 'graph-option' }, toggle('freeOnes', 'Show standalone'));
     return el(
       'div',
       { class: 'graph-option' },
@@ -297,26 +303,32 @@
     return `M${x1} ${a.y}C${middle} ${a.y} ${back} ${b.y} ${x2} ${b.y}`;
   }
 
+  // The tooltip, from queueGraph.nodeWords. A task: the title first (deps H1), then the id, the state, what it waits on
+  // and what it unlocks, by title (H3). A neighbor is drawn small and gray because the filter or search hides it
+  // (QA-1e Q6): its first line says so, so a hover or a screen reader explains the gray before the state. A question:
+  // its text first, then its id, its kind and what answering it unlocks (deps L3).
   function nodeTitle(n) {
-    if (n.art === 'question')
-      return [
-        `${n.sp} (${SP_TYPE[n.type] ?? SP_TYPE.question})`,
-        n.text,
-        `Unlocks ${plural(n.locks, 'task', 'tasks')}`,
-      ]
-        .filter(Boolean)
-        .join('\n');
-    // A neighbor is drawn small and gray because the filter or search hides it (QA-1e Q6): its name says so first,
-    // so a hover or a screen reader explains the gray before the state. A done predecessor's state line is "done".
-    return [
-      n.role === 'neighbor'
-        ? `${n.id} ${n.title}: hidden by the filter or search`
-        : `${n.id}: ${n.title}`,
-      STATE[n.state] ?? n.status,
-      n.locks ? `Unlocks ${plural(n.locks, 'task', 'tasks')}` : null,
-    ]
-      .filter(Boolean)
-      .join('\n');
+    return window.QueueGraph.nodeWords(n, cache.setup).lines.join('\n');
+  }
+
+  /** The accessible name, with the same facts as the tooltip ("Streak calendar, UI-2, blocked, waits on ..."). */
+  function nodeName(n) {
+    return window.QueueGraph.nodeWords(n, cache.setup).name;
+  }
+
+  /**
+   * The title label below a node (deps H1): the clamped title lines (from queueGraph.buildGraph), then a muted line
+   * with the id and, for a task, its state in words (so the ring is never the only signal) or, for a question, how
+   * many tasks answering it unlocks. Every line has a reserved slot in the layout (queueGraph.labelBox).
+   */
+  function titleLabel(n, meta) {
+    const line = window.QueueGraph?.MEASURE?.labelLine ?? 15;
+    return s(
+      'text',
+      { class: 'label titled', y: labelY(n.r) },
+      n.label.map((text, i) => s('tspan', { class: 'label-title', x: 0, dy: i ? line : null, text })),
+      s('tspan', { class: 'label-meta', x: 0, dy: n.label.length ? line : null }, ...meta),
+    );
   }
 
   function nodeEl(n) {
@@ -324,7 +336,7 @@
       'data-id': n.id,
       tabindex: 0,
       role: 'button',
-      'aria-label': nodeTitle(n).replace(/\n/g, '. '),
+      'aria-label': nodeName(n),
       transform: `translate(${n.x} ${n.y})`,
     };
     if (n.art === 'question') {
@@ -335,15 +347,11 @@
         s('title', { text: nodeTitle(n) }),
         s('rect', { class: 'sp-box', x: -h, y: -h, width: 2 * h, height: 2 * h, rx: 6 }),
         s('text', { class: 'sp-badge', y: 5, text: '?' }),
-        n.locks
-          ? s('text', {
-              class: 'graph-locks',
-              y: h + SP_STROKE_MAX / 2 + LABEL_GAP,
-              text: `unlocks ${n.locks}`,
-            })
-          : null,
-        // Above the square: the alphabetic baseline sits LABEL_GAP above the edge (ids have no descenders).
-        s('text', { class: 'label above', y: -(h + SP_STROKE_MAX / 2 + LABEL_GAP + 1), text: n.sp }),
+        titleLabel(n, [
+          n.sp,
+          n.locks ? ' · ' : null,
+          n.locks ? s('tspan', { class: 'graph-locks', text: `unlocks ${n.locks}` }) : null,
+        ]),
       );
     }
     const classes = ['node', 'task', `t-${n.state}`, `role-${n.role}`];
@@ -372,7 +380,9 @@
             s('text', { y: 3.5, text: 'S' }),
           )
         : null,
-      s('text', { class: 'label', y: labelY(n.r), text: n.id }),
+      n.label
+        ? titleLabel(n, [`${n.id} · ${stateShort(n)}`])
+        : s('text', { class: 'label', y: labelY(n.r), text: n.id }),
     );
   }
 
@@ -411,12 +421,14 @@
         }),
       );
     const edges = s('g', { class: 'edges' });
+    // The longest chain named in the lead is drawn a little stronger (deps H3 step 1).
+    const critical = new Set(cache.lead?.critical?.edges ?? []);
     for (const k of o.edges) {
       const a = perId.get(k.from);
       const b = perId.get(k.to);
       edges.append(
         s('path', {
-          class: `edge ${k.art}${k.muted ? ' muted' : ''}${k.cycle ? ' cycle' : ''}`,
+          class: `edge ${k.art}${k.muted ? ' muted' : ''}${k.cycle ? ' cycle' : ''}${critical.has(`${k.from}>${k.to}`) ? ' critical' : ''}`,
           d: filePath(a, b),
           'data-from': k.from,
           'data-to': k.to,
@@ -439,8 +451,9 @@
             viewBox: '0 0 10 10',
             refX: 1,
             refY: 5,
-            markerWidth: 7,
-            markerHeight: 7,
+            // deps M3: large enough to read the direction without knowing the left-to-right convention.
+            markerWidth: 9,
+            markerHeight: 9,
             orient: 'auto-start-reverse',
           },
           s('path', { class: 'arrow', d: 'M0 0L10 5L0 10z' }),
@@ -461,6 +474,8 @@
     svg.style.setProperty('--graph-scale', String(Math.round(snippet.s * 1000) / 1000));
     svg.classList.toggle('zoom-medium', snippet.s >= 0.8);
     svg.classList.toggle('zoom-near', snippet.s >= 1.4);
+    // Zoomed so far out that a title would be under 6 px: the titles wait for hover, focus or a zoom in.
+    svg.classList.toggle('zoom-far', snippet.s < 0.5);
   }
   function customize() {
     const o = cache.setup;
@@ -470,7 +485,9 @@
     let sk =
       b && h && o.width && o.height ? Math.min(b / (o.width + 20), h / (o.height + 20), 1.5) : 1;
     // If the circles become unreadable with the whole picture visible: fill the width, start at the top, scroll down.
-    if (b && o.width && sk < (o.readableScale ?? 0)) sk = Math.min(b / (o.width + 20), 1.5);
+    // With title labels, at most 1 (the 12 px the labels are laid out for), so more of the graph stays in view.
+    if (b && o.width && sk < (o.readableScale ?? 0))
+      sk = Math.min(b / (o.width + 20), o.labelled ? 1 : 1.5);
     snippet = {
       s: sk,
       x: b ? (b - o.width * sk) / 2 : 0,
@@ -578,37 +595,86 @@
       else fadedItem.setAttribute('aria-hidden', 'true');
     }
     chainStatus(active ? id : null, active ? chain : null);
+    // deps M5: a new selection is brought into the part of the surface the side panel does not cover. Once per
+    // selection, so a later pan or zoom by hand is never undone by a redraw.
+    if (!active) keptFor = null;
+    else if (keptFor !== id) {
+      keptFor = id;
+      keepInView(id, chain);
+    }
+  }
+
+  /** The id whose chain keepInView last placed (reset when the selection is cleared). */
+  let keptFor = null;
+
+  /**
+   * Moves the view so the selected chain (circles and titles) lies in the free part of the surface: left of the side
+   * panel when it floats over the graph, and above the bottom of the window. Pure math in queueGraph.panInto.
+   */
+  function keepInView(id, chain) {
+    const o = cache?.setup;
+    if (!surface || !snippet || !o) return;
+    const sr = surface.getBoundingClientRect();
+    if (!sr.width || !sr.height) return; // not laid out (hidden view or a test without layout)
+    const area = {
+      left: 0,
+      top: Math.max(0, -sr.top),
+      right: sr.width,
+      bottom: Math.min(sr.height, (window.innerHeight || sr.bottom) - sr.top),
+    };
+    const panel = document.getElementById('panel');
+    if (panel && !panel.hidden) {
+      const pr = panel.getBoundingClientRect();
+      if (pr.width && pr.left < sr.right && pr.right > sr.left) area.right = Math.min(area.right, pr.left - sr.left);
+    }
+    // Too little room beside the panel to be of use (the modal sheet on a narrow window): leave the view.
+    if (area.right - area.left < 240 || area.bottom - area.top < 160) return;
+    const ids = [id, ...(chain?.before ?? []), ...(chain?.after ?? [])];
+    // The questions the chain waits on are lit with it (mark), so they belong in view too.
+    const inChain = new Set(ids);
+    for (const k of o.edges ?? []) if (k.art === 'sp' && inChain.has(k.to)) ids.push(k.from);
+    const box = window.QueueGraph.chainBox(o, ids);
+    if (!box) return;
+    const own = o.nodes.find((n) => n.id === id);
+    const fresh = window.QueueGraph.panInto(box, snippet, area, {
+      focus: own ? { x: own.x, y: own.y } : undefined,
+    });
+    if (!fresh) return;
+    snippet = fresh;
+    use();
   }
 
   /** Draws the view in `ctx.main` (board.js has emptied it). */
   function draw(c) {
     ctx = c;
     const el = c.el;
-    const { setup: o, counts } = setup();
+    const { setup: o, lead } = setup();
     const focus = document.activeElement?.closest?.('.graph-svg .node')?.dataset.id ?? null;
+    if (!o.nodes.length) {
+      // Empty (deps M2): one plain sentence and its action (the shared emptyState from board.js says when the search
+      // or a filter hides everything), with only the switch that could change the result. No lead, legend or Fit.
+      svg = null;
+      make = null;
+      surface = null;
+      statusEl = null;
+      fadedItem = null;
+      const text = 'No task here waits on another task or on a question.';
+      c.main.append(
+        el('div', { class: 'graph-top' }, optionRow(true)),
+        window.QueueEmpty ? window.QueueEmpty(text) : el('p', { class: 'empty', text }),
+      );
+      return;
+    }
     // Empty until mark() fills it; always in the layout with its fixed height (a full row of its own).
     statusEl = el('p', { class: 'graph-chain-status', role: 'status', 'aria-live': 'polite' });
     const top = el(
       'div',
       { class: 'graph-top' },
-      recap(counts, o),
+      recap(lead, o),
       legend(o),
       optionRow(),
       statusEl,
     );
-    if (!o.nodes.length) {
-      svg = null;
-      make = null;
-      surface = null;
-      c.main.append(
-        top,
-        // The shared emptyState from board.js (the reason and the action).
-        window.QueueEmpty
-          ? window.QueueEmpty('No dependencies here.')
-          : el('p', { class: 'empty', text: 'No dependencies with these filters.' }),
-      );
-      return;
-    }
     c.main.append(top, drawSvg(o));
     if (snippet) use();
     else customize();

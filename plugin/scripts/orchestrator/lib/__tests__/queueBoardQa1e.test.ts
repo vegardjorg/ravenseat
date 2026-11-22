@@ -5,15 +5,15 @@
 // queueBoardQa1e.test.ts: why things are grayed in Dependencies, and the project name on lane cards (QA-1e: Q6, Q8).
 //
 // What the tests prove:
-//   - Q6: selecting a task in Dependencies shows a status line in the graph's top area ("Showing the chain of <id>
-//     (<n> tasks) · Clear selection"). The line is a polite live region that is always in the layout with a fixed
+//   - Q6: selecting a task in Dependencies shows a status line in the graph's top area ("Showing the chain of <title>
+//     (<id>): 1 task before it, 1 after it · Clear selection", title first since deps M5). The line is a polite live region that is always in the layout with a fixed
 //     height, so it never pushes the graph down. "Clear selection" and Esc both clear it. The card views say the
 //     same in the strip above the columns (plus "the rest is faded"); in Dependencies the strip leaves it to the graph
 //     line, so the chain is never explained twice.
 //   - Q6: the legend explains the dimmed states, and only the ones that apply right now: "faded: outside the selected
 //     chain" (while a chain is selected; its slot is kept so nothing moves), "small gray: hidden by your filter or
 //     search" (when neighbor nodes are drawn) and "pale: done" (when done predecessors are drawn).
-//   - Q6: a neighbor node is named "<id> <title>: hidden by the filter or search" and still opens on a click; a done
+//   - Q6: a neighbor node is named "<title>: hidden by the filter or search, <id>" and still opens on a click; a done
 //     node says "done".
 //   - Q8: cards keep the project short name and color dot in Project lanes and in Flat grouped by area or feature,
 //     and the card cache key no longer depends on the view or grouping (the same node is reused when they change).
@@ -153,18 +153,18 @@ describe('Q6: the chain status line in Dependencies', () => {
     expect(base('.graph-chain-status')['flex-basis']).toBe('100%');
   });
 
-  it('selecting a task shows "Showing the chain of <id> (<n> tasks) · Clear selection"', async () => {
+  it('selecting a task shows "Showing the chain of <title> (<id>): ... · Clear selection" (title first, deps M5)', async () => {
     const before = status();
     node('EX-2')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await flush();
     // The same element is updated (a live region is only announced when it was already in the page).
     expect(status()).toBe(before);
-    // EX-2's chain (the server's, open tasks only): EX-1 before it and EX-3 after it. 3 tasks with EX-2.
+    // EX-2's chain (the server's, open tasks only): EX-1 before it and EX-3 after it.
     const lead = status().querySelector('.graph-chain-text') as HTMLElement;
-    expect(lead.textContent).toBe('Showing the chain of EX-2 (3 tasks)');
+    expect(lead.textContent).toBe('Showing the chain of Title EX-2 (EX-2): 1 task before it, 1 after it');
     const clear = status().querySelector('button') as HTMLButtonElement;
     expect(clear.textContent).toBe('Clear selection');
-    expect(status().textContent).toMatch(/^Showing the chain of EX-2 \(3 tasks\) · .*Clear selection$/);
+    expect(status().textContent).toMatch(/^Showing the chain of Title EX-2 \(EX-2\): .* · .*Clear selection$/);
     // The strip above the graph does not say it a second time.
     expect($('stripe').querySelector('.chain-line')).toBeNull();
   });
@@ -180,9 +180,9 @@ describe('Q6: the chain status line in Dependencies', () => {
   it('Esc clears it too (the first Esc closes the panel, the next clears the chain)', async () => {
     node('EX-3')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await flush();
-    expect(status().textContent).toContain('Showing the chain of EX-3');
+    expect(status().textContent).toContain('Showing the chain of Title EX-3 (EX-3)');
     await closePanel();
-    expect(status().textContent).toContain('Showing the chain of EX-3');
+    expect(status().textContent).toContain('Showing the chain of Title EX-3 (EX-3)');
     key(document.body, 'Escape');
     await flush();
     expect(status().textContent).toBe('');
@@ -224,10 +224,11 @@ describe('Q6: the legend explains the dimmed states that apply', () => {
 // ---- Q6: names -------------------------------------------------------------------------------------------------------
 
 describe('Q6: neighbor and done nodes say why they look dimmed', () => {
-  it('a neighbor is named "<id> <title>: hidden by the filter or search", in the tooltip too', () => {
+  // deps H1: the title first, the id after it (it was "<id> <title>: ...").
+  it('a neighbor is named "<title>: hidden by the filter or search, <id>", in the tooltip too', () => {
     const g = node('OT-1')!;
-    expect(g.getAttribute('aria-label')).toMatch(/^OT-1 Title OT-1: hidden by the filter or search\./);
-    expect(g.querySelector('title')!.textContent).toMatch(/^OT-1 Title OT-1: hidden by the filter or search\n/);
+    expect(g.getAttribute('aria-label')).toMatch(/^Title OT-1: hidden by the filter or search, OT-1, /);
+    expect(g.querySelector('title')!.textContent).toMatch(/^Title OT-1: hidden by the filter or search\nOT-1\n/);
   });
 
   it('a click on a neighbor still opens it', async () => {

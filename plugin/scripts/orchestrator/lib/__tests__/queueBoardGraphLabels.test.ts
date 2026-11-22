@@ -82,7 +82,7 @@ function data() {
       review: [],
       built: [],
     },
-    inbox: { question: [{ type: 'question', sp: 'Q-1', direct: ['Q-W'], count: 1 }] },
+    inbox: { question: [{ type: 'question', sp: 'Q-1', text: 'Is Q-W wanted?', direct: ['Q-W'], count: 1 }] },
     projects: [{ pid: 'a', title: 'Project a', color: 'category-teal' }],
   };
 }
@@ -156,15 +156,58 @@ describe('labels sit outside the status ring', () => {
       expect(V.labelY(r)).toBeGreaterThanOrEqual(r + 3 + stroke / 2 + 2);
   });
 
-  it('a question id sits above its square and "unlocks N" hangs below it, both clear of the edge', () => {
+  it('a question label (its text, then the id and "unlocks N") hangs below its square, clear of the edge', () => {
     const q = nodes().find((g) => g.classList.contains('sp')) as SVGGElement;
     const h = Number(q.querySelector('rect.sp-box')?.getAttribute('width')) / 2;
     const label = Number(q.querySelector('text.label')?.getAttribute('y'));
-    expect(label).toBeLessThanOrEqual(-(h + 4));
-    const locks = q.querySelector('text.graph-locks');
-    expect(locks).toBeTruthy();
-    expect(Number(locks?.getAttribute('y'))).toBeGreaterThanOrEqual(h + 3);
-    expect(rule('.graph-svg .node .graph-locks')['dominant-baseline']).toBe('hanging');
+    expect(label).toBeGreaterThanOrEqual(h + 3);
+    const locks = q.querySelector('text.label .graph-locks');
+    expect(locks?.textContent).toBe('unlocks 1');
+    expect(rule('.graph-svg .node .label')['dominant-baseline']).toBe('hanging');
+  });
+});
+
+describe('the title is what you read first (deps H1)', () => {
+  const lines = (g: Element) => [...g.querySelectorAll('text.label > tspan')].map((t) => t.textContent);
+
+  it('every core task shows its title, then a muted line with the id', () => {
+    for (const g of nodes().filter((x) => x.classList.contains('role-core'))) {
+      const id = g.dataset.id as string;
+      const l = lines(g);
+      expect(l[0], id).toBe(`Title ${id}`);
+      expect(l[l.length - 1], id).toMatch(new RegExp(`^${id}\\b`));
+      expect(g.querySelector('tspan.label-meta')?.textContent, id).toMatch(new RegExp(`^${id}\\b`));
+      expect(g.querySelector('text.label')?.classList.contains('titled'), id).toBe(true);
+    }
+  });
+
+  it('small nodes are labelled too: the titled label is shown without hover or zoom', () => {
+    expect(rule('.graph-svg .node .label.titled').display).toBe('inline');
+    const small = nodes().find((g) => g.dataset.id === 'S-1') as SVGGElement;
+    expect(small.classList.contains('large')).toBe(false);
+    expect(lines(small)[0]).toBe('Title S-1');
+  });
+
+  it('a question shows its text first, its id muted after', () => {
+    const q = nodes().find((g) => g.classList.contains('sp')) as SVGGElement;
+    expect(lines(q)[0]).toBe('Is Q-W wanted?');
+    expect(q.querySelector('tspan.label-meta')?.textContent).toMatch(/^Q-1\b/);
+  });
+
+  it('the muted line uses the muted text token', () => {
+    expect(token(rule('.graph-svg .node .label .label-meta').fill)).toBe('on-surface-variant');
+  });
+
+  it('the accessible name and the tooltip start with the title, not the id', () => {
+    const t = nodes().find((g) => g.dataset.id === 'L-2') as SVGGElement;
+    expect(t.getAttribute('aria-label')).toMatch(/^Title L-2, L-2, /);
+    expect(t.querySelector('title')?.textContent).toMatch(/^Title L-2\n/);
+  });
+
+  it('the title font is fixed in graph units and capped at 14 px on screen when zoomed in', () => {
+    expect(rule('.graph-svg .node .label.titled')['font-size']).toBe(
+      'min(var(--text-xs), calc(var(--text-sm) / var(--graph-scale, 1)))',
+    );
   });
 });
 
@@ -202,6 +245,7 @@ describe('legend samples with a visible edge', () => {
     ['t-ready', '.task .ring'],
     ['t-blocked', '.task.t-blocked .ring'],
     ['t-active', '.task.t-active .ring'],
+    ['t-review', '.task.t-review .ring'],
     ['t-batch', '.task.t-batch .ring'],
     ['t-sp', '.sp .sp-box'],
   ];
@@ -245,5 +289,135 @@ describe('keyboard and screen reader behaviour stay', () => {
     const t = nodes().find((g) => g.dataset.id === 'A-1') as SVGGElement;
     t.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     expect(opened).toContain('A-1');
+  });
+});
+
+describe('the view answers in words (deps H3 step 1, M2)', () => {
+  it('the lead names the question and the longest chain; the counts follow, muted', () => {
+    const lead = main.querySelector('.graph-top .graph-lead') as HTMLElement;
+    expect(lead.querySelector('.graph-lead-text')?.textContent).toBe(
+      'Answering "Is Q-W wanted?" unlocks 1 task. Longest chain: Title L-1 and Title L-2.',
+    );
+    expect(lead.querySelector('.graph-lead-counts')?.textContent).toMatch(/tasks in chains/);
+    expect(token(rule('.graph-lead-counts').color)).toBe('on-surface-variant');
+    // The old count line is gone: the top no longer leads with a number.
+    expect(main.querySelector('.graph-tall')).toBeNull();
+    expect(lead.textContent).not.toMatch(/^\d/);
+  });
+
+  it('the longest chain is drawn a little stronger', () => {
+    const edge = main.querySelector('.edge[data-from="L-1"][data-to="L-2"]') as SVGPathElement;
+    expect(edge.classList.contains('critical')).toBe(true);
+    expect(main.querySelector('.edge[data-from="S-1"]')?.classList.contains('critical')).toBe(false);
+    expect(Number(rule('.edge.critical')['stroke-width'])).toBeGreaterThan(Number(rule('.edge')['stroke-width']));
+  });
+
+  it('each node says what it waits on and what it unlocks', () => {
+    const s2 = nodes().find((g) => g.dataset.id === 'S-2') as SVGGElement;
+    expect(s2.getAttribute('aria-label')).toBe('Title S-2, S-2, blocked, waits on Title S-1');
+    const s1 = nodes().find((g) => g.dataset.id === 'S-1') as SVGGElement;
+    expect(s1.getAttribute('aria-label')).toBe('Title S-1, S-1, ready now, unlocks Title S-2');
+    expect(s1.querySelector('title')?.textContent).toBe('Title S-1\nS-1\nready now\nUnlocks Title S-2');
+  });
+
+  it('a question is named by its text first, with no double period (deps L3)', () => {
+    const q = nodes().find((g) => g.dataset.sp === 'Q-1') as SVGGElement;
+    expect(q.getAttribute('aria-label')).toBe('Is Q-W wanted?, Q-1, owner question, unlocks Title Q-W');
+    expect(q.querySelector('title')?.textContent).toBe('Is Q-W wanted?\nQ-1\nowner question\nUnlocks Title Q-W');
+  });
+});
+
+describe('the legend explains every sign, and a dash means one thing (deps M3)', () => {
+  const item = (k: string) => main.querySelector(`.graph-draw li[data-legend="${k}"]`) as HTMLElement | null;
+
+  it('says the fill colour is the project', () => {
+    expect(item('project')?.textContent).toBe('fill colour: the project');
+  });
+
+  it('says which way the arrows point', () => {
+    expect(item('arrow')?.textContent).toBe('arrows point from what must finish first to what waits');
+  });
+
+  it('names the line from a question and the longest chain in words', () => {
+    expect(item('question-line')?.textContent).toBe('line from a ? square: waits on that question');
+    expect(item('critical')?.textContent).toBe('thick line: the longest chain');
+  });
+
+  it('dashed means blocked only: the question lines are solid', () => {
+    expect(rule('.task.t-blocked .ring')['stroke-dasharray']).toBeTruthy();
+    expect(rule('.edge.sp')['stroke-dasharray']).toBeUndefined();
+  });
+
+  it('the before and after rings of a selected chain look the same (the status line says it in words)', () => {
+    expect(rule('.node.before .ring').stroke).toBeTruthy();
+    expect(rule('.node.before .ring').stroke).toBe(rule('.node.after .ring').stroke);
+  });
+
+  it('the legend samples for lines are hidden from screen readers; the text carries the meaning', () => {
+    for (const k of ['project', 'arrow', 'question-line', 'critical'])
+      expect(item(k)?.querySelector('.draw')?.getAttribute('aria-hidden'), k).toBe('true');
+  });
+});
+
+describe('the empty state is one plain sentence (deps M2)', () => {
+  it('no lead, no legend and no Fit; only the switch that could change the result', () => {
+    const w = window as unknown as { QueueGraphView: { draw: (c: unknown) => void } };
+    const empty = document.createElement('main');
+    document.body.append(empty);
+    w.QueueGraphView.draw({
+      el,
+      main: empty,
+      version: 1,
+      filterKey: 'nothing',
+      data: data(),
+      visible: () => false,
+      drawOnNew: () => {},
+      openPanel: () => {},
+      openDecisions: () => {},
+    });
+    expect(empty.querySelector('.graph-lead')).toBeNull();
+    expect(empty.querySelector('.graph-draw')).toBeNull();
+    expect([...empty.querySelectorAll('button')].some((b) => b.textContent === 'Fit')).toBe(false);
+    expect(empty.querySelector('.empty')?.textContent).toBe('No task here waits on another task or on a question.');
+    const switches = [...empty.querySelectorAll('.graph-switch')].map((l) => l.textContent);
+    expect(switches).toEqual(['Show standalone']);
+    empty.remove();
+  });
+});
+
+describe('Review shows as review, not "in progress" (deps M4)', () => {
+  it('a task in review has its own state, ring, words and legend entry', () => {
+    const w = window as unknown as { QueueGraphView: { draw: (c: unknown) => void } };
+    const host = document.createElement('main');
+    document.body.append(host);
+    const d = data();
+    // R-1 waits in review; R-2 waits on it, so R-1 is part of a chain and drawn.
+    (d.columns as Record<string, unknown[]>).review = [
+      { id: 'R-1', title: 'Title R-1', project: 'a', status: 'review', estimate: 30, ready: false, depends_on: [] },
+    ];
+    d.columns.queue.push({ id: 'R-2', title: 'Title R-2', project: 'a', status: 'waiting', estimate: 30, ready: false, depends_on: ['R-1'] } as never);
+    w.QueueGraphView.draw({
+      el,
+      main: host,
+      version: 2,
+      filterKey: 'review',
+      data: d,
+      visible: () => true,
+      drawOnNew: () => {},
+      openPanel: () => {},
+      openDecisions: () => {},
+    });
+    const r1 = host.querySelector('.graph-svg .node[data-id="R-1"]') as SVGGElement;
+    expect(r1.classList.contains('t-review')).toBe(true);
+    expect(r1.classList.contains('t-active')).toBe(false);
+    expect(r1.getAttribute('aria-label')).toMatch(/^Title R-1, R-1, in review, /);
+    expect(r1.querySelector('.label-meta')?.textContent).toBe('R-1 · in review');
+    // The review ring is drawn, and differs from the in-progress ring (text says it too, colour is not alone).
+    expect(token(rule('.task.t-review .ring').stroke)).toBeTruthy();
+    expect(rule('.task.t-review .ring').stroke).not.toBe(rule('.task.t-active .ring').stroke);
+    const legend = [...host.querySelectorAll('.graph-draw li')].map((l) => l.textContent);
+    expect(legend).toContain('in review');
+    expect(legend).toContain('in progress');
+    host.remove();
   });
 });
