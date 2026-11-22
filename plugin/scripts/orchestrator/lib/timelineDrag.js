@@ -143,12 +143,41 @@
     return { slot: next, edge: false };
   }
 
+  /** "in step 1 (Alpha)", or "in the rest" for a row that is not a numbered step (`step` starts with "the "). */
+  const inStep = (step) => (/^the /.test(String(step)) ? `in ${step}` : `in step ${step}`);
+
   /** "A-3: place 2 of 4 in step 1 Alpha, right above A-2." (a block: "2 tasks: ..."). */
   function placeText({ ids, place, of, step, space, ref, same }) {
     const who = ids.length === 1 ? ids[0] : `${ids.length} tasks`;
     const where = same ? 'where it is now' : space === 'over' ? `right above ${ref}` : `right below ${ref}`;
-    return `${who}: place ${place} of ${of} in step ${step}, ${where}.`;
+    return `${who}: place ${place} of ${of} ${inStep(step)}, ${where}.`;
   }
 
-  return { DRAG, REFUSAL, stepOrder, blockFor, slotOf, spaceFor, groupAt, taskTarget, stepTarget, reorder, keyAction, moveSlot, placeText };
+  /**
+   * A new focus order from a reorder of the visible step rows: the steps the chart does not show (no tasks in view)
+   * keep their places in the full order, and the visible ones take their new order around them.
+   */
+  function fullOrder(full, visible, nextVisible) {
+    const seen = new Set(visible);
+    const queue = [...nextVisible];
+    return (full ?? []).map((k) => (seen.has(k) ? queue.shift() : k));
+  }
+
+  return {
+    DRAG,
+    REFUSAL,
+    stepOrder,
+    blockFor,
+    slotOf,
+    spaceFor,
+    groupAt,
+    taskTarget,
+    stepTarget,
+    reorder,
+    keyAction,
+    moveSlot,
+    placeText,
+    inStep,
+    fullOrder,
+  };
 });

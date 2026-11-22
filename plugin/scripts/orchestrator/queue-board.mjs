@@ -3464,6 +3464,7 @@ const BOARD_SCRIPTS = [
   'top.js',
   'cloud.js',
   'timeline.js',
+  'timelinemove.js',
   'route.js',
   'keys.js',
   'palette.js',

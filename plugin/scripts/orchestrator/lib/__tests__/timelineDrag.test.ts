@@ -154,3 +154,20 @@ describe('the keyboard model', () => {
     );
   });
 });
+
+describe('the rest row and the hidden steps', () => {
+  it('a row that is not a numbered step is said as itself', () => {
+    expect(D.placeText({ ids: ['X-1'], place: 1, of: 2, step: 'the rest', space: 'over', ref: 'X-2' })).toBe(
+      'X-1: place 1 of 2 in the rest, right above X-2.',
+    );
+  });
+
+  it('a step move keeps the steps the chart does not show in their places', () => {
+    expect(D.fullOrder(['p:a', 'p:hidden', 'p:b', 'p:c'], ['p:a', 'p:b', 'p:c'], ['p:b', 'p:a', 'p:c'])).toEqual([
+      'p:b',
+      'p:hidden',
+      'p:a',
+      'p:c',
+    ]);
+  });
+});

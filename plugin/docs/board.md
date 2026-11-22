@@ -878,7 +878,7 @@ serves only the files in its allow list (`STATIC`), all with the same strict Con
   grouping, saved views), `menus.js` (help, project lanes, the Filter menu), `statistics.js`, `settings.js` (the
   gear), `question.js` (the one renderer for owner questions and answer buttons), `decide.js` (the Decisions tab and the "Waiting on you" button), `checks.js` (the Checks tab), `panel.js` (the detail panel), `edit.js` (cancel, decline, edit, markdown),
   `select.js` (multi-select and the selection menu), `bulk.js` (bulk dialog and undo), `interact.js` (writing, drag, keyboard), `top.js`
-  (theme, gear sections, modules, view tabs), `cloud.js` (the Cloud view), `timeline.js` (the Timeline tab), `route.js` (deep links and the count in the
+  (theme, gear sections, modules, view tabs), `cloud.js` (the Cloud view), `timeline.js` (the Timeline tab), `timelinemove.js` (the Timeline's drag for order), `route.js` (deep links and the count in the
   tab title), `keys.js` (the shortcuts and the `?` overview), `palette.js` (the Ctrl+K palette), `search.js` (the structured search's suggestions and hint) and `start.js` (update banner, logo and
   the start). They share the page's global scope, so a top-level name in one is visible in the others, as when they
   were one `board.js`. Code that runs while a script loads may only use names from the scripts before it; a new

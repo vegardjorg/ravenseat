@@ -406,7 +406,7 @@ async function update(force) {
       window.QueueMascotView?.newState(t.data);
       // The first state picks where the board lands: Decisions when anything waits on the owner (board/decide.js).
       if (typeof landingView === 'function') landingView();
-      if (drag || boosted || t.busy || window.QueuePlan?.busy()) t.pending = true;
+      if (drag || boosted || t.busy || window.QueuePlan?.busy() || tlHeld()) t.pending = true;
       else if (t.view === 'cloud')
         getCloudQueue(); // the bundles depend on the queue: fetch again
       else if (t.view === 'timeline')
@@ -568,7 +568,7 @@ function drawStale() {
   if (before && !after && $('message').textContent === window.QueueA11y.STALE_BLOCKED) hideToast('message');
   if (before && !after && t.data) {
     // Back in contact: the cards are drawn again from now (the ages count on), as after a new state.
-    if (drag || boosted || t.busy || window.QueuePlan?.busy()) t.pending = true;
+    if (drag || boosted || t.busy || window.QueuePlan?.busy() || tlHeld()) t.pending = true;
     else if (t.view === 'cloud') getCloudQueue();
     else if (t.view === 'timeline') getTimeline();
     else if (t.view !== 'statistics') draw();

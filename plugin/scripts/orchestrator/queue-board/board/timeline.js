@@ -11,6 +11,8 @@
 //   - Under both: the tasks that cannot start with the reason, and the precision line.
 // The settings: board.timeline (the tab), board.timelineHorizonDays (days ahead), board.timelineRows (the default rows;
 // this browser can switch, remembered in localStorage). Colors only from the theme tokens (board.css .tl-*).
+// T-B: with board.timelineDrag on, order can be changed here (never time): board/timelinemove.js has the drag, the
+// keyboard moves, the preview and the save; this file marks what can move and calls it.
 //
 // One of the board's classic scripts in queue-board/board/ (see docs/board.md): top-level names are shared with the
 // other scripts. Called from draw() (board/draw.js) and the polling (api.js, start.js). Tested in
@@ -80,7 +82,11 @@ async function getTimeline(redraw = false) {
     t.timeline.error = e.message;
   } finally {
     fetchingTimeline = false;
-    if (changed && t.view === 'timeline') draw();
+    // T-B: while a move is lifted or previewed the redraw waits (board/timelinemove.js catches up afterwards).
+    if (changed && t.view === 'timeline') {
+      if (tlHeld()) t.pending = true;
+      else draw();
+    }
   }
 }
 
@@ -212,20 +218,29 @@ function timelineChart(d, rows, horizon) {
     }
   }
   svg.append(heads);
-  // The bars: each one a button (Enter opens the card) with its words as the name; the title is the tooltip.
+  // The bars: each one a button (Enter opens the card) with its words as the name; the title is the tooltip. T-B: a
+  // planned bar in a step row can also be moved (board/timelinemove.js: Space lifts, or drag it up or down).
   const bars = svgEl('g', { class: 'tl-bars' });
   for (const b of lay.bars) {
     const y = TL_AXIS + b.y;
     const mid = y + b.h / 2;
+    const movable = tlMovable(b.id);
     const g = svgEl('g', {
-      class: `tl-bar ${b.kind}${b.over ? ' over' : ''}`,
+      class: `tl-bar ${b.kind}${b.over ? ' over' : ''}${movable && t.marked.has(b.id) ? ' marked' : ''}`,
       role: 'button',
       tabindex: '0',
       'aria-label': b.label,
+      'aria-describedby': movable ? 'tl-move-help' : null,
       'data-id': b.id,
       'data-focus': `tl:bar:${b.id}`,
-      onclick: () => openPanel(b.id),
+      'data-movable': movable ? 'true' : null,
+      onclick: (e) => {
+        if (tlBarClick(e, b)) return;
+        openPanel(b.id);
+      },
+      onpointerdown: movable ? (e) => tlPointerDown(e, { id: b.id }) : null,
       onkeydown: (e) => {
+        if (tlBarKey(e, b)) return;
         if (e.key !== 'Enter' && e.key !== ' ') return;
         e.preventDefault();
         openPanel(b.id);
@@ -267,15 +282,39 @@ function timelineChart(d, rows, horizon) {
     ),
   );
 
+  // T-B: a focus step's title is a button that moves the step (Space lifts, or drag it up or down); the other titles
+  // stay hidden from screen readers (the bars and the table carry the same words).
+  const stepMoves = tlDragOn() && tlSteps.length > 1;
   const titles = el(
     'div',
     // Sizes as CSS variables through the style object (the CSP allows no style attribute).
-    { class: 'tl-titles', '--tl-w': `${titleWidth}px`, 'aria-hidden': 'true' },
-    el('div', { class: 'tl-title-axis', '--tl-h': `${TL_AXIS}px` }),
-    ...lay.groups.map((g) =>
-      el('div', { class: `tl-title ${g.kind}`, '--tl-h': `${g.h}px` }, el('span', { class: 'tl-title-text', text: g.title })),
-    ),
+    { class: 'tl-titles', '--tl-w': `${titleWidth}px`, 'aria-hidden': stepMoves ? null : 'true' },
+    el('div', { class: 'tl-title-axis', '--tl-h': `${TL_AXIS}px`, 'aria-hidden': 'true' }),
+    ...lay.groups.map((g) => {
+      const moves = stepMoves && g.stage != null && tlSteps.some((s) => s.stage === g.stage);
+      return el(
+        'div',
+        {
+          class: `tl-title ${g.kind}${moves ? ' movable' : ''}`,
+          '--tl-h': `${g.h}px`,
+          'data-stage': g.stage ?? null,
+          ...(moves
+            ? {
+                role: 'button',
+                tabindex: '0',
+                'aria-label': `Step ${g.step + 1} (${g.name})`,
+                'aria-describedby': 'tl-step-help',
+                'data-focus': `tl:step:${g.stage}`,
+                onkeydown: (e) => tlStepKey(e, g.stage),
+                onpointerdown: (e) => tlPointerDown(e, { stage: g.stage }),
+              }
+            : { 'aria-hidden': stepMoves ? 'true' : null }),
+        },
+        el('span', { class: 'tl-title-text', text: g.title }),
+      );
+    }),
   );
+  tlSetChart(svg, lay);
   const scroller = el('div', { class: 'tl-scroll', tabindex: '0', role: 'region', 'aria-label': 'Timeline chart, scrolls sideways' }, svg);
   const frame = el('div', { class: 'tl-frame' }, titles, scroller);
   // Start with the now line near the left when the chart is wider than its box (the ran part a scroll away).
@@ -322,6 +361,24 @@ function timelineLegend() {
 /** The table view: the same tasks, with column and row headers. */
 function timelineTable(d, rows) {
   const tb = window.QueueTimelineLayout.tableRows(rows, d);
+  // T-B: with the drag on, a planned task in a step row has Move up and Move down (the same preview as a drop).
+  const moves = tlPlace.size > 0;
+  const moveCell = (id) => {
+    const p = tlPlace.get(id);
+    if (!p) return el('td', {});
+    const i = p.order.indexOf(id);
+    const button = (dir, delta, off) =>
+      el('button', {
+        type: 'button',
+        class: 'button button-muted button-small',
+        text: `Move ${dir}`,
+        'aria-label': `Move ${id} ${dir}`,
+        'data-focus': `tl:mv:${id}:${dir}`,
+        disabled: off,
+        onclick: () => tlTableMove(id, delta),
+      });
+    return el('td', { class: 'tl-move-cell' }, button('up', -1, i <= 0), button('down', 1, i >= p.order.length - 1));
+  };
   return el(
     'div',
     { class: 'tl-table-wrap', tabindex: '0', role: 'region', 'aria-label': 'Timeline table' },
@@ -329,7 +386,11 @@ function timelineTable(d, rows) {
       'table',
       { class: 'tl-table' },
       el('caption', { text: 'The timeline as a table: rough, relative times only' }),
-      el('thead', {}, el('tr', {}, ...tb.columns.map((c) => el('th', { scope: 'col', text: c })))),
+      el(
+        'thead',
+        {},
+        el('tr', {}, ...tb.columns.map((c) => el('th', { scope: 'col', text: c })), moves ? el('th', { scope: 'col', text: 'Order' }) : null),
+      ),
       el(
         'tbody',
         {},
@@ -348,6 +409,7 @@ function timelineTable(d, rows) {
             el('td', { class: 'tl-nowrap', text: r.starts || '-' }),
             el('td', { class: 'tl-nowrap', text: r.takes || '-' }),
             el('td', { text: r.note || '' }),
+            moves ? moveCell(r.id) : null,
           ),
         ),
       ),
@@ -425,6 +487,28 @@ function drawTimeline() {
     }),
   );
   const rows = TL.buildRows(d, { by, horizonDays: horizon });
+  // T-B: the drag for order (board/timelinemove.js): which tasks and steps can move, the words for a screen reader and
+  // the live region that says each move.
+  tlSetRows(rows, by);
+  tlChart = null;
+  if (tlDragOn()) {
+    view.append(
+      el('p', { id: 'tl-live', class: 'hidden-for-eye', role: 'status', 'aria-live': 'polite' }),
+      el('p', {
+        id: 'tl-move-help',
+        class: 'hidden-for-eye',
+        text: 'Space lifts it to change its place in the step; Enter opens the card.',
+      }),
+      el('p', { id: 'tl-step-help', class: 'hidden-for-eye', text: 'Space lifts the step to change the focus order.' }),
+    );
+    if (by === 'step' && tlPlace.size && prefs.display !== 'table')
+      view.append(
+        el('p', {
+          class: 'tl-note',
+          text: 'Drag a bar up or down to change its place in the step, or a step title to change the focus order. Time is calculated, so a sideways drag is refused.',
+        }),
+      );
+  }
   if (!rows.length) view.append(el('p', { class: 'empty', text: 'Nothing ran in the last day and nothing is planned.' }));
   else if (prefs.display === 'table') view.append(timelineTable(d, rows));
   else view.append(timelineChart(d, rows, horizon), timelineLegend());
