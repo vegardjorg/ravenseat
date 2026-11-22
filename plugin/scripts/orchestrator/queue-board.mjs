@@ -273,6 +273,7 @@ if (a.includes('--help') || a.includes('-h')) {
       '--mascot off turns it off for every viewer.\n' +
       'The board opens itself in your browser with its key (new for every run); the key is never printed.\n' +
       `  ${require('./lib/projectRoot.js').cliCommand()} board open [--follow] [--port <nr>]   opens the running board again\n` +
+      `  ${require('./lib/projectRoot.js').cliCommand()} board open --task <id> [--no-open]   opens it on that card (--no-open: prints the link without the key)\n` +
       'board.hideKey false in queue.config.json prints the link with the key instead (a weakened guard). Ctrl+C stops the board.',
   );
   process.exit(0);
@@ -294,6 +295,8 @@ if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) {
 // list while the browser starts, can still see it; this closes the plain way (stdout, then curl).
 const HIDE_KEY = CONFIG.board?.hideKey !== false;
 const KEY_FILE = val('--key-file') ?? null;
+/** A task id in `board open --task` and POST /open: the same pattern as the page's deep link (board/route.js ROUTE_TASK). */
+const OPEN_TASK = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 if (a[0] === 'open') await openRunningBoard();
 
 /**
@@ -302,7 +305,20 @@ if (a[0] === 'open') await openRunningBoard();
  */
 async function openRunningBoard() {
   const cli = require('./lib/projectRoot.js').cliCommand();
-  const body = JSON.stringify({ follow: a.includes('--follow') });
+  // --task <id> (J14 follow-up): the board opens on that card with the J2 deep link (#view=flat&task=<id>). The id is
+  // checked here first with the same pattern the page uses (board/route.js ROUTE_TASK), so a typo never reaches the
+  // board; the board then checks that the task is in the queue. --no-open: the board answers with the link without
+  // the key and opens nothing (paste it into the board's tab, which keeps its key).
+  const task = a.includes('--task') ? String(val('--task') ?? '') : null;
+  if (task != null && !OPEN_TASK.test(task)) {
+    console.error(`"${task.slice(0, 80)}" is not a task id. Use: ${cli} board open --task <id> [--no-open]`);
+    process.exit(1);
+  }
+  if (task != null && a.includes('--follow')) {
+    console.error(`Use --task or --follow, not both.`);
+    process.exit(1);
+  }
+  const body = JSON.stringify({ follow: a.includes('--follow'), ...(task != null ? { task, open: !a.includes('--no-open') } : {}) });
   const answer = await new Promise((done) => {
     const req = http.request(
       {
@@ -358,9 +374,9 @@ const VALID_ORIGIN = new Set([...VALID_HOSTS].map((v) => `http://${v}`));
 const keyLink = (page = '/') => `http://${HOST}:${PORT}${page}#key=${KEY}`;
 /** The link without the key: safe to print. */
 const plainLink = (page = '/') => `http://${HOST}:${PORT}${page}`;
-/** --key-file: the link with the key, readable by this user only (best effort on Windows). */
-function writeKeyFile() {
-  fs.writeFileSync(KEY_FILE, `${keyLink()}\n`, { mode: 0o600 });
+/** --key-file: the link with the key, readable by this user only (best effort on Windows). route = a J2 deep link part. */
+function writeKeyFile(route = '') {
+  fs.writeFileSync(KEY_FILE, `${keyLink()}${route ? `&${route}` : ''}\n`, { mode: 0o600 });
 }
 /**
  * Opens the link in the default browser, without a shell that could log it and with nothing printed. Resolves
@@ -3429,15 +3445,36 @@ const server = http.createServer(async (req, res) => {
       } catch {
         /* no body: the board itself */
       }
-      const page = b?.follow === true && FEATURES.follow ? '/follow' : '/';
+      // --task <id> (J14 follow-up): the J2 deep link after the key, '#key=…&view=flat&task=<id>'. The page takes the key
+      // out of the address at once and keeps the rest (board/api.js getKey), so the key never stays in the address.
+      const task = typeof b?.task === 'string' ? b.task : null;
+      let route = '';
+      if (b?.task != null) {
+        if (!task || !OPEN_TASK.test(task)) return json(res, 400, { ok: false, message: 'not a task id' });
+        let ids = [];
+        try {
+          ids = (JSON.parse(fs.readFileSync(FILE, 'utf8')).tasks ?? []).map((o) => o?.id);
+        } catch {
+          /* no queue file: no task either */
+        }
+        if (!ids.includes(task)) return json(res, 404, { ok: false, message: `There is no task ${task} in the queue.` });
+        route = `view=flat&task=${encodeURIComponent(task)}`;
+        // --no-open: only the link without the key, for the owner to paste into the board's tab (which keeps its key).
+        if (b.open === false)
+          return json(res, 200, { ok: true, message: `The card: ${plainLink(`/#${route}`)} (paste it into the board's tab; no browser opened)` });
+      }
+      const page = !route && b?.follow === true && FEATURES.follow ? '/follow' : '/';
+      const opened = route ? `Opened the board on ${task} in your browser.` : 'Opened the board in your browser.';
       // Scripted (--key-file): the link goes to the file again, no browser.
       if (KEY_FILE) {
-        writeKeyFile();
+        writeKeyFile(route);
         return json(res, 200, { ok: true, message: 'Wrote the link to the key file again (--key-file); no browser opened.' });
       }
       if (process.env.VITEST) return json(res, 200, { ok: true, message: 'Under a test runner: no browser opened.' });
-      const r = await openBrowser(keyLink(page));
-      return json(res, r.ok ? 200 : 500, { ok: r.ok, message: r.ok ? 'Opened the board in your browser.' : openFailedLine(r.error) });
+      const r = await openBrowser(`${keyLink(page)}${route ? `&${route}` : ''}`);
+      // A failed open prints the card's link without the key, so the owner can still get there from the board's tab.
+      const failed = () => `${openFailedLine(r.error)}${route ? ` The card: ${plainLink(`/#${route}`)}` : ''}`;
+      return json(res, r.ok ? 200 : 500, { ok: r.ok, message: r.ok ? opened : failed() });
     }
 
     if (!filePath.startsWith('/api/')) {
