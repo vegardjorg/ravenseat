@@ -813,9 +813,13 @@ const BUILT_IN = [
     name: 'New since last visit',
     special: 'newEntry',
     explain: 'Added since your last visit here.',
-    title: 'Tasks added after the previous time the board was open in this browser.',
+    title:
+      'Tasks added after your seen mark (shared with Since you left and ravenseat since), or, without one, after the ' +
+      'previous time the board was open in this browser.',
   },
 ];
+/** The cut for "New since last visit": the server's seen mark when the page opened (AW-3), else this browser's time. */
+const lastVisitCut = () => t.since?.seenAt || t.lastVisit;
 const SPECIAL = {
   focus1: (k) => k.space?.step === 0,
   readyFocus: (k) => k.ready && k.space?.step != null,
@@ -823,7 +827,7 @@ const SPECIAL = {
     !!k.space?.outside && !k.parked && k.blockers.every((h) => h === k.space.reason),
   onWait: (k) => !!k.parked,
   sort: (k) => (t.data?.inbox?.sort ?? []).some((r) => r.id === k.id),
-  newEntry: (k) => !!t.lastVisit && !!k.added_at && Date.parse(k.added_at) > t.lastVisit,
+  newEntry: (k) => !!lastVisitCut() && !!k.added_at && Date.parse(k.added_at) > lastVisitCut(),
 };
 t.special = null;
 t.viewName = null;

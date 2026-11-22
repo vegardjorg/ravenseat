@@ -142,6 +142,8 @@ function rememberSeen() {
 function landingView() {
   if (t.decide.landed || !t.data) return;
   t.decide.landed = true;
+  // "Since you left" and the seen mark are fetched once at the start, whatever the view (AW-2, AW-3).
+  getSince();
   const D = DV();
   if (!D || document.body.classList.contains('room-plans')) return;
   const keys = t.data.inbox ? D.fromInbox(t.data.inbox).map((x) => x.key) : [];
@@ -593,15 +595,223 @@ function sortPart(rows) {
   );
 }
 
-/** "Decided today" at the bottom, closed unless the owner opened it. */
+// ---- "Since you left" (roadmap 3e AW-2, AW-3, AW-8; plans/borte-flate-vurdering-2026-11-21.md) ----
+//
+// A band under the room's head: the window in words, five numbers and the latest events (newest first, failures
+// marked in words, an event with a task links to its card with the J2 deep link). The numbers and the list are
+// lib/awaySummary.js on the server (GET /api/since), the same join `ravenseat since` prints, so they never disagree.
+// Hidden when nothing happened in the window, with board.sinceLast off, or after X for this visit.
+//
+// The window: the browser's own choice (localStorage, a convenience) or board.sinceLastWindow. "Since last seen" is the
+// server-side seen mark; the first answer's start is kept for the whole visit (?from=), so the band does not empty
+// itself when the mark moves. The mark moves when this room has shown the band for SEEN_AFTER_MS while the page is
+// visible (once per visit), or on "Mark seen" (which then starts the band from now). Never on a page hide.
+
+/** The browser's window choice for the band (a per-browser convenience; the default is board.sinceLastWindow). */
+const SINCE_STORAGE = 'queue-board-since-window';
+/** The band on screen this long (and the page visible) counts as seen. */
+const SEEN_AFTER_MS = 5000;
+const SINCE_CHOICES = [
+  ['last-seen', 'Since last seen'],
+  ['24h', 'Last 24 hours'],
+  ['7d', 'Last 7 days'],
+];
+t.since = {
+  data: null, // the last answer of /api/since
+  version: null, // the state version it was fetched for
+  loading: false,
+  choice: (() => {
+    const v = store.getItem(SINCE_STORAGE);
+    return SINCE_CHOICES.some(([k]) => k === v) ? v : null;
+  })(),
+  from: null, // the start of the visit's "since last seen" window (ms)
+  seenAt: undefined, // the server's seen mark when the page opened (ms, null: none), for "New since last visit"
+  hidden: false, // X: hidden for this visit
+  listOpen: true,
+  timer: null,
+  marked: false, // the seen mark was set on this visit
+};
+
+/** Fetches the band's data (again) when the state is newer than the last answer, or `force`. Redraws Decisions after. */
+async function getSince(force = false) {
+  const s = t.since;
+  // Once per state version, also after an error (a failed fetch must not start again on every redraw).
+  if (s.loading || !t.version || (!force && s.version === t.version)) return;
+  s.loading = true;
+  s.version = t.version;
+  const p = new URLSearchParams();
+  if (s.choice) p.set('window', s.choice);
+  if (s.from != null && (s.choice ?? s.data?.default_choice ?? 'last-seen') === 'last-seen') p.set('from', String(s.from));
+  const q = p.toString();
+  try {
+    const answer = await api(`/api/since${q ? `?${q}` : ''}`);
+    s.data = answer;
+    // Keep the first "since last seen" start for the visit, and the seen mark as it was when the page opened (the
+    // "New since last visit" filter in board/views.js reads it before its own browser time).
+    if (answer?.on && answer.window?.used === 'last-seen' && s.from == null) s.from = answer.window.from;
+    if (s.seenAt === undefined) {
+      s.seenAt = Date.parse(answer?.seen?.at ?? '') || null;
+      if (s.seenAt && t.special === 'newEntry' && t.view !== 'decisions') draw();
+    }
+  } catch {
+    s.data = null; // the band is display only: on any error it is left out
+  } finally {
+    s.loading = false;
+  }
+  if (t.view === 'decisions') drawDecisions(false);
+}
+
+/** The time of an event, "21:40" or "Mon 21:40" when it is not today. */
+function sinceClock(iso) {
+  const d = new Date(iso);
+  const hm = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  return d.toDateString() === new Date().toDateString() ? hm : `${d.toLocaleDateString('en-GB', { weekday: 'short' })} ${hm}`;
+}
+
+/** One event row: time, "Failed" in words for a failure, and the text with the task id as a link to its card. */
+function sinceEvent(e) {
+  const task = e.task && typeof e.text === 'string' && e.text.startsWith(e.task) ? e.task : null;
+  const link = task && typeof routeHash === 'function' ? routeHash({ view: 'flat', task }) : '';
+  return el(
+    'li',
+    { class: `since-event${e.fail ? ' fail' : ''}` },
+    el('time', { class: 'since-time', datetime: e.time, text: sinceClock(e.time) }),
+    e.fail ? el('span', { class: 'badge since-fail', text: 'Failed' }) : null,
+    el(
+      'span',
+      { class: 'since-text' },
+      task && link ? el('a', { class: 'sp-id', href: link, title: `Open ${task}` , text: task }) : null,
+      task ? e.text.slice(task.length) : e.text,
+    ),
+  );
+}
+
+/** Sets the seen mark (POST /api/seen). `fresh`: "Mark seen", so the band starts from now. */
+async function markSeen(fresh) {
+  const s = t.since;
+  try {
+    await api('/api/seen', { by: 'board' });
+    s.marked = true;
+    if (fresh) {
+      s.from = null;
+      message('Marked as seen. "Since last seen" starts from now.');
+      await getSince(true);
+    }
+  } catch (e) {
+    if (fresh) message(e?.message ?? 'Could not set the seen mark.', true);
+  }
+}
+
+/** Starts the "on screen a few seconds" timer once per visit, while the band is shown and the page visible. */
+function armSeenTimer() {
+  const s = t.since;
+  if (s.marked || s.timer || document.hidden) return;
+  s.timer = setTimeout(() => {
+    s.timer = null;
+    if (t.view === 'decisions' && !document.hidden && !s.hidden && main.querySelector('.since')) markSeen(false);
+  }, SEEN_AFTER_MS);
+}
+document.addEventListener('visibilitychange', () => {
+  // Hidden before the time was up: it does not count; the timer starts again when the room is drawn visible.
+  if (document.hidden && t.since.timer) {
+    clearTimeout(t.since.timer);
+    t.since.timer = null;
+  } else if (!document.hidden && t.view === 'decisions' && main.querySelector('.since')) armSeenTimer();
+});
+
+/** The band, or null (off, hidden, not fetched yet, or nothing happened in the window). */
+function sinceBand() {
+  const s = t.since;
+  getSince();
+  const d = s.data;
+  if (s.hidden || !d?.on || !d.summary || d.summary.empty) return null;
+  const c = d.summary.counts;
+  const choice = s.choice ?? d.default_choice ?? 'last-seen';
+  const number = (n, label, extra = '') => el('li', { class: `since-number${extra}` }, el('strong', { text: String(n) }), el('span', { text: label }));
+  const numbers = [
+    number(c.merged, 'merged'),
+    number(c.recovered, 'recovered without you'),
+    number(c.blocked, 'blocked now', c.blocked ? ' warn' : ''),
+    c.waiting != null ? number(c.waiting, 'waiting on you') : null,
+    c.spend_usd != null ? number(`$${c.spend_usd.toFixed(2)}`, 'spend') : null,
+  ];
+  const events = d.summary.events ?? [];
+  const list = el(
+    'details',
+    { class: 'since-events', open: s.listOpen },
+    el('summary', { text: d.summary.more ? `Latest events (${events.length} of ${d.summary.total_events})` : `Events (${events.length})` }),
+    el('ol', { class: 'since-list' }, events.map(sinceEvent)),
+  );
+  list.addEventListener('toggle', () => (s.listOpen = list.open));
+  const select = el(
+    'select',
+    {
+      class: 'since-window-choice',
+      'aria-label': 'Window for Since you left',
+      'data-focus': 'since-window',
+      onchange: (e) => {
+        s.choice = e.target.value;
+        store.setItem(SINCE_STORAGE, s.choice);
+        if (s.choice !== 'last-seen') s.from = null;
+        getSince(true);
+      },
+    },
+    SINCE_CHOICES.map(([k, label]) => el('option', { value: k, selected: k === choice, text: label })),
+  );
+  const band = el(
+    'section',
+    { class: 'since', 'aria-labelledby': 'since-title' },
+    el(
+      'div',
+      { class: 'since-head' },
+      el('h3', { id: 'since-title', class: 'since-title', text: 'Since you left' }),
+      el('span', { class: 'since-window', text: d.window?.text ?? '' }),
+      el(
+        'span',
+        { class: 'since-tools' },
+        select,
+        el('button', {
+          type: 'button',
+          class: 'button button-muted',
+          'data-focus': 'since-seen',
+          text: 'Mark seen',
+          title: 'Sets your seen mark to now (shared with ravenseat since), so the next summary starts here',
+          onclick: () => markSeen(true),
+        }),
+        roomHelp('since', 'Since you left'),
+        el('button', {
+          type: 'button',
+          class: 'since-close',
+          'aria-label': 'Hide Since you left for this visit',
+          title: 'Hide for this visit (Settings, Board turns it off)',
+          'data-focus': 'since-close',
+          onclick: () => {
+            s.hidden = true;
+            drawDecisions(true);
+          },
+        }, icon('close')),
+      ),
+    ),
+    d.window?.note ? el('p', { class: 'since-note', text: `${d.window.note[0].toUpperCase()}${d.window.note.slice(1)}.` }) : null,
+    el('ul', { class: 'since-numbers', 'aria-label': 'Since you left in numbers' }, numbers),
+    events.length ? list : null,
+  );
+  armSeenTimer();
+  return band;
+}
+
+/** "Decided today" at the bottom, closed unless the owner opened it. With the band on, it follows the band's window (AW-8). */
 function decidedPart() {
-  const list = t.data?.inbox?.decided ?? [];
+  const sd = t.since.data;
+  const windowed = sd?.on && Array.isArray(sd.decided) && sd.window;
+  const list = windowed ? sd.decided : (t.data?.inbox?.decided ?? []);
   if (!list.length) return null;
   const verbName = Object.fromEntries((DV()?.VERBS ?? []).map((v) => [v.verb, v.title]));
+  const title = windowed ? `Decided, ${sd.window.used === 'last-seen' ? 'since last seen' : sd.window.text}` : 'Decided today';
   const box = el(
     'details',
     { class: 'decide-done', open: t.decide.doneOpen },
-    el('summary', { text: `Decided today (${list.length})` }),
+    el('summary', { text: `${title} (${list.length})` }),
     el(
       'ul',
       { class: 'decide-done-list' },
@@ -609,7 +819,7 @@ function decidedPart() {
         el(
           'li',
           null,
-          el('span', { class: 'decide-done-time', text: new Date(d.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) }),
+          el('span', { class: 'decide-done-time', text: windowed ? sinceClock(d.at) : new Date(d.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) }),
           el('span', { class: 'badge', text: verbName[d.verb] ?? d.verb }),
           el('span', { class: 'sp-id', text: d.id }),
           el('span', { class: 'decide-done-what', text: d.what }),
@@ -871,7 +1081,8 @@ function drawDecisions(fresh) {
     listeningLine(Math.max(items.length, 1)),
     t.data.baseHealth?.status === 'red' ? el('p', { class: 'decide-base-red', text: t.data.baseHealth.text }) : null,
   );
-  const parts = [head];
+  // "Since you left" (AW-2) under the head, above the groups.
+  const parts = [head, sinceBand()];
   if (!items.length)
     parts.push(
       el('p', { class: 'inbox-empty' }, icon('checkmark'), el('span', { text: 'Nothing waiting on you' })),

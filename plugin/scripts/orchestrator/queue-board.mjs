@@ -86,6 +86,9 @@
 //     expect } is the owner's Accept, Decline or Merge of an Inbox item (`plan accept|decline|merge --set-by owner`,
 //     P7, with --expect-changed, Undo in the toast), POST /api/plan-undo undoes what the board just saved (`plan undo --nr`),
 //     and GET /api/plans?wait=1 waits until plans.json or queue.json changes (live update, fs.watch).
+//   - SINCE YOU LEFT (roadmap 3e AW-2, AW-3): GET /api/since?window=last-seen|24h|7d&from=<ms> gives the band at the top
+//     of Decisions (lib/awaySummary.js on the queue with its archive and the cached time log rows, plus "Decided" for
+//     the same window); POST /api/seen sets the seen mark (lib/seenMark.js, <dataFolder>/seen.json, by board).
 //   - FOLLOW UP: the read view /follow (its own page; the link is written in the terminal) with the follow-up entries from
 //     follow.json via GET /api/follow (behind the key). The rules (due date, statuses) are lib/queueFollow.js, the same
 //     as queue.mjs follow; the board never writes follow.json. Only with features.follow on (off by default).
@@ -215,6 +218,9 @@ const TIME_LOG = KK.timeLog();
 const TA = require('./lib/timeLogArchive.js');
 // The archive of done tasks (lib/queueArchive.js, owner decision B5): statistics, plans and lookups by id read it too.
 const QARCH = require('./lib/queueArchive.js');
+// "Since you left" (roadmap 3e AW-1 to AW-3): the shared join and the server-side seen mark (GET /api/since, POST /api/seen).
+const AWAY = require('./lib/awaySummary.js');
+const SEEN = require('./lib/seenMark.js');
 // The task's short human summary and its own sources for the detail panel (/api/task; lib/taskDescription.js).
 const DESC = require('./lib/taskDescription.js');
 const archiveMtime = () => {
@@ -1187,11 +1193,15 @@ function timeLogRows() {
     // sections; the compaction rows only as time and scope.
     const gates = [];
     const compacts = [];
+    // "Since you left" (lib/awaySummary.js): a track's red gate runs as time, track, kind and the red command names only.
+    const redGates = [];
     for (const r of all) {
       if (r?.event === 'gate' || r?.event === 'flakyGate') gates.push(SX.slimGateRow(r));
       else if (r?.event === 'compact' && r.scope !== 'session') compacts.push({ time: r.time });
+      if (r?.event === 'gate' && r.ok === false && r.track)
+        redGates.push({ time: r.time, event: 'gate', track: r.track, kind: r.kind ?? null, ok: false, failed: r.failed ?? [] });
     }
-    logCache = { key, rows, events, guards, gates, compacts, error: null };
+    logCache = { key, rows, events, guards, gates, compacts, redGates, error: null };
   }
   return logCache;
 }
@@ -1343,6 +1353,38 @@ function statistics() {
   const version = crypto.createHash('sha1').update(JSON.stringify(data)).digest('hex').slice(0, 16);
   statCache = { key, version, data };
   return statCache;
+}
+
+// ---- "Since you left" (roadmap 3e AW-2, AW-3, AW-8; lib/awaySummary.js) ---------------------------------------------
+/**
+ * The band at the top of Decisions: the window (the board's choice, else board.sinceLastWindow), the summary on the
+ * queue with its archive and the time log rows the cache already keeps, and "Decided" for the same window. `from` is
+ * the start the board opened with, so the window stays put for the visit while the seen mark moves. With
+ * board.sinceLast off only { on: false } (nothing is read).
+ */
+function sinceData({ choice = null, from = null } = {}) {
+  const setup = KK.boardSince(KK.config({ fresh: true }));
+  if (!setup.on) return { on: false, default_choice: setup.window };
+  const now = Date.now();
+  const seen = SEEN.readSeen(FOLDER);
+  const w = AWAY.resolveWindow({ choice: choice ?? setup.window, seen, from, now });
+  const queue = QARCH.withArchive(JSON.parse(fs.readFileSync(FILE, 'utf8')), FOLDER);
+  const log = timeLogRows();
+  // What waits on the owner now: the same count as "Waiting on you" (null when the state could not be built).
+  let waiting = null;
+  try {
+    waiting = state().data?.inbox?.count ?? null;
+  } catch {
+    waiting = null;
+  }
+  return {
+    on: true,
+    default_choice: setup.window,
+    seen,
+    window: { ...w, text: AWAY.windowText(w) },
+    summary: AWAY.awaySummary({ queue, rows: [...(log.events ?? []), ...(log.redGates ?? [])], from: w.from, to: w.to, waiting }),
+    decided: DEC.decidedToday(queue, { now, from: w.from }),
+  };
 }
 
 // ---- The plan register: read only, rebuilt when plans.json or queue.json changes (or every minute,
@@ -2689,6 +2731,12 @@ async function write(filePath, b) {
   if (filePath === '/api/lawyerPackage') return lawyerPackageWrite(b);
   // The update banner's X (board/start.js): the same dismissal as `ravenseat update dismiss` (lib/queueUpdate.js), so
   // other browsers and the CLI line stay quiet about that version too.
+  // "Since you left": the seen mark (AW-3), set by Decisions on screen a few seconds or "Mark seen" (lib/seenMark.js).
+  if (filePath === '/api/seen') {
+    const r = SEEN.writeSeen(FOLDER, { by: 'board' });
+    if (!r.ok) return { status: 500, answer: { ok: false, message: `could not write seen.json (${r.error})` } };
+    return { status: 200, answer: { ok: true, seen: r.seen } };
+  }
   if (filePath === '/api/update-dismiss') {
     if (!U.parse(b.version)) return no('invalid version');
     if (!U.dismiss(fs, UPDATE_CACHE, String(b.version)))
@@ -3432,6 +3480,16 @@ const server = http.createServer(async (req, res) => {
           ok: false,
           message: `Could not read the follow-up entries (${e?.code ?? e?.message ?? 'unknown error'}).`,
         });
+      }
+    }
+    // "Since you left" (AW-2): ?window=last-seen|24h|7d (else the setting), ?from=<ms> keeps the visit's window.
+    if (req.method === 'GET' && filePath === '/api/since') {
+      try {
+        const w = url.searchParams.get('window');
+        const f = Number(url.searchParams.get('from'));
+        return json(res, 200, sinceData({ choice: AWAY.WINDOWS.includes(w) ? w : null, from: url.searchParams.has('from') && Number.isFinite(f) ? f : null }));
+      } catch (e) {
+        return json(res, 503, { ok: false, message: `Could not build "Since you left" (${e?.code ?? e?.message ?? 'unknown error'}).` });
       }
     }
     if (req.method === 'GET' && filePath === '/api/statistics') {

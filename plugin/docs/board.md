@@ -609,6 +609,21 @@ link opens the card directly. The board key is never written there: a link with 
 taken out at once. The tab title starts with the number of decisions waiting on you, `(3) Queue board`
 (`board.titleCount`, on by default); running tracks are not counted.
 
+## Since you left
+
+A band under the Decisions head: the window in words ("since 21:40 yesterday (9 h 20 min)"), five numbers (merged,
+recovered without you, blocked now, waiting on you, spend) and the latest ten events, newest first. A failure (a red
+gate, a red base, a conflict, red CI, a new blocker) says **Failed** in words; an event with a task links to its card.
+Hidden when nothing happened in the window; X hides it for the visit, and `board.sinceLast` (on) turns it off. The
+numbers come from `lib/awaySummary.js`, the same join `ravenseat since` prints.
+
+The window is a choice on the band (remembered per browser; `board.sinceLastWindow`, default `last-seen`): since last
+seen, the last 24 hours or the last 7 days. Last seen is the server-side mark `<dataFolder>/seen.json`, set when
+Decisions has shown the band for 5 seconds while the page is visible, by **Mark seen**, or by `ravenseat since --mark`;
+never by a hidden tab. Without a mark, or one older than 7 days, the band shows the last 24 hours and says so. The board
+keeps the window it opened with for the visit. **Decided** at the bottom follows the band's window, and the **New since
+last visit** filter uses the seen mark too (this browser's last visit when there is none).
+
 ## Quick filter buttons
 
 A row over the columns with **Changed 24 h** (added, started, delivered, blocked, checked or finished in the last day),

@@ -1338,6 +1338,17 @@ const SETTINGS = Object.freeze([
   row('board.quickFilters', 'board', 'onoff', 'Quick filter buttons',
     'Buttons over the columns: Changed 24 h, Older than usual and Red gate. Each filters the cards; several combine. ' +
     'On in full mode, off in lite.', { defaultByMode: { lite: false, full: true } }),
+  // Roadmap 3e AW-2 (owner answers 21.11 as recommended). Friction: display only, it never stops or slows work; it takes
+  // some height at the top of Decisions, hidden when nothing happened and closable for the visit. On by default since
+  // it answers the first question after a pause. Not a guard.
+  row('board.sinceLast', 'board', 'onoff', 'Since you left',
+    'A short summary at the top of Decisions: merged, recovered without you, blocked, waiting on you and spend since ' +
+    'you last looked, with the latest events. Hidden when nothing happened. Off: no band.', BASIC),
+  // AW-2/AW-3. Friction: none; it only picks the window. last-seen is the default because "what happened while I was
+  // away" is the question; it falls back to 24 h without a mark. A browser can pick another one for itself on the band.
+  row('board.sinceLastWindow', 'board', 'choice', 'Since you left: window',
+    'last-seen: since your seen mark (Decisions on screen a few seconds, "Mark seen", or ravenseat since --mark); ' +
+    '24 h without one. 24h or 7d: a fixed window. "Decided" in Decisions follows it.', { choices: ['last-seen', '24h', '7d'] }),
   row('limits.autocompact', 'board', 'onoff', 'Automatic compaction',
     'On: Claude Code compacts the orchestrator session itself and the queue continues. Off: a ready /compact line; ' +
     'then also turn off auto-compaction in Claude Code ("autoCompactEnabled": false), or it compacts anyway.',

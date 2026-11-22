@@ -857,6 +857,12 @@ const STANDARD = Object.freeze({
     // The quick filter buttons over the columns (J4): Changed 24 h, Older than usual, Red gate. Off in lite unless set
     // (resolveOwn below), so the lite board stays simple.
     quickFilters: true,
+    // "Since you left" (roadmap 3e AW-2): a band at the top of Decisions with what happened in the window (merged,
+    // recovered, blocked, waiting, spend, the latest events). Display only, on in lite and full. Read fresh by GET /api/since.
+    sinceLast: true,
+    // Its window: last-seen (the seen mark in <dataFolder>/seen.json, 24 h when there is none), 24h or 7d. A browser
+    // may pick another choice for itself on the band; this is the default.
+    sinceLastWindow: 'last-seen',
   },
   // The modules that can be switched off (FEATURES above): { "cloud": true } turns one on. Unknown keys are ignored.
   features: FEATURES,
@@ -1097,6 +1103,22 @@ function boardDisplay(cfg = config()) {
   return out;
 }
 
+/** The window choices of board.sinceLastWindow (the same list as lib/awaySummary.js WINDOWS). */
+const SINCE_WINDOWS = Object.freeze(['last-seen', '24h', '7d']);
+/**
+ * "Since you left" on the board (roadmap 3e AW-2): board.sinceLast and board.sinceLastWindow, each a real value or its
+ * STANDARD default. Read fresh by GET /api/since, so `settings set` reaches an open board on its next fetch.
+ * @param {object|null} [cfg] the configuration (default: config())
+ * @returns {{ on: boolean, window: 'last-seen'|'24h'|'7d' }}
+ */
+function boardSince(cfg = config()) {
+  const b = cfg?.board ?? {};
+  return {
+    on: typeof b.sinceLast === 'boolean' ? b.sinceLast : STANDARD.board.sinceLast,
+    window: SINCE_WINDOWS.includes(b.sinceLastWindow) ? b.sinceLastWindow : STANDARD.board.sinceLastWindow,
+  };
+}
+
 /** The highest plans.roadmapFoldAfter (a larger number is taken as this; 0 already means never fold). */
 const ROADMAP_FOLD_MAX = 500;
 /**
@@ -1168,5 +1190,7 @@ module.exports = {
   boardPanelMode,
   BOARD_DISPLAY,
   boardDisplay,
+  SINCE_WINDOWS,
+  boardSince,
   plansView,
 };
