@@ -864,7 +864,14 @@ function decidedForYouPart() {
             el('span', { class: 'decide-done-what', text: d.what }),
           ),
           el('span', { class: 'decide-for-meta', text: `${d.who}, ${d.why}` }),
-          el('span', { class: 'decide-for-meta' }, 'Undo: ', el('code', { class: 'decide-for-undo', text: d.undo })),
+          // The state in words, the command as code, the cost in words, so only the command reads as something to run.
+          el(
+            'span',
+            { class: 'decide-for-meta' },
+            `Undo${d.undo_parts?.when ? ` (${d.undo_parts.when})` : ''}: `,
+            d.undo_parts ? (d.undo_parts.cli ? el('code', { class: 'decide-for-undo', text: d.undo_parts.cli }) : null) : el('code', { class: 'decide-for-undo', text: d.undo }),
+            d.undo_parts?.note ? ` (${d.undo_parts.note})` : null,
+          ),
         ),
       ),
     ),

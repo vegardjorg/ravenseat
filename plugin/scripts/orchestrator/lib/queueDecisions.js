@@ -838,25 +838,34 @@
    * The honest next step to undo what was decided, from where the task is now (the table in section 5.2): free before
    * the start, a cancel after it, a fix round before the merge, a revert after it.
    */
-  function undoText(o, { rules = false, undone = false, ravenseat = 'ravenseat' } = {}) {
-    if (undone) return 'undone already, back to proposed';
-    if (!o) return 'the task is gone';
+  function undoParts(o, { rules = false, undone = false, ravenseat = 'ravenseat' } = {}) {
+    // when: where the task is (plain words); cli: the command, or null; note: what it costs (plain words), or null.
+    const p = (when, cli = null, note = null) => ({ when, cli, note });
+    if (undone) return p('undone already, back to proposed');
+    if (!o) return p('the task is gone');
     const s = o.status;
-    if (s === 'cancelled') return 'cancelled, nothing to undo';
-    if (s === 'proposed') return 'back to proposed';
+    if (s === 'cancelled') return p('cancelled, nothing to undo');
+    if (s === 'proposed') return p('back to proposed');
     if (s === 'waiting' && !o.started && !o.picked_by)
-      return rules ? `${ravenseat} proposals undo ${o.id}` : `${ravenseat} set ${o.id} cancelled`;
+      return p(null, rules ? `${ravenseat} proposals undo ${o.id}` : `${ravenseat} set ${o.id} cancelled`);
     if (s === 'running' || s === 'picked' || (s === 'waiting' && (o.started || o.picked_by)))
-      return `started: ${ravenseat} set ${o.id} cancelled (the tokens it used are spent)`;
-    if (s === 'review') return `not merged: ${ravenseat} resume ${o.id} --reason fix --answer "<what to change>"`;
-    if (s === 'done') return o.merge_commit ? `merged: git revert -m 1 ${String(o.merge_commit).slice(0, 12)}` : 'merged: revert its merge commit';
-    return `status ${s}: ${ravenseat} show ${o.id}`;
+      return p('started', `${ravenseat} set ${o.id} cancelled`, 'the tokens it used are spent');
+    if (s === 'review') return p('not merged', `${ravenseat} resume ${o.id} --reason fix --answer "<what to change>"`);
+    if (s === 'done')
+      return o.merge_commit ? p('merged', `git revert -m 1 ${String(o.merge_commit).slice(0, 12)}`) : p('merged: revert its merge commit');
+    return p(`status ${s}`, `${ravenseat} show ${o.id}`);
+  }
+
+  /** undoParts as one line: "not merged: ravenseat resume ...", "started: ... (the tokens it used are spent)". */
+  function undoText(o, opts = {}) {
+    const { when, cli, note } = undoParts(o, opts);
+    return `${[when, cli].filter(Boolean).join(': ')}${note ? ` (${note})` : ''}`;
   }
 
   /**
    * "Decided for you" since the start of today (or `from`, the "Since you left" window), newest first.
    * @returns {{ source: 'rules'|'agent', id: string, title: string|null, what: string, category: string, who: string,
-   *   why: string, at: string, undo: string }[]}
+   *   why: string, at: string, undo: string, undo_parts: { when: string|null, cli: string|null, note: string|null } }[]}
    */
   function decidedForYou(queue, { now = Date.now(), max = 50, from: start = null, ravenseat = 'ravenseat' } = {}) {
     const from = typeof start === 'number' && Number.isFinite(start) ? start : dayStart(now);
@@ -879,6 +888,7 @@
         why: e.reason ?? 'fits your rules',
         at: e.at,
         undo: undoText(o, { rules: true, undone: !!e.undone, ravenseat }),
+        undo_parts: undoParts(o, { rules: true, undone: !!e.undone, ravenseat }),
       });
     }
     for (const o of queue?.tasks ?? []) {
@@ -897,6 +907,7 @@
           why,
           at: rec.at,
           undo: undoText(o, { ravenseat }),
+          undo_parts: undoParts(o, { ravenseat }),
         });
       }
     }
@@ -906,6 +917,7 @@
 
   return {
     SIGNAL_LABELS,
+    undoParts,
     undoText,
     decidedForYou,
     VERBS,

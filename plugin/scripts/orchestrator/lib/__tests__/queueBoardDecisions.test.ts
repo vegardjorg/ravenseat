@@ -139,7 +139,9 @@ describe('the Decisions view', () => {
     expect(rows[0]).toContain('Undo: ravenseat proposals undo EX-3');
     expect(rows[1]).toContain('New package');
     expect(rows[1]).toContain('The agent decided, not asked');
-    expect(rows[1]).toContain('Undo: merged: git revert -m 1 abcdef123456');
+    // The state in words, only the command as code.
+    expect(rows[1]).toContain('Undo (merged): git revert -m 1 abcdef123456');
+    expect(box.querySelectorAll('.decide-for-undo')[1].textContent).toBe('git revert -m 1 abcdef123456');
     expect($('inbox').querySelector('.inbox-count')?.textContent).toBe('2');
   });
 
