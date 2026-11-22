@@ -490,6 +490,32 @@ function questionWithoutText(tasks, queue) {
 /** Strict id for an owner question: letters (including Nordic letters), digits, ".", "_" and "-", at most 40 characters, without whitespace. */
 const QUESTION_ID_PATTERN = /^[A-Za-z0-9\u00C6\u00D8\u00C5\u00E6\u00F8\u00E5][A-Za-z0-9\u00C6\u00D8\u00C5\u00E6\u00F8\u00E5._-]{0,39}$/;
 
+/**
+ * Receive (section 6.3 of plans/autonomi-nivaa-utredning.md): the open questions a track registered with
+ * `ravenseat question` (setQuestion records `track` from the branch), against the `ownerQuestions=<n>` it reported.
+ * What it said it asked beyond those was written as free text: `unfilled`. Never below 0; a count that is not a number is 0.
+ * @returns {{ registered: string[], unfilled: number }}
+ */
+function registeredQuestions(queue, trackId, count) {
+  const registered = Object.entries(queue?.question ?? {})
+    .filter(([, q]) => q && q.track === trackId)
+    .map(([sp]) => sp)
+    .sort();
+  const n = Number.isFinite(Number(count)) ? Number(count) : 0;
+  return { registered, unfilled: Math.max(0, n - registered.length) };
+}
+
+/** The one NOTE line receive prints when a track asked in free text, or null when every question was registered. */
+function registeredQuestionNote(trackId, { registered = [], unfilled = 0 } = {}, ravenseat = 'ravenseat') {
+  if (!unfilled) return null;
+  const what = unfilled === 1 ? '1 owner question' : `${unfilled} owner questions`;
+  return (
+    `NOTE: ${trackId} asked ${what} as free text instead of registering ${unfilled === 1 ? 'it' : 'them'} with ${ravenseat} question. ` +
+    `The card says "Not filled in by the agent" (no category, context or consequence).` +
+    (registered.length ? ` Registered: ${registered.join(', ')}.` : '')
+  );
+}
+
 /** Is the question registered so that the owner can answer it (text and type in `question`)? */
 function questionRegistered(queue, sp) {
   const q = Object.hasOwn(queue?.question ?? {}, sp) ? queue.question[sp] : null;
@@ -665,6 +691,8 @@ module.exports = {
   AFTER_MAX,
   QUESTION_ID_PATTERN,
   questionRegistered,
+  registeredQuestions,
+  registeredQuestionNote,
   waitingOnError,
   resolveWaits,
   resolveWaitsLines,
