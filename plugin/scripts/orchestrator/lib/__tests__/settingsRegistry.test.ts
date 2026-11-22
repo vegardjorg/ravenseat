@@ -310,6 +310,11 @@ describe('requires: a row that has an effect only while another one is on (M3)',
     expect(withRequires().length).toBe(Object.keys(R.REQUIRES).length);
   });
 
+  // Friction review 22.11: board/palette.js opens on Ctrl+K only while board.shortcuts is on too, so Settings marks it.
+  it('the command palette requires the keyboard shortcuts', () => {
+    expect(reqOf(byKey.get('board.palette'))).toEqual(['board.shortcuts']);
+  });
+
   it('no cycles: following requires never comes back to the row', () => {
     const walk = (key: string, path: string[]): void => {
       expect(path, `a cycle: ${[...path, key].join(' -> ')}`).not.toContain(key);

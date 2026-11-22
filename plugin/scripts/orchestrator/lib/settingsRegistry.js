@@ -228,6 +228,8 @@ const REQUIRES = Object.freeze({
   'catalog.gateAfter': ['learning.proposals', 'catalog.checks'],
   // board/top.js applyFeatures: the Cloud tab comes with the cloud module.
   'board.showCloud': ['features.cloud'],
+  // board/palette.js paletteOn: Ctrl+K opens the palette only while the shortcuts are on as well.
+  'board.palette': ['board.shortcuts'],
   // cli/checks.mjs canaryFacts: with the canary off no transcript is read, so no shape is logged.
   'client.shapeLog': ['client.canary'],
   // lib/queueConfig.js features: a part is off while its parent is off.
