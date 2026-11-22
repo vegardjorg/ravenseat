@@ -27,8 +27,9 @@ const LM = require('../liteMode') as {
 };
 const H = require('../cliHelp') as {
   QUEUE_COMMANDS: string[];
-  LITE_GROUPS: { commands: { cmd: string }[] }[];
+  LITE_GROUPS: { commands: { cmd: string; usage: string }[] }[];
   shortHelp: (ravenseat?: string, o?: { lite?: boolean }) => string[];
+  undoHint: (ravenseat?: string) => string;
 };
 const KK = require('../queueConfig') as { STANDARD: Task; merge: (a: Task, b: Task) => Task };
 /* eslint-enable @typescript-eslint/no-require-imports */
@@ -124,6 +125,18 @@ describe('the lite help', () => {
     expect(lite).toMatch(/ravenseat mode full/);
     expect(lite).not.toMatch(/approve|takeover|pick/);
     expect(H.shortHelp('ravenseat').join('\n')).not.toMatch(/lite mode/);
+  });
+
+  // Friction review 22.11 (Q2): the lite user is the one who cannot `git revert`, so the safe way back is in their help.
+  it('has undo <id> (the git-free way to take a merged task out), within the cap of 15', () => {
+    const all = H.LITE_GROUPS.flatMap((g) => g.commands);
+    expect(all.find((c) => c.cmd === 'undo')?.usage).toBe('undo <id>');
+    expect(all.length).toBeLessThanOrEqual(15);
+    expect(H.shortHelp('ravenseat', { lite: true }).join('\n')).toMatch(/ravenseat undo <id> +\S/);
+  });
+
+  it('the bare undo hint names undo <id>, so one word doing two things is said out loud', () => {
+    expect(H.undoHint('ravenseat')).toBe('Undo the last queue edit. To take a merged task back out: ravenseat undo <id>.');
   });
 });
 
@@ -267,6 +280,15 @@ describe('ravenseat init, add, help and mode', () => {
     const help = await run('ravenseat.mjs', 'help');
     expect(help.stdout).toContain('(lite mode)');
     expect(help.stdout).toContain('ravenseat mode full');
+  });
+
+  it('bare undo says which undo it is and points to undo <id>; the JSON the board reads has no extra line', async () => {
+    expect((await ravenseat('init', '--lite')).status).toBe(0);
+    const u = await ravenseat('undo', '--show');
+    expect(u.stdout.split('\n')[0]).toBe('Undo the last queue edit. To take a merged task back out: ravenseat undo <id>.');
+    const j = await ravenseat('undo', '--show', '--json');
+    expect(() => JSON.parse(j.stdout)).not.toThrow();
+    expect(j.stdout).not.toContain('undo <id>');
   });
 
   it('ravenseat mode full switches back: the guard and the JSON-only add return', async () => {

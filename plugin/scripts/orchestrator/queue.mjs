@@ -1098,6 +1098,9 @@ if (command === 'init') {
   // ravenseat undo <id>: revert the task's merge (GS-3); bare `undo` is the changelog undo below
   await (await import('./cli/undo.mjs')).cmdUndoMerge();
 } else if (command === 'undo') {
+  // One word, two undos: the text form first says which one this is and where the other lives (lib/cliHelp.js
+  // undoHint). The board reads --json, which stays one JSON object.
+  if (!a.includes('--json')) console.log(require('./lib/cliHelp.js').undoHint(CLI));
   (await import('./cli/taskEdit.mjs')).cmdUndo();
 } else if (command === 'plan') {
   // ---- The plan register (see the top of the file and lib/queuePlan.js) ----
