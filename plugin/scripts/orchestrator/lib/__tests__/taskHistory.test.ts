@@ -149,6 +149,32 @@ describe('taskHistory', () => {
     expect(last.text).toBe('Status waiting -> cancelled by you');
   });
 
+  it('an owner edit: the changelog step never names edited_at, and edited_at fills in when the entry has rolled off', () => {
+    const task = { id: 'EX-11', status: 'waiting', added_at: at(5), edited_at: at(2) };
+    const logged = {
+      tasks: [task],
+      changelog: [
+        {
+          nr: 4,
+          at: at(2),
+          by: 'theBoard',
+          action: 'edit',
+          changes: [
+            { id: 'EX-11', field: 'value', before: 5, after: 8 },
+            { id: 'EX-11', field: 'edited_at', before: null, after: at(2) },
+          ],
+        },
+      ],
+    };
+    const h1 = TH.taskHistory({ task, queue: logged, rows: [], findings: [], now: NOW });
+    expect(h1.steps.filter((s: any) => s.kind === 'edited').map((s: any) => s.text)).toEqual(['Edited: value by you']);
+    // The changelog keeps only the last 50 entries: without it, edited_at still shows the edit.
+    const h2 = TH.taskHistory({ task, queue: { tasks: [task], changelog: [] }, rows: [], findings: [], now: NOW });
+    const edited = h2.steps.filter((s: any) => s.kind === 'edited');
+    expect(edited.map((s: any) => s.text)).toEqual(['Edited by you']);
+    expect(edited[0].time).toBe(at(2));
+  });
+
   it('marks an open block as still open and counts its time up to now', () => {
     const task = { id: 'EX-10', status: 'waiting', added_at: at(5), blocks: [{ code: 'gate-red', from: at(3) }] };
     const h = TH.taskHistory({ task, queue: { tasks: [task] }, rows: [], findings: [], now: NOW });

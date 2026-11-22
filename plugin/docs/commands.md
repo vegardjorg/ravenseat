@@ -82,6 +82,7 @@ ravenseat plan show                 # plan register
 ravenseat finding "<title>"         # a track notes something outside its scope (an idea, not a fix)
 ravenseat board                     # the board: opens itself in your browser (the printed link has no key)
 ravenseat board open                # opens the running board again, in a tab with its key
+ravenseat board open --task <id>    # the same, on that card (--no-open prints the link without the key)
 ravenseat board-setting             # the board's own switches; `cloud on|off` (the Cloud tab), `blocked on|off` (the Blocked column, off by default)
 ravenseat follow                    # follow-up entries
 ravenseat handover now              # the "Now" part of the handover note

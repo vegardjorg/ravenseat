@@ -23,7 +23,7 @@ key, and prints the link without it. Never look for the key, never pass `--key-f
    says it could not open a browser, pass that line on as it is. The key changes on every start; a tab with an old key
    says "The key is old".
 4. Tell the user in two short lines:
-   - `ravenseat board open` opens the running board again (a closed tab, or another browser window); the board runs
+   - `ravenseat board open` opens the running board again (a closed tab, or another browser window), and `--task <id>` opens it on that card; the board runs
      while this Claude Code session runs; ask again, or run `/ravenseat:board`, to restart it;
    - to run it from their own terminal instead (it then keeps running after Claude Code closes), from the project
      folder: `node "<plugin root>/scripts/orchestrator/ravenseat.mjs" board`. Find `<plugin root>` with

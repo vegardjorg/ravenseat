@@ -38,6 +38,8 @@ const RI = require('./lib/reviewItems.js');
 const FSRC = require('./lib/findingSources.js');
 // The task's short human summary (`description`): its stored form and the soft-limit WARNING (lib/taskDescription.js).
 const DESC = require('./lib/taskDescription.js');
+// The --by values that mean the owner (the board calls the CLI with --by theBoard): only they stamp edited_at.
+const { OWNER_BY } = require('./lib/ownerLog.js');
 let trackBranchCache;
 /**
  * The track branch the cwd is on (`<branchPrefix><id>`), or null. A track agent runs ravenseat from its worktree, so this is
@@ -315,6 +317,8 @@ export function cmdEdit() {
     'attempts',
     // The plan review (lib/planReview.js) is only recorded by triage --plan.
     'plan_review',
+    // The owner-edit stamp is written by this command itself (below), never set by hand.
+    'edited_at',
   ])
     delete field[f];
   // An edit with nothing to write (a mistyped flag, or only fields with their own commands) must not look like it worked.
@@ -331,6 +335,8 @@ export function cmdEdit() {
   editLogged('edit', (queue) => {
     const o = queue.tasks.find((x) => x.id === id);
     if (!o) die(`Unknown task ${id}`);
+    // For the owner-edit stamp at the end: the task as it was, to tell a real change from a no-op.
+    const taskBefore = JSON.stringify(o);
     const fixesBefore = FX.fixesList(o.fixes) ?? [];
     // The finish line is fixed once the task has started (only the owner moves it, never a track).
     const locked = lockError(o, field);
@@ -395,6 +401,11 @@ export function cmdEdit() {
       const m = moveLongMission(o);
       if (m) missionMoved.push(m);
     }
+    // J14 follow-up: an owner edit (--by owner, or the board's Edit with --by theBoard) that changed the task stamps
+    // edited_at, so "Changed 24 h" and History see it. Never from inside a track worktree, whatever --by says, and
+    // never for an agent's or the machine's edit (any other --by), so the stamp means "you changed this".
+    if (OWNER_BY.has(String(byName()).trim()) && JSON.stringify(o) !== taskBefore && !trackBranchHere())
+      o.edited_at = new Date().toISOString();
   });
   // The finding log (lib/findingSources.js), after the write: one row per newly fixed task, at most a warning.
   if (newFixes.length) FSRC.record(() => FSRC.fixLinks({ id, fixes: newFixes }));

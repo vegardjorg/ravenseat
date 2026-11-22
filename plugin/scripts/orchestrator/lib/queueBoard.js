@@ -219,11 +219,11 @@ function aging(o, ageLimits, now = Date.now()) {
 /**
  * When the task last changed, for the "Changed 24 h" quick filter (roadmap 0ø J4): the newest of the times the queue
  * already writes on the task (added, picked, started, delivered, reviewed, done, a blocker opened or closed, the gate
- * check). No new field or log file (owner answer 3, plans/jira-vurdering-2026-11-18.md). An owner edit of the title or
- * the priority alone does not move it.
+ * check), and edited_at, the owner's own edit (`ravenseat edit --by owner` and the board's Edit; J14 follow-up). No log
+ * file (owner answer 3, plans/jira-vurdering-2026-11-18.md). An agent's edit does not move it.
  * @returns {string|null} ISO time, or null when the task has none
  */
-const CHANGED_FIELDS = ['added_at', 'picked_at', 'started', 'delivered', 'review_at', 'done', 'archived_at'];
+const CHANGED_FIELDS = ['added_at', 'picked_at', 'started', 'delivered', 'review_at', 'done', 'archived_at', 'edited_at'];
 function lastChanged(o) {
   const times = CHANGED_FIELDS.map((f) => o?.[f]);
   for (const b of Array.isArray(o?.blocks) ? o.blocks : []) times.push(b?.from, b?.to);

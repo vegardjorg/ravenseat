@@ -161,6 +161,53 @@ describe('board.hideKey on (the default)', () => {
   }, 30_000);
 });
 
+// J14 follow-up: `ravenseat board open --task <id>` opens the board on that card (the J2 deep link #view=flat&task=ID).
+// The key rides only in the link the board itself hands the browser or the key file (the page takes it out of the
+// address at once, board/api.js); what the command prints never carries it.
+describe('board open --task <id> (the J2 deep link)', () => {
+  let b: Board | null = null;
+  const wait = () => new Promise((done) => setTimeout(done, 2100)); // one open per 2 s
+  beforeAll(async () => {
+    const file = path.join(root, 'q', 'queue.json');
+    const q = JSON.parse(fs.readFileSync(file, 'utf8'));
+    q.tasks = [{ id: 'EX-1', title: 'A task', class: 'K', value: 5, content_min: 60, status: 'waiting', depends_on: [], waiting_on: [], owned_files: [] }];
+    fs.writeFileSync(file, JSON.stringify(q, null, 2));
+    b = await startBoard(env, root);
+  }, 90_000);
+  afterAll(() => stop(b));
+
+  it('opens the card: the key file gets the deep link after the key, and nothing printed carries the key', async () => {
+    fs.rmSync(b!.keyFile!);
+    const r = await run(env, root, 'ravenseat.mjs', 'board', 'open', '--task', 'EX-1', '--port', String(b!.port));
+    expect(r.code, r.out).toBe(0);
+    expect(r.out.includes(b!.key!), 'board open --task printed the key').toBe(false);
+    expect(r.out).not.toMatch(/key=/);
+    const link = fs.readFileSync(b!.keyFile!, 'utf8');
+    expect(link.includes(`#key=${b!.key}&view=flat&task=EX-1`), 'the key file has no deep link after the key').toBe(true);
+  }, 30_000);
+
+  it('--no-open prints the deep link without the key and opens nothing', async () => {
+    await wait();
+    fs.rmSync(b!.keyFile!);
+    const r = await run(env, root, 'ravenseat.mjs', 'board', 'open', '--task', 'EX-1', '--no-open', '--port', String(b!.port));
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).toContain(`http://127.0.0.1:${b!.port}/#view=flat&task=EX-1`);
+    expect(r.out.includes(b!.key!), 'the printed link carried the key').toBe(false);
+    expect(fs.existsSync(b!.keyFile!), 'the key file was written although --no-open').toBe(false);
+  }, 30_000);
+
+  it('a task that is not in the queue is refused by the board, and a malformed id before any call', async () => {
+    await wait();
+    const unknown = await run(env, root, 'ravenseat.mjs', 'board', 'open', '--task', 'NOPE-9', '--port', String(b!.port));
+    expect(unknown.code).toBe(1);
+    expect(unknown.out).toMatch(/no task NOPE-9 in the queue/);
+    const bad = await run(env, root, 'ravenseat.mjs', 'board', 'open', '--task', 'a b', '--port', String(await freePort()));
+    expect(bad.code).toBe(1);
+    expect(bad.out).toMatch(/not a task id/);
+    expect(bad.out).not.toMatch(/No board answers/);
+  }, 30_000);
+});
+
 describe('without --key-file (the way Claude starts it)', () => {
   it('prints no key at all, and says the board opens in the browser (no browser under the test runner)', async () => {
     const b = await startBoard(env, root, { keyFile: false });

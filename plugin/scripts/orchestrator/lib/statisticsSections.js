@@ -339,7 +339,8 @@ function qualitySection({ gateRows, findings, from }) {
 function slimGateRow(r) {
   if (r?.event === 'flakyGate') return { time: r.time, event: r.event, source: r.source ?? null, commands: r.commands ?? [] };
   const out = { time: r.time, event: 'gate', gates: r.gates ?? [], failed: r.failed ?? [], duration_s: r.duration_s };
-  for (const k of ['durations', 'wait_sec', 'min_free_memory_pct', 'start_free_memory_pct', 'flaky', 'timed_out'])
+  // sha: the commit the run checked, so "Gates run twice" (CI-1) finds the merge step's quick gates on a merge commit.
+  for (const k of ['durations', 'wait_sec', 'min_free_memory_pct', 'start_free_memory_pct', 'flaky', 'timed_out', 'sha'])
     if (r[k] != null) out[k] = r[k];
   return out;
 }
