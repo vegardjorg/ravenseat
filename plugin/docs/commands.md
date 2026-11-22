@@ -25,6 +25,7 @@ ravenseat wait                      # waits in the background at no token cost u
 ravenseat cost                      # USD per merged change, cost per task (all runs), then per class
 ravenseat cost --reads              # the files tracks most often read whole: candidates for a catalog excerpt or a split
 ravenseat calibrate                 # how far minute and cost estimates are off, per class
+ravenseat schedule [--json]         # the queue played forward: per focus step the expected end, the next tasks (rough); read only
 ravenseat decide                    # everything waiting on you, most impact first (/ravenseat:decide walks it; the board's Decisions room is the same list)
 ravenseat since [--window last-seen|24h|7d] [--json] [--mark]   # what happened while you were away: Done, Stuck, Waiting on you, Spend and the latest events (the board's "Since you left"); --mark moves the seen mark to now
 ravenseat proposals                 # the proposals waiting, and the auto-accept rules

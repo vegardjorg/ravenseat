@@ -344,6 +344,7 @@ waiting on you. Settings: `decisionSignals.*`.
 | `approve <id> [--by owner]` | Approves a proposal (`--by` records who) |
 | `proposals [auto [on\|off] …]` / `proposals log` / `proposals undo <id>` | Lists the proposals waiting, and auto-accept of proposals by the owner's rules (default off) / what was auto-accepted / back to proposed (see below) |
 | `forecast [--project <pid>] [--days 28] [--json]` | When the remaining tasks are done at 50, 85 and 95 % (Monte Carlo, see below) |
+| `schedule [--json] [--next <n>]` | The queue played forward: per focus step the expected end and the task count, the next tasks with a rough start and length; read only (see [Schedule](#schedule)) |
 | `show` / `show --full` | Short view (under about 3,000 characters; names up to 5 proposals with the track they came from) / full table |
 | `next` | What can start now, without changing anything |
 | `triage` / `triage <id> --verdict ready\|done\|stale\|adjust [--note "…"] [--plan ok\|notes\|ask --plan-note "…"]` / `triage <id> --prompt --scratchpad <dir>` | The tasks that need an intake verdict or a plan review before they start / record the triage helper's verdict (done and stale become an owner question, adjust adds the note to the mission) and its PLANREVIEW line (`--plan` alone works too; see [plan review](#plan-review-before-a-risky-task)) / write the triage prompt again (see orchestration.md, Intake triage) |
@@ -407,6 +408,22 @@ today). The expected cost is the sum of the calibrated cost estimate of each rem
 nothing in the window has a measured cost. With fewer than 5 done in the window it says "not enough data".
 The throughput is the whole queue's, also with `--project`. The board shows the same paragraph in the Focus view and
 in Statistics. The logic is `lib/queueForecast.js`.
+
+### Schedule
+
+`ravenseat schedule` plays the queue forward with the same ranking and limits `next` and `fill` use (focus steps, score,
+maxDPlus, maxDb, owned-file conflicts, `depends_on`, the pause when a focus ends) on slots = the lowest of
+`maxConcurrent`, the quota cap `fill` would apply and the load-aware slots. A task takes its calibrated wall time
+(`estimateWall`) times the median measured actual/calibrated ratio for its class and size (class + size from 5 done
+tasks in 28 days, else the class, else the model alone), never the raw minute estimate. A running task gets the time
+left (never below zero; past it, "over its estimate"); an open owner question gets the median answer time (4 hours
+until 5 answers are measured) and the task is marked "waits on you"; with `nightRun` off nothing starts in the night
+window. What the numbers mean: a focus step's expected end is the last expected end in it, and with many tasks it is
+roughly right to 25 to 40 %. What they do not mean: one task's start and end are rough (a factor 2.5 to 3 either way is
+normal), so they are shown relative to now and never as a promised time, and the whole plan holds only for the queue as
+it is now (new tasks that rank in ahead, fix rounds and changes in quota or load are not in it). For when the work is
+done with a spread, use `forecast`. `--json` gives every task with `rough: true` and a band. The logic is
+`lib/queueSchedule.js`.
 
 ### Cost estimates and calibration
 

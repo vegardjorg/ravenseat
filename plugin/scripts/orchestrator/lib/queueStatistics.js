@@ -112,6 +112,30 @@ function minutesBetween(from, to) {
   return (b - a) / 60_000;
 }
 
+/**
+ * The time from question to answer in minutes, one number per resolution with a time: from when the question existed
+ * (registered, or the first task waiting on it) until the resolution. Shared by statistics (the key figure) and
+ * lib/queueSchedule.js (the answer time the schedule simulation gives an open owner question).
+ */
+function responseTimesOf(queue) {
+  const out = [];
+  for (const [sp, x] of Object.entries(queue?.resolutions ?? {})) {
+    const answeredAt = Date.parse(x?.time ?? '');
+    if (!Number.isFinite(answeredAt)) continue;
+    const from = [
+      queue?.question?.[sp]?.added_at,
+      ...(queue?.tasks ?? [])
+        .filter((o) => (o.waiting_on ?? []).includes(sp))
+        .map((o) => o.added_at),
+    ]
+      .map((t) => Date.parse(t ?? ''))
+      .filter(Number.isFinite);
+    if (!from.length || answeredAt < Math.min(...from)) continue;
+    out.push((answeredAt - Math.min(...from)) / 60_000);
+  }
+  return out;
+}
+
 /** The numbers for one selection: median and average in whole minutes. */
 const middle = (xs) => ({
   median: xs.length ? round(median(xs)) : null,
@@ -164,23 +188,8 @@ function statistics(queue, rows, { now = Date.now(), tz = TK.TZ, cap = CONTEXT_C
   const inSum = last.reduce((s, r) => s + r.in, 0);
   const outSum = last.reduce((s, r) => s + r.out, 0);
 
-  // ---- Time from question to answer: from when the question existed (registered, or the first task waiting on
-  // it) until the resolution. Shown only with enough resolutions with a time. ----
-  const responseTimes = [];
-  for (const [sp, x] of Object.entries(queue?.resolutions ?? {})) {
-    const answeredAt = Date.parse(x?.time ?? '');
-    if (!Number.isFinite(answeredAt)) continue;
-    const from = [
-      queue?.question?.[sp]?.added_at,
-      ...(queue?.tasks ?? [])
-        .filter((o) => (o.waiting_on ?? []).includes(sp))
-        .map((o) => o.added_at),
-    ]
-      .map((t) => Date.parse(t ?? ''))
-      .filter(Number.isFinite);
-    if (!from.length || answeredAt < Math.min(...from)) continue;
-    responseTimes.push((answeredAt - Math.min(...from)) / 60_000);
-  }
+  // ---- Time from question to answer (responseTimes). Shown only with enough resolutions with a time. ----
+  const responseTimes = responseTimesOf(queue);
 
   const cycles = [];
   const match = [];
@@ -341,6 +350,7 @@ module.exports = {
   percentile,
   daysBackward,
   minutesBetween,
+  responseTimesOf,
   doneInWindow,
   ageBounds,
   statistics,
