@@ -276,6 +276,65 @@ describe('finding and going', () => {
   });
 });
 
+describe('one palette per room (the Plans command line in plans/work.js also takes Ctrl+K)', () => {
+  // The real plans/work.js, installed with a small stand-in for the helpers plans.js hands it; `inPlans` is the room.
+  let inPlans = false;
+  const plansOpen = () =>
+    [...document.querySelectorAll('input')].some((i) => /Jump to an area/.test(i.placeholder) && !i.closest('[hidden]'));
+  beforeAll(() => {
+    (0, eval)(clientSource('../lib/queuePlanView.js'));
+    (0, eval)(clientSource('plans/work.js'));
+    const room = document.createElement('div');
+    document.body.append(room);
+    (window as any).QueuePlans = { ...(window as any).QueuePlans, isPlans: () => inPlans };
+    (window as any).QueuePlanWork.install({
+      // The same contract as board/core.js el (the board's own stays inside its strict eval).
+      el: (tag: string, attr: Record<string, any> = {}, ...kids: any[]) => {
+        const e = document.createElement(tag);
+        for (const [k, v] of Object.entries(attr ?? {})) {
+          if (v == null || v === false) continue;
+          if (k === 'class') e.className = v;
+          else if (k === 'text') e.textContent = v;
+          else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+          else e.setAttribute(k, v === true ? '' : v);
+        }
+        for (const c of kids.flat()) if (c != null && c !== false) e.append(c);
+        return e;
+      },
+      isPlans: () => inPlans,
+      data: () => null,
+      get() {},
+      room,
+      state: () => ({}),
+      filterMenuOpen: () => false,
+    });
+  });
+  const escape = () => document.activeElement && press('Escape', document.activeElement);
+
+  it('in the queue rooms only the board palette opens', async () => {
+    inPlans = false;
+    ctrlK(document.body);
+    await flush();
+    expect(isOpen()).toBe(true);
+    expect(plansOpen()).toBe(false);
+    escape();
+    await flush();
+    expect(isOpen()).toBe(false);
+  });
+
+  it('in the Plans room only the Plans command line opens', async () => {
+    inPlans = true;
+    document.body.focus();
+    ctrlK(document.body);
+    await flush();
+    expect(isOpen()).toBe(false);
+    expect(plansOpen()).toBe(true);
+    escape();
+    await flush();
+    inPlans = false;
+  });
+});
+
 describe('the shortcut overview', () => {
   it('lists Ctrl K', async () => {
     (window as any).QueueKeys.open();

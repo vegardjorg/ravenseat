@@ -1922,6 +1922,8 @@
   }
 
   window.QueuePlans = {
+    /** Is the Plans room the one on screen? (Ctrl+K: the Plans command line here, the board palette elsewhere, J7.) */
+    isPlans: () => isPlans(),
     /** Leave Plans for the queue room (the Decisions tab, board/decide.js). */
     showQueue() {
       if (isPlans()) useState({ ...s.state, room: 'queue' });

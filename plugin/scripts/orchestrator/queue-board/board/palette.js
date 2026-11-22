@@ -306,6 +306,8 @@ document.addEventListener('keydown', (e) => {
   if (e.defaultPrevented || e.isComposing || e.altKey || e.shiftKey) return;
   if (!(e.ctrlKey || e.metaKey) || String(e.key).toLowerCase() !== 'k') return;
   if (!paletteOn() || !paletteBackground.hidden || !keysBackground.hidden) return;
+  // In the Plans room Ctrl+K stays the Plans command line (plans/work.js); the board palette is for the queue rooms.
+  if (window.QueuePlans?.isPlans?.()) return;
   const active = document.activeElement;
   // Never in a text field (its own Ctrl+K, such as a link shortcut in an editor, stays its own).
   if (inputField(active) || active?.isContentEditable) return;

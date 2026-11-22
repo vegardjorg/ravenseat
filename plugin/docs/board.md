@@ -614,8 +614,9 @@ Settings, Since you left, a card by id or a word of its title, or a setting by i
 `Enter` goes there (a card opens through its deep link, a setting opens Settings on its row), `Shift+Enter` or **Copy
 command** copies the `ravenseat` command behind the item (`ravenseat info EX-12`, `ravenseat settings board.palette`), and
 `Esc` closes. It never changes anything itself: a switch is changed in Settings, where a weakened guard asks first. It
-never fires in a text field or a dialog. `board.palette` (on) together with `board.shortcuts` turns it on; off leaves
-`Ctrl+K` to the browser.
+never fires in a text field or a dialog. In the Plans room `Ctrl+K` stays the Plans command line, so only one palette
+opens. `board.palette` (on) together with `board.shortcuts` turns it on; off leaves `Ctrl+K` to the Plans command line
+as before.
 
 ## Structured search
 

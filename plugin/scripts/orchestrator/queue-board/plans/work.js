@@ -827,6 +827,9 @@
     });
     if (!t) return;
     if (t.type === 'palette') {
+      // J7: outside Plans the board's own palette (board/palette.js, board.palette) takes Ctrl+K first and marks the
+      // key handled; then this command line stays shut, so only one palette opens.
+      if (e.defaultPrevented && !a.palette.open && !h.isPlans()) return;
       e.preventDefault();
       if (a.palette.open) closePalette();
       else openPalette(h);
