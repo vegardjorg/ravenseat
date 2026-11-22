@@ -373,6 +373,69 @@ function missionSummary(text) {
 const PANEL_DETAILS_STORAGE = 'queue-board-panel-details';
 let panelDetailsOpen = store.getItem(PANEL_DETAILS_STORAGE) === 'open';
 
+// "History" (roadmap 0ø J5): what happened with the task, oldest first, from /api/task's `history` (lib/taskHistory.js,
+// only data that already exists). Closed by default, remembered per viewer like Details. Pure display: no setting.
+const PANEL_HISTORY_STORAGE = 'queue-board-panel-history';
+let panelHistoryOpen = store.getItem(PANEL_HISTORY_STORAGE) === 'open';
+
+/** "+45 min", "+2 h", "+3 h 10 min", "+2 d 4 h": the time since the step before. */
+function historyGap(ms) {
+  const min = Math.max(0, Math.round(ms / 60_000));
+  if (min < 60) return `+${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 48) return `+${h} h${min % 60 ? ` ${min % 60} min` : ''}`;
+  return `+${Math.floor(h / 24)} d${h % 24 ? ` ${h % 24} h` : ''}`;
+}
+
+/** The History section for the panel: a <details> with an ordered list, or a line that says why there is none. */
+function historySection(d) {
+  const h = d?.history;
+  const steps = Array.isArray(h?.steps) ? h.steps : [];
+  const fails = steps.filter((s) => s.fail).length;
+  const hint = !d
+    ? 'fetching'
+    : h == null
+      ? 'not read'
+      : `${steps.length} ${steps.length === 1 ? 'step' : 'steps'}${fails ? `, ${fails} failed` : ''}`;
+  let body;
+  if (!d) body = el('p', { class: 'empty', text: 'Fetching the history …' });
+  else if (d.error) body = el('p', { class: 'empty', text: d.error });
+  else if (h == null) body = el('p', { class: 'empty', text: 'The history could not be read (the time log or the queue).' });
+  else if (!steps.length) body = el('p', { class: 'empty', text: 'Nothing recorded yet.' });
+  else
+    body = el(
+      'ol',
+      { class: 'history-list' },
+      steps.map((s) =>
+        el(
+          'li',
+          { class: `history-step${s.fail ? ' history-fail' : ''}` },
+          el('time', { datetime: s.time, text: localTime(s.time) }),
+          el(
+            'span',
+            { class: 'history-text' },
+            // A failure is said in words for a screen reader and drawn with the error colour (never colour alone).
+            s.fail ? el('span', { class: 'history-flag', text: 'Failed: ' }) : null,
+            String(s.text ?? ''),
+          ),
+          s.gap_ms ? el('span', { class: 'history-gap', text: historyGap(s.gap_ms) }) : null,
+        ),
+      ),
+    );
+  const box = el(
+    'details',
+    { class: 'panel-details panel-history' },
+    el('summary', null, 'History', el('span', { class: 'panel-details-hint', text: hint })),
+    body,
+  );
+  box.open = panelHistoryOpen;
+  box.addEventListener('toggle', () => {
+    panelHistoryOpen = box.open;
+    store.setItem(PANEL_HISTORY_STORAGE, box.open ? 'open' : 'closed');
+  });
+  return box;
+}
+
 function drawPanel(fresh) {
   const found = t.perId.get(t.selected);
   if (!found) return closePanel();
@@ -578,6 +641,7 @@ function drawPanel(fresh) {
     panelDetailsOpen = details.open;
     store.setItem(PANEL_DETAILS_STORAGE, details.open ? 'open' : 'closed');
   });
+  const history = historySection(d);
 
   panel.replaceChildren(
     el(
@@ -613,6 +677,7 @@ function drawPanel(fresh) {
         : el('p', { class: 'empty', text: d?.error ?? 'Fetching the mission …' }),
     ),
     details,
+    history,
   );
   if (focusAgain && !panel.contains(document.activeElement)) panel.querySelector(focusAgain)?.focus({ preventScroll: true });
   panel.scrollTop = scroll;

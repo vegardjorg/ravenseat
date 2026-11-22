@@ -223,6 +223,28 @@ const AWAY = require('./lib/awaySummary.js');
 const SEEN = require('./lib/seenMark.js');
 // The task's short human summary and its own sources for the detail panel (/api/task; lib/taskDescription.js).
 const DESC = require('./lib/taskDescription.js');
+// The card's History in the detail panel (roadmap 0ø J5, lib/taskHistory.js): only data that already exists.
+const HIST = require('./lib/taskHistory.js');
+
+/**
+ * The history of one task for /api/task: the queue with its archive, the cached time log rows (flow rows and the track
+ * gate runs) and the review rows of the finding log. Null when it cannot be built (the panel then says so; the rest of
+ * the answer is unchanged).
+ */
+function historyFor(o, queue) {
+  try {
+    const log = timeLogRows();
+    let findings = [];
+    try {
+      findings = FL.read(null, { since: o.added_at ?? null, includeArchive: true }).rows;
+    } catch {
+      findings = []; // no finding log yet: the review rounds are left out
+    }
+    return HIST.taskHistory({ task: o, queue, rows: [...(log.events ?? []), ...(log.trackGates ?? [])], findings, now: Date.now() });
+  } catch {
+    return null;
+  }
+}
 const archiveMtime = () => {
   try {
     return fs.statSync(QARCH.archiveFile(FOLDER)).mtimeMs;
@@ -1195,13 +1217,18 @@ function timeLogRows() {
     const compacts = [];
     // "Since you left" (lib/awaySummary.js): a track's red gate runs as time, track, kind and the red command names only.
     const redGates = [];
+    // The card's History (lib/taskHistory.js, J5): every track gate run, red and green, in the same slim form.
+    const trackGates = [];
     for (const r of all) {
       if (r?.event === 'gate' || r?.event === 'flakyGate') gates.push(SX.slimGateRow(r));
       else if (r?.event === 'compact' && r.scope !== 'session') compacts.push({ time: r.time });
-      if (r?.event === 'gate' && r.ok === false && r.track)
-        redGates.push({ time: r.time, event: 'gate', track: r.track, kind: r.kind ?? null, ok: false, failed: r.failed ?? [] });
+      if (r?.event === 'gate' && r.track) {
+        const slim = { time: r.time, event: 'gate', track: r.track, kind: r.kind ?? null, ok: r.ok === false ? false : r.ok === true, failed: r.failed ?? [] };
+        trackGates.push(slim);
+        if (r.ok === false) redGates.push(slim);
+      }
     }
-    logCache = { key, rows, events, guards, gates, compacts, redGates, error: null };
+    logCache = { key, rows, events, guards, gates, compacts, redGates, trackGates, error: null };
   }
   return logCache;
 }
@@ -3612,6 +3639,8 @@ const server = http.createServer(async (req, res) => {
         branch: { name: branch, ...branchInfo(branch) },
         ...DESC.panelFields(o),
         ...archived,
+        // J5: the card's History (lib/taskHistory.js), ids, codes, counts and times only; null = could not be built.
+        history: historyFor(o, queue),
       });
     }
     // The archived tasks (lib/queueArchive.js) for the board's history and search: ?q= matches id, title, project and

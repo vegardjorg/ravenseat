@@ -407,6 +407,8 @@
 //         or after it when the base gate commands went red (the merge stays, a fix task <id>-BASE<n> is added).)
 //   node scripts/orchestrator/queue.mjs info <id> [--field <name>] [--json]   (short view; one field raw, also cost.usd;
 //        shows the description, plan, sources with anchors and roles, and source)
+//   node scripts/orchestrator/queue.mjs info <id> --history [--json]   (what happened with the task, oldest first, from
+//        data that already exists; the same join as the board's History, lib/taskHistory.js)
 //   node scripts/orchestrator/queue.mjs edit <id> --description "<text>"   (sets or replaces the short human summary;
 //        "" removes it, as null in --json does. Over 320 characters: one WARNING line, saved anyway)
 //   node scripts/orchestrator/queue.mjs edit <id> --risk-first "<assumption>"   (sets or replaces the riskiest assumption;

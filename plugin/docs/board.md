@@ -298,7 +298,12 @@ The Queue workspace has these tabs:
 line on what the task is about, the actions, the full mission, and last the technical facts (status, project, class,
 placement and score, dependencies, owner files, branch, cloud, migrations, QA, verification, source and remarks) under
 **Details**. Details is closed from the start and shows the status on its row; whether you keep it open is remembered
-in this browser. The short line is the first paragraph under a heading such as "What and why", "Why", "Goal",
+in this browser. Under it, **History** (closed from the start, also remembered) lists what happened with the task,
+oldest first, with the local time and the time since the step before: added, approved, picked, started, gate runs,
+delivered, received, review rounds (H/M/L counts), fix rounds, questions and answers (by id), blocks, merge conflicts,
+merged, QA, CI and changes in the changelog (field names only). A failure says "Failed:" in words. It is built from
+data that already exists (the task, the queue, the time log and the finding log), never from text an agent wrote;
+`ravenseat info <id> --history` prints the same list. The short line is the first paragraph under a heading such as "What and why", "Why", "Goal",
 "Purpose", "Background" or "Summary" (or a bold `**Goal:**` label) in the mission; without one it is the first plain
 paragraph, skipping generated lines such as the `=====ID=====` marker, `TITLE:` and `BRANCH:` lines, headings and
 `**Ownership in the queue:**` blocks, and last the first list item. It is clipped at about 320 characters.
