@@ -117,6 +117,16 @@ async function askYes(question) {
   }
 }
 
+/**
+ * Bare `ravenseat undo` (the changelog undo, cli/taskEdit.mjs cmdUndo). One word does two things, so the text form
+ * first says which undo this is and points to `undo <id>` (lib/cliHelp.js undoHint); --json (the board) stays one
+ * JSON object.
+ */
+export async function cmdUndoLast() {
+  if (!a.includes('--json')) console.log(require('./lib/cliHelp.js').undoHint(CLI));
+  (await import('./taskEdit.mjs')).cmdUndo();
+}
+
 /** `ravenseat undo <id> [--dry] [--yes]` (the usage is at the top of queue.mjs). */
 export async function cmdUndoMerge() {
   const id = positional(1)[0];
