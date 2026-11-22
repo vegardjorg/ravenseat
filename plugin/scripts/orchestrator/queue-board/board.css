@@ -2860,9 +2860,10 @@ body.with-option-line .toaster {
    outlined badge next to the type, the two consequence lines as a list of label and text, and the mark on a track
    question left as free text on the warn pair. Tokens only, in both modes. */
 .badge.sp-category {
-  background: transparent;
+  /* The neutral tone pair as the type badge; the outline tells the category apart from the type. */
+  background: var(--color-tone-neutral);
   border-color: var(--color-outline-variant);
-  color: var(--color-on-surface-variant);
+  color: var(--color-on-tone-neutral);
 }
 
 .badge.sp-not-filled {
