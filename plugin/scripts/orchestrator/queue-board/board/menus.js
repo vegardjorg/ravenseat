@@ -109,6 +109,18 @@ const HELP = [
     ],
   },
   {
+    id: 'timeline',
+    title: 'Timeline',
+    text: [
+      'Timeline shows what ran in the last day and what runs now, left of the now line, and then the queue played ' +
+        'forward as it is now (the same as ravenseat schedule): one row per focus step, or per project with the switch. ' +
+        'Each bar is rough. The thin line through it is the likely range, and no task has a promised time; only a step ' +
+        'says when it is done "around". A hatched part waits on you, and the tasks that cannot start are listed under ' +
+        'the chart with the reason. "Table" shows the same as a table. A click on a bar opens the card. It changes ' +
+        'nothing. Days ahead and the rows are in Settings, Board.',
+    ],
+  },
+  {
     id: 'checks',
     title: 'Checks',
     text: [

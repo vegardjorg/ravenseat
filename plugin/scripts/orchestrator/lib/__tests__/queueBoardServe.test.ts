@@ -460,3 +460,47 @@ describe('the board server: Build as gate on the Checks tab (0i step 7)', () => 
     expect(fs.existsSync(configFile()) ? fs.readFileSync(configFile(), 'utf8') : null).toBe(saved);
   }, 60_000);
 });
+
+describe('the board server: the Timeline (T-A) is read only', () => {
+  it('GET /api/schedule needs the key, sends the schedule, answers unchanged for its version and writes nothing', async () => {
+    const queueFile = path.join(root, 'q', 'queue.json');
+    const before = fs.readFileSync(queueFile);
+    const stamp = fs.statSync(queueFile).mtimeMs;
+    expect((await fetch(`${base}/api/schedule`)).status).toBe(401);
+    // This project is in lite mode, where the tab is off: nothing is played then.
+    const off = (await (await fetch(`${base}/api/schedule`, { headers: { 'x-queue-key': key } })).json()) as any;
+    expect(off.data).toMatchObject({ enabled: false, version: 'off' });
+    expect(off.data.schedule).toBeUndefined();
+    const env = {
+      ...process.env,
+      QUEUE_ROOT: root,
+      QUEUE_FOLDER: path.join(root, 'q'),
+      QUEUE_CONFIG: path.join(root, 'no-config.json'),
+      QUEUE_TIME_LOG: path.join(root, 'times.jsonl'),
+      QUEUE_GIT: root,
+      DISABLE_UPDATES: '1',
+    };
+    expect(await ravenseat(env, 'settings', 'set', 'board.timeline', 'on')).toBe(0);
+    const r = await fetch(`${base}/api/schedule`, { headers: { 'x-queue-key': key } });
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as any;
+    expect(body.ok).toBe(true);
+    expect(body.data.enabled).toBe(true);
+    expect(body.data.settings).toEqual({ on: true, horizonDays: 3, rows: 'step' });
+    expect(body.data.schedule.rough).toBe(true);
+    expect(Array.isArray(body.data.schedule.tasks)).toBe(true);
+    expect(Array.isArray(body.data.ran)).toBe(true);
+    const again = (await (await fetch(`${base}/api/schedule?version=${encodeURIComponent(body.version)}`, { headers: { 'x-queue-key': key } })).json()) as any;
+    expect(again).toEqual({ version: body.version, unchanged: true });
+    // No write path: a POST is no route, and the queue file is the same bytes and time as before.
+    const post = await fetch(`${base}/api/schedule`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: base, 'x-queue-key': key },
+      body: '{}',
+    });
+    expect(post.status).toBeGreaterThanOrEqual(400);
+    await post.arrayBuffer();
+    expect(fs.readFileSync(queueFile).equals(before)).toBe(true);
+    expect(fs.statSync(queueFile).mtimeMs).toBe(stamp);
+  }, 60_000);
+});

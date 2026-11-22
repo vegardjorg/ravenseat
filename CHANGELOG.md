@@ -6,6 +6,8 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 ## Unreleased
 
 ### Added
+- **A Timeline tab on the board shows what ran, what runs and the rough plan ahead, as a chart or a table.** Read only;
+  `board.timeline` (on in full, off in lite), `board.timelineHorizonDays` `3`, `board.timelineRows` `step`.
 - **Track reports state a one-way or two-way door and a one-word blast radius, the reviewer checks them, and Decisions,
   `ravenseat decide` and the PR body show them, a one-way door first with a badge.** Display only, never a guard.
 - **`ravenseat board open --task <id>` opens the board on that card, your own edits count in Changed 24 h and History,

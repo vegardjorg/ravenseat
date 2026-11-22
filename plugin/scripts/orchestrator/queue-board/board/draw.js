@@ -461,7 +461,7 @@ function draw() {
   main.replaceChildren();
   main.className = `board ${t.view}${t.marked.size ? ' has-option' : ''}`;
   // Search and filter apply to the cards, not the statistics (and not the plan, which shows areas and projects).
-  $('search-filter').hidden = ['statistics', 'cloud', 'plan', 'decisions', 'checks'].includes(t.view);
+  $('search-filter').hidden = ['statistics', 'cloud', 'plan', 'timeline', 'decisions', 'checks'].includes(t.view);
   // The quick filter buttons (J4, board/views.js) follow the view.
   drawQuickFilters();
   // The grouping applies to Flat and Project lanes.
@@ -495,6 +495,13 @@ function draw() {
   }
   if (t.view === 'cloud') {
     drawCloudQueue();
+    drawStripe();
+    [main.scrollTop, main.scrollLeft] = mainScroll;
+    return;
+  }
+  // The Timeline (T-A, board/timeline.js): its own fetched data, drawn as an SVG chart or a table.
+  if (t.view === 'timeline') {
+    drawTimeline();
     drawStripe();
     [main.scrollTop, main.scrollLeft] = mainScroll;
     return;

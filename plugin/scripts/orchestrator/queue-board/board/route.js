@@ -80,6 +80,7 @@ function applyRoute(r) {
     // A view whose module or tab is off is left as it is.
     if (view && VIEW_FEATURE[view] && !featureOn(VIEW_FEATURE[view])) view = null;
     if (view === 'checks' && $('show-checks')?.hidden) view = null;
+    if (view === 'timeline' && $('show-timeline')?.hidden) view = null;
     // A card alone opens over a queue view, not over Statistics or Cloud.
     if (!view && r.task && ['statistics', 'cloud'].includes(t.view)) view = 'flat';
     if (view && view !== t.view) {

@@ -225,6 +225,11 @@ const SEEN = require('./lib/seenMark.js');
 const DESC = require('./lib/taskDescription.js');
 // The card's History in the detail panel (roadmap 0ø J5, lib/taskHistory.js): only data that already exists.
 const HIST = require('./lib/taskHistory.js');
+// The Timeline tab (roadmap TIDSLINJE T-A): the payload of GET /api/schedule (lib/queueTimeline.js over queueSchedule.js),
+// the quota cap the way `ravenseat schedule` takes it, and the load-aware slots (memory only, no CPU sampling here).
+const QT = require('./lib/queueTimeline.js');
+const SCHED = require('./lib/queueSchedule.js');
+const LOADS = require('./lib/loadSlots.js');
 
 /**
  * The history of one task for /api/task: the queue with its archive, the cached time log rows (flow rows and the track
@@ -1046,7 +1051,9 @@ function state() {
   const panelMode = KK.boardPanelMode(fresh);
   // The display switches (roadmap 0ø J1, J3, J4: tab title count, shortcuts, quick filters), read fresh the same way.
   const display = KK.boardDisplay(fresh);
-  const displayKey = JSON.stringify(display);
+  // The Timeline tab's settings (T-A: board.timeline, .timelineHorizonDays, .timelineRows), read fresh the same way.
+  const timeline = KK.boardTimeline(fresh);
+  const displayKey = JSON.stringify([display, timeline]);
   // catalog.captureAnswers (roadmap 0z Z-A): read fresh and part of the cache key like panelMode, so `settings set`
   // shows or hides "Keep as design choice" on the next poll.
   const captureAnswers = CATALOG.setupOf(fresh).captureAnswers;
@@ -1161,6 +1168,8 @@ function state() {
     panelMode,
     // board.titleCount, .shortcuts, .quickFilters (lib/queueConfig.js boardDisplay).
     boardDisplay: display,
+    // The Timeline tab: shown, its horizon in days and its default rows (lib/queueConfig.js boardTimeline).
+    boardTimeline: timeline,
   };
   // Each step gets status and rests; a step with only rests shows them in the title and the label (the focus line
   // reads the label, the cards and the panel the title), not as an empty step.
@@ -1398,6 +1407,45 @@ function statistics() {
   const version = crypto.createHash('sha1').update(JSON.stringify(data)).digest('hex').slice(0, 16);
   statCache = { key, version, data };
   return statCache;
+}
+
+// ---- The Timeline tab (roadmap TIDSLINJE T-A; lib/queueTimeline.js) ------------------------------------------------
+// Read-only: the queue is played forward on a copy (queueSchedule.js) and nothing is written. One payload is kept per
+// key (the queue's mtime and size, the settings and the minute), so the polls of an open tab do not play it again.
+let scheduleCache = { key: null, data: null };
+/** The payload of GET /api/schedule; with board.timeline off only { enabled: false } (nothing is read). */
+function scheduleData() {
+  const settings = KK.boardTimeline(KK.config({ fresh: true }));
+  if (!settings.on) return { enabled: false, settings, version: 'off' };
+  let stamp = 'none';
+  try {
+    const st = fs.statSync(FILE);
+    stamp = `${st.mtimeMs}:${st.size}`;
+  } catch {
+    /* no queue file: read below fails with its own error */
+  }
+  const now = Date.now();
+  const key = QT.cacheKey({ queueStamp: stamp, settings, now });
+  if (scheduleCache.key === key) return scheduleCache.data;
+  const queue = JSON.parse(fs.readFileSync(FILE, 'utf8'));
+  // The same caps as cli/schedule.mjs; a forecast or a measurement that fails never stops the tab (no cap then).
+  let quotaSlots = null;
+  try {
+    const running = (queue.tasks ?? []).filter((o) => o.status === 'running').length;
+    quotaSlots = SCHED.quotaSlotsFrom(KAP.forecast({ queue, events: usage() }), running);
+  } catch {
+    quotaSlots = null;
+  }
+  let loadSlots = null;
+  try {
+    const ls = L.loadSlotsFor(queue, LOADS.measure({ cpu: false }));
+    loadSlots = ls.active ? ls.slots : null;
+  } catch {
+    loadSlots = null;
+  }
+  const data = { enabled: true, settings, version: key, ...QT.timelineData(queue, { now, quotaSlots, loadSlots }) };
+  scheduleCache = { key, data };
+  return data;
 }
 
 // ---- "Since you left" (roadmap 3e AW-2, AW-3, AW-8; lib/awaySummary.js) ---------------------------------------------
@@ -3323,6 +3371,7 @@ const BOARD_SCRIPTS = [
   'interact.js',
   'top.js',
   'cloud.js',
+  'timeline.js',
   'route.js',
   'keys.js',
   'palette.js',
@@ -3353,6 +3402,8 @@ const STATIC = {
   '/queueUpdate.js': [path.join('..', 'lib', 'queueUpdate.js'), 'text/javascript; charset=utf-8'],
   // The structured search's rules (lib/boardSearch.js, J6, the same file the tests use); board/search.js draws.
   '/boardSearch.js': [path.join('..', 'lib', 'boardSearch.js'), 'text/javascript; charset=utf-8'],
+  // The Timeline tab's layout (lib/timelineLayout.js, T-A, the same file the tests use); board/timeline.js draws.
+  '/timelineLayout.js': [path.join('..', 'lib', 'timelineLayout.js'), 'text/javascript; charset=utf-8'],
   // The plan view (Now, Next, Later, Waiting) with a draft and "Save focus", and the help.
   '/plan.js': ['plan.js', 'text/javascript; charset=utf-8'],
   // Shared focus trap, toast queue, tabs and legend (the same file the tests use).
@@ -3564,6 +3615,19 @@ const server = http.createServer(async (req, res) => {
         return json(res, 200, sinceData({ choice: AWAY.WINDOWS.includes(w) ? w : null, from: url.searchParams.has('from') && Number.isFinite(f) ? f : null }));
       } catch (e) {
         return json(res, 503, { ok: false, message: `Could not build "Since you left" (${e?.code ?? e?.message ?? 'unknown error'}).` });
+      }
+    }
+    // The Timeline tab (T-A): the schedule played forward, read only. "unchanged" when the client has this version.
+    if (req.method === 'GET' && filePath === '/api/schedule') {
+      try {
+        const d = scheduleData();
+        if (url.searchParams.get('version') === d.version) return json(res, 200, { version: d.version, unchanged: true });
+        return json(res, 200, { ok: true, version: d.version, data: d });
+      } catch (e) {
+        return json(res, 503, {
+          ok: false,
+          message: `Could not build the timeline (${e?.code ?? e?.message ?? 'unknown error'}).`,
+        });
       }
     }
     if (req.method === 'GET' && filePath === '/api/statistics') {

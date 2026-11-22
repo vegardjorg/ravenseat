@@ -59,6 +59,7 @@ $('key-form').addEventListener('submit', (e) => {
   update(true);
   if (t.view === 'statistics') getStatistics();
   if (t.view === 'cloud') getCloudQueue();
+  if (t.view === 'timeline') getTimeline();
 });
 
 // The write calls that are the owner's actions (approve, resolve, mark, bulk, move, focus). After a successful call the
@@ -407,6 +408,8 @@ async function update(force) {
       if (drag || boosted || t.busy || window.QueuePlan?.busy()) t.pending = true;
       else if (t.view === 'cloud')
         getCloudQueue(); // the bundles depend on the queue: fetch again
+      else if (t.view === 'timeline')
+        getTimeline(true); // the plan depends on the queue: fetch again (the server keeps it per queue version and minute)
       else if (t.view !== 'statistics')
         draw(); // the statistics have their own fetching
       else drawFilter();
@@ -566,6 +569,7 @@ function drawStale() {
     // Back in contact: the cards are drawn again from now (the ages count on), as after a new state.
     if (drag || boosted || t.busy || window.QueuePlan?.busy()) t.pending = true;
     else if (t.view === 'cloud') getCloudQueue();
+    else if (t.view === 'timeline') getTimeline();
     else if (t.view !== 'statistics') draw();
   }
   // The running times are only moved by the clock (a reused card keeps its text): set them when the state changes, so

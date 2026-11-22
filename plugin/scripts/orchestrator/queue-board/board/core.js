@@ -52,7 +52,8 @@ const background = $('panel-background');
 // "graph" is the "Dependencies" view (graph.js, the layout in queueGraph.js). "plan" is
 // the plan view (In focus, Not in focus, On pause) in plan.js. The tab is called "Focus" (the id `plan` is kept), so
 // it is not confused with the Plans room (the plan register, plans/plans.js).
-const VIEWS = ['flat', 'lanes', 'plan', 'graph', 'cloud', 'statistics'];
+// "timeline" is the Timeline tab (T-A, board/timeline.js), shown while board.timeline is on.
+const VIEWS = ['flat', 'lanes', 'plan', 'graph', 'timeline', 'cloud', 'statistics'];
 // The modules that can be switched off (features in queue.config.json, lib/queueConfig.js): the view tabs they own.
 const VIEW_FEATURE = { plan: 'focus', cloud: 'cloud', statistics: 'statistics' };
 // The names in the gear's "Modules" section (a key the board does not know shows as itself).
@@ -118,6 +119,7 @@ const t = {
   setting: null, // the settings panel: the answer from /api/settings (null = closed)
   stat: { data: null, version: null, error: null }, // the statistics from /api/statistics
   cloudQueue: { data: null, error: null }, // the "Cloud" view: bundle proposals from /api/cloud-bundles
+  timeline: { data: null, version: null, error: null }, // the Timeline tab (T-A): the schedule from /api/schedule
   details: new Map(), // id → { mission, branch } from /api/task
   busy: false, // a move is being saved: do not redraw the board meanwhile
   pending: false,

@@ -46,7 +46,7 @@ for (const [id, name] of [
 }
 // The view tabs (Flat, Project lanes, Focus, Dependencies, Cloud, Statistics) are bold when chosen too, so their text
 // goes in the same width-keeping label: choosing a view no longer moves the tabs after it by a few pixels.
-for (const id of ['show-flat', 'show-lanes', 'show-plan', 'show-graph', 'show-cloud', 'show-statistics']) {
+for (const id of ['show-flat', 'show-lanes', 'show-plan', 'show-graph', 'show-timeline', 'show-cloud', 'show-statistics']) {
   const tab = $(id);
   if (!tab || tab.querySelector('.tab-label')) continue;
   tab.replaceChildren(tabLabel(tab.textContent.trim()));
@@ -247,6 +247,9 @@ function applyFeatures() {
   // The Cloud tab comes with the module, unless the board switch showCloud is off (`ravenseat board-setting cloud off` or Settings, Cloud). A saved
   // Cloud view still opens without the tab (the view shows a note), so only a module that is off leaves the view.
   if (!boardSwitch('showCloud')) $('show-cloud').hidden = true;
+  // The Timeline tab (T-A) follows board.timeline; a view that was just switched off goes back to Flat.
+  $('show-timeline').hidden = !timelineOn();
+  if (t.view === 'timeline' && t.data && !timelineOn()) setView('flat');
   if (VIEW_FEATURE[t.view] && !featureOn(VIEW_FEATURE[t.view])) setView('flat');
   $('room-plans').hidden = !featureOn('plans');
   // Plans redraws only when the switches themselves changed (not on every poll).
@@ -475,6 +478,10 @@ function setView(v) {
   if (v === 'cloud') {
     closeFilter(false);
     getCloudQueue();
+  }
+  if (v === 'timeline') {
+    closeFilter(false);
+    getTimeline();
   }
   // The plan shows areas and projects, and Checks has no cards: the Filter menu (with the quick and saved filters,
   // QA-1d) is closed.
