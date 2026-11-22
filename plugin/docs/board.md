@@ -617,6 +617,17 @@ command** copies the `ravenseat` command behind the item (`ravenseat info EX-12`
 never fires in a text field or a dialog. `board.palette` (on) together with `board.shortcuts` turns it on; off leaves
 `Ctrl+K` to the browser.
 
+## Structured search
+
+The search box takes fields next to plain words: `class:D status:blocked age>2d`. Fields: `class` (exact, so `D` is not
+`D+`), `status` (`blocked` means the card is in Blocked), `project`, `block` (an open block's code), `label`, `plan`,
+`age` (time since the card last changed: `age>2d`, `age<3h`, with m, h, d, w) and `cost` (measured USD: `cost>1`). A
+comma or a repeated field is "or" (`class:d,u`), different fields are "and", and a leading minus leaves out
+(`-class:K`). Plain words search id, title, feature and project as before. Typing a field name or `field:` opens
+suggestions under the box (arrows, `Enter` or `Tab` takes one, `Esc` closes the list); an empty box lists the fields. An
+unknown field or a bad value shows a hint under the box and is ignored, so a typo never empties the board. The rules are
+`lib/boardSearch.js`. `board.structuredSearch` (on) off makes every word plain text again.
+
 ## Deep links and the tab title
 
 The view and the open card stand in the address, for example `#view=flat&task=EX-12`, so the back button works and a
@@ -803,14 +814,14 @@ serves only the files in its allow list (`STATIC`), all with the same strict Con
 'self'`, no inline script).
 
 - `index.html`, `board.css` and `theme.css` (built by the server): the page.
-- `board/`: the board itself, 19 classic scripts that `index.html` loads in this order with `defer`:
+- `board/`: the board itself, 23 classic scripts that `index.html` loads in this order with `defer`:
   `core.js` (constants, the state, helpers, toasts), `api.js` (key, API calls, fetching, the warning dialog),
   `cards.js` (filters, search, the card), `draw.js` (the columns, the chain, the strip), `views.js` (Focus wiring,
   grouping, saved views), `menus.js` (help, project lanes, the Filter menu), `statistics.js`, `settings.js` (the
   gear), `question.js` (the one renderer for owner questions and answer buttons), `decide.js` (the Decisions tab and the "Waiting on you" button), `checks.js` (the Checks tab), `panel.js` (the detail panel), `edit.js` (cancel, decline, edit, markdown),
   `select.js` (multi-select and the selection menu), `bulk.js` (bulk dialog and undo), `interact.js` (writing, drag, keyboard), `top.js`
   (theme, gear sections, modules, view tabs), `cloud.js` (the Cloud view), `route.js` (deep links and the count in the
-  tab title), `keys.js` (the shortcuts and the `?` overview), `palette.js` (the Ctrl+K palette) and `start.js` (update banner, logo and
+  tab title), `keys.js` (the shortcuts and the `?` overview), `palette.js` (the Ctrl+K palette), `search.js` (the structured search's suggestions and hint) and `start.js` (update banner, logo and
   the start). They share the page's global scope, so a top-level name in one is visible in the others, as when they
   were one `board.js`. Code that runs while a script loads may only use names from the scripts before it; a new
   file goes into `BOARD_SCRIPTS` in `queue-board.mjs` and into `index.html` in the same place.

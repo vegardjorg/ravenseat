@@ -13,9 +13,19 @@ function visible(k, col) {
   return visibleWithoutSearch(k, col) && searchMatch(k);
 }
 
+/** The last parsed structured search (J6), so searchMatch parses once per text. */
+let searchParsed = { text: null, parsed: null };
+
 /** The search alone (the search hides cards with `hidden`, while the filters decide what is built). */
 function searchMatch(k) {
   if (!t.filter.search) return true;
+  // J6: the structured search (lib/boardSearch.js, board.structuredSearch): class:D status:blocked age>2d, plain words
+  // as before. The parsed search is kept per text, so a redraw does not parse it once per card.
+  const S = window.QueueSearch;
+  if (S && typeof displayOn === 'function' && displayOn('structuredSearch')) {
+    if (searchParsed.text !== t.filter.search) searchParsed = { text: t.filter.search, parsed: S.parse(t.filter.search) };
+    return S.matches(k, searchParsed.parsed, { now: Date.now() });
+  }
   // P8: the shared rule (lib/queuePlanView.js) also understands plan:<id> ("See tasks" on a plan page uses it). It loads
   // after the board scripts, so the plain search below covers the moment before it is there.
   const V = window.QueuePlanView;

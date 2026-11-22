@@ -3304,6 +3304,7 @@ const BOARD_SCRIPTS = [
   'route.js',
   'keys.js',
   'palette.js',
+  'search.js',
   'start.js',
 ];
 const STATIC = {
@@ -3328,6 +3329,8 @@ const STATIC = {
   '/queueDecisions.js': [path.join('..', 'lib', 'queueDecisions.js'), 'text/javascript; charset=utf-8'],
   // The update banner's rules (lib/queueUpdate.js, the same file the tests use); board/start.js draws it.
   '/queueUpdate.js': [path.join('..', 'lib', 'queueUpdate.js'), 'text/javascript; charset=utf-8'],
+  // The structured search's rules (lib/boardSearch.js, J6, the same file the tests use); board/search.js draws.
+  '/boardSearch.js': [path.join('..', 'lib', 'boardSearch.js'), 'text/javascript; charset=utf-8'],
   // The plan view (Now, Next, Later, Waiting) with a draft and "Save focus", and the help.
   '/plan.js': ['plan.js', 'text/javascript; charset=utf-8'],
   // Shared focus trap, toast queue, tabs and legend (the same file the tests use).
