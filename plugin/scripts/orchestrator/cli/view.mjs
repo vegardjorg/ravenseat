@@ -17,7 +17,7 @@ import path from 'node:path';
 
 import {
   a, branchFor, branchInfo, CE, CLI, cut, D, die, FOLDER, FX, HERE, L, MAIN_TREE, positional, read, readCursor, require,
-  uncommittedPaths, val, WIDTH,
+  TIME_LOG, TK, uncommittedPaths, val, WIDTH,
 } from './context.mjs';
 import { activityFor, costEstimateState, dailyUsageFor, findSilent, findSpinning, findWithoutAgent, measureLoad, nextCostUsd } from './tracks.mjs';
 import { batchGroupLine } from './batch.mjs';
@@ -29,6 +29,28 @@ import { installInfo, showUpdateLine } from './update.mjs';
 
 // The checks before a task starts (PS-3): a D or D+ without its own size is marked where the size is shown.
 const SC = require('./lib/startChecks.js');
+// `info <id> --history` (roadmap 0ø J5): the same join as the board's History in the detail panel.
+const HIST = require('./lib/taskHistory.js');
+const TA = require('./lib/timeLogArchive.js');
+const FLOG = require('./lib/findingLog.js');
+
+/** The history of one task from the queue, the time log (with its archives) and the finding log. Read-only. */
+function historyOf(o, queue) {
+  const since = Date.parse(o.added_at ?? '');
+  let rows = [];
+  try {
+    rows = TK.readRows(TA.readText(TIME_LOG, Number.isFinite(since) ? { from: since } : {}));
+  } catch {
+    rows = []; // no time log yet: the queue's own times still count
+  }
+  let findings = [];
+  try {
+    findings = FLOG.read(null, { since: Number.isFinite(since) ? since : null, includeArchive: true }).rows;
+  } catch {
+    findings = [];
+  }
+  return HIST.taskHistory({ task: o, queue, rows, findings, now: Date.now() });
+}
 
 /** "picked by X 3 h ago · 2 commits · OLD" for a picked task. */
 function pickLine(o) {
@@ -327,11 +349,18 @@ const archivedLine = (o) =>
 export function cmdInfo() {
   // ---- Fixed lookups instead of `node -e` against queue.json ----
   const id = positional(1, ['--field'])[0];
-  if (!id) die('info <id> [--field <name>] [--json]');
+  if (!id) die('info <id> [--field <name>] [--json] [--history]');
   // An archived task (lib/queueArchive.js, history.archiveDoneAfterDays) is shown read-only, with a line that says so.
   const infoQueue = QA.withArchive(read(), FOLDER);
   const o = infoQueue.tasks.find((x) => x.id === id);
   if (!o) die(`Unknown task ${id}`);
+  if (a.includes('--history')) {
+    // J5: what happened with the task, oldest first (lib/taskHistory.js); --json gives the steps as data.
+    const h = historyOf(o, infoQueue);
+    if (a.includes('--json')) console.log(JSON.stringify(h, null, 2));
+    else for (const l of HIST.historyLines(h)) console.log(l);
+    return;
+  }
   if (o.archived && !val('--field') && !a.includes('--json')) console.log(archivedLine(o));
   const field = val('--field');
   if (field) {

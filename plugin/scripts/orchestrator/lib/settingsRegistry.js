@@ -1350,6 +1350,19 @@ const SETTINGS = Object.freeze([
     'One-key shortcuts on the whole board: ? lists them, / goes to the search, g and a letter opens a tab, j and k ' +
     'move between cards. Never in text fields or dialogs. Off: only the keys on a focused card and in Decisions.',
     BASIC),
+  // J7. Friction: none for the work; it only navigates and copies a command, never changes anything (owner answer 4).
+  // While the board has focus it takes Ctrl+K from the browser (which would focus its own search bar), never inside a
+  // text field. On by default since it is the fast way to a card or one of the many settings. Needs board.shortcuts.
+  row('board.palette', 'board', 'onoff', 'Command palette (Ctrl+K)',
+    'Ctrl+K opens one field that finds a view, a card (id or title) or a setting and goes there, with the ravenseat ' +
+    'command behind each to copy. It changes nothing itself. Needs the keyboard shortcuts on. Off: Ctrl+K is the ' +
+    "browser's again.", BASIC),
+  // J6. Friction: none; plain words search exactly as before, and an unknown field is shown as a hint, never emptying
+  // the board. On by default since it only adds meaning to words with a colon or a > or <. Off: every word is plain text.
+  row('board.structuredSearch', 'board', 'onoff', 'Structured search',
+    'The search box also understands fields: class:D, status:blocked, project:x, block:gate-red, label:visual, age>2d, ' +
+    'cost>1, and -class:K to leave out, with suggestions while you type. Plain words search as before. Off: every ' +
+    'word is searched as plain text.'),
   // J4. Friction: a row of three buttons over the columns takes a little room; off in lite so the first board stays
   // simple (owner answer 6). They only filter what is shown, never what the queue does.
   row('board.quickFilters', 'board', 'onoff', 'Quick filter buttons',

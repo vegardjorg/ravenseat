@@ -451,6 +451,10 @@ function buildBoard(
       // The quick filters "Changed 24 h" and "Red gate" (J4): the newest of the task's own times, and a failed gate.
       changed_at: lastChanged(o),
       gate_red: gateRed(o),
+      // The structured search (J6, lib/boardSearch.js): the open block's code (block:<code>; the Blocked column's
+      // `block` object is added later and drives status:blocked) and the measured cost (cost>1).
+      open_block: L.openBlockOf(o)?.code ?? null,
+      cost_usd: typeof o.cost?.usd === 'number' ? o.cost.usd : null,
       // SILENT: running with an agent worktree but no sign of life (only running cards can be in the list).
       silent: silentFor.get(o.id) ?? null,
       // The merge gate as progress: the chosen reviewers that reported after receive, and any HIGH (only in Review).

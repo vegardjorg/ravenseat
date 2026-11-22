@@ -173,8 +173,12 @@ describe('Q9: "Select all matches" left the top bar', () => {
   it('there is no #mark-match in the page, and the search group holds only the search and Filter', () => {
     expect($('mark-match')).toBeNull();
     expect(html).not.toMatch(/id="mark-match"/);
+    // J6: the structured search's suggestions float under the box (position absolute) and its live region is for a
+    // screen reader only (hidden-for-eye), so neither takes room in the row; the row's own controls stay these two.
     const kids = [...$('search-filter').children].map((e) => e.id || e.className);
-    expect(kids).toEqual(['search', 'filter']);
+    expect(kids).toEqual(['search', 'search-help', 'search-hint-live', 'filter']);
+    expect($('search-help').hidden).toBe(true);
+    expect($('search-hint-live').className).toBe('hidden-for-eye');
   });
 
   it('the top bar keeps the same elements, and the Filter button its fixed width, with a search and a filter', async () => {

@@ -29,7 +29,7 @@ const GROUPS = [
     commands: [
       { cmd: 'show', usage: 'show [--full]', text: 'what runs, what can start, and the counts' },
       { cmd: 'next', usage: 'next', text: 'what can start now (changes nothing)' },
-      { cmd: 'info', usage: 'info <id>', text: 'a short view of one task' },
+      { cmd: 'info', usage: 'info <id> [--history]', text: 'a short view of one task (--history: what happened with it)' },
       { cmd: 'pick', usage: 'pick <id> --by "<who>"', text: 'do a task yourself, outside the agents' },
     ],
   },

@@ -30,6 +30,8 @@
     <script src="/queueUpdate.js" defer></script>
     <!-- The Decisions view's rules (lib/queueDecisions.js, the same file `ravenseat decide` uses), before board/decide.js. -->
     <script src="/queueDecisions.js" defer></script>
+    <!-- The structured search's rules (lib/boardSearch.js, J6), before board/cards.js and board/search.js. -->
+    <script src="/boardSearch.js" defer></script>
     <!-- The board itself: classic scripts in board/ that share one scope, in this order (start.js runs the board).
          Each must come after the scripts whose names it uses while it loads (see docs/board.md). -->
     <script src="/board/core.js" defer></script>
@@ -52,6 +54,8 @@
     <script src="/board/cloud.js" defer></script>
     <script src="/board/route.js" defer></script>
     <script src="/board/keys.js" defer></script>
+    <script src="/board/palette.js" defer></script>
+    <script src="/board/search.js" defer></script>
     <script src="/board/start.js" defer></script>
     <!-- The Plans room. The rules (queuePlanView.js) are the same file the tests use; plans.js draws. After
          the board (board/), so the key from the link is saved before Plans fetches the register. -->
@@ -255,6 +259,13 @@
             aria-label="Search id, title or feature"
             autocomplete="off"
           />
+          <!-- J6: the structured search's suggestions (a listbox the search box controls as a combobox) and the hint for
+               an unknown field. Drawn by board/search.js; it floats under the box, so the top bar keeps its width. -->
+          <div id="search-help" class="search-help" hidden>
+            <ul id="search-suggest" class="search-suggest" role="listbox" aria-label="Search suggestions"></ul>
+            <p id="search-hint" class="search-hint"></p>
+          </div>
+          <p id="search-hint-live" class="hidden-for-eye" role="status" aria-live="polite"></p>
           <!-- QA-1d: one Filter button and one menu. The menu holds "Select all N matches" (when a search or filter is
                on), Quick filters (the built-ins), Saved (your own) and the filter sections. The button has a fixed
                width and says what is active ("Filter · 2", "Filter · Ready in focus", cut with an ellipsis), so the
@@ -344,6 +355,10 @@
     <!-- J3: the keyboard shortcut overview (?), drawn by board/keys.js. -->
     <div id="keys-background" class="guard-background" hidden>
       <div id="keys" class="guard keys" role="dialog" aria-modal="true" aria-labelledby="keys-title"></div>
+    </div>
+    <!-- J7: the command palette (Ctrl+K), drawn by board/palette.js. It navigates and copies commands, nothing else. -->
+    <div id="palette-background" class="guard-background palette-background" hidden>
+      <div id="palette" class="guard palette" role="dialog" aria-modal="true" aria-labelledby="palette-title"></div>
     </div>
     <!-- The selection bar (shown when something is selected), the bulk action dialog and the "Undo" message. -->
     <div id="optionLine" class="optionLine" role="region" aria-label="Marked tasks" hidden></div>
