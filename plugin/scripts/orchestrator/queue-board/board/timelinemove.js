@@ -509,7 +509,8 @@ function tlOpenDialog(job, dry) {
     },
   });
   const cancelButton = el('button', { type: 'button', class: 'button button-muted', text: 'Cancel', onclick: cancel });
-  box.replaceChildren(
+  // replaceChildren would write a null as the text "null": the parts that are not there are left out first.
+  const parts = [
     el('h2', { id: 'tl-drop-title', class: 'guard-title', text: job.title }),
     el('p', { text: job.what }),
     el('p', {
@@ -527,7 +528,8 @@ function tlOpenDialog(job, dry) {
     warned.length ? el('ul', {}, ...warned.map((x) => el('li', { class: 'guard-info', text: x }))) : null,
     blocked.length ? el('ul', {}, ...blocked.map((x) => el('li', { class: 'error', text: x }))) : null,
     el('div', { class: 'guard-buttons' }, save, cancelButton),
-  );
+  ];
+  box.replaceChildren(...parts.filter(Boolean));
   box.addEventListener('keydown', keys);
   bg.hidden = false;
   (save.disabled ? cancelButton : save).focus();

@@ -183,6 +183,8 @@ describe('a planned bar with the keyboard', () => {
     expect((d.closest('.guard-background') as HTMLElement).hidden).toBe(false);
     expect(d.querySelector('.tl-plan-sentence')?.textContent).toBe(SENTENCE);
     expect(d.textContent).toContain('priority_bonus');
+    // A part the dry run does not have (the focus line for a rank) is left out, never written as "null".
+    expect(d.textContent).not.toContain('null');
     button(d, 'Save order').click();
     await flush();
     expect(posts[1]).toEqual({ path: '/api/bulk', body: { action: 'rank', ids: ['A-2'], val: { space: 'over', ref: 'A-1' }, expect: 'V1' } });
