@@ -681,6 +681,30 @@ a wait on you is hatched, a review is the thin end of a bar, and tasks that cann
 When the queue has no task that is not done or cancelled, Flat and Project lanes show a first-run card instead of
 empty columns: 1. add work (say "add to the queue" in Claude Code, or `ravenseat add --file`), 2. start the queue with
 `/ravenseat:queue`, 3. answer questions in **Decisions** (**Waiting on you** at the top), plus a link to the help.
+A queue that has never had a task also offers the demo board above it (see Demo mode).
+
+## Demo mode
+
+A made-up project, Pebble, with work in every column, questions to answer and a few days of history, so a first-time
+user can see what a busy board looks like. An empty board that has never had a task offers it: **Show me a demo
+board**, **Not now** (back on the next visit) or **Don't show again** (stored for the project in
+`<dataFolder>/demo-offer.json`). The first real task ends the offer; after that **Show demo board** at the bottom of
+Settings opens it. `board.demoOffer` (on in lite and full) turns the offer off.
+
+While it is on, a banner at the top of every view says **Demo data: nothing here is real**, with **Back to my board**
+and **Reset demo**, and the tab title starts with `Demo · `.
+
+- **You can** answer questions, approve, mark QA ok or a deviation, edit, cancel and move cards, change the focus and
+  filters, and read every tab and Settings.
+- **Not in demo mode**: starting or filling work, the night run, agents, cloud sessions, push, merge, pull requests,
+  git, gates and checks, new plans and project files, and settings changes. The server refuses them with "Not in demo
+  mode" (409); anything not on its allow-list is refused.
+- Branches, diffs and the Checks tab are empty, since the demo has no git. Commands you copy run on your real queue.
+
+The demo lives in `<dataFolder>/demo/` (gitignored with the data folder), and while it is on the board reads and
+writes only there. Nothing is copied from it into your queue, **Back to my board** deletes nothing, and a CLI command
+in the project never sees it. **Reset demo** makes the folder again from the snapshot in the plugin, with its dates
+moved to now. A restarted board starts on your own queue.
 
 ## Stale data
 

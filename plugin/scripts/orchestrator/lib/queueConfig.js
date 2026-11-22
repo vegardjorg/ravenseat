@@ -896,6 +896,9 @@ const STANDARD = Object.freeze({
     timelineHorizonDays: 3,
     // The Timeline's rows: 'step' (one per focus step, what decides the order) or 'project'. A viewer can switch on the tab.
     timelineRows: 'step',
+    // Demo mode (owner decision 22.11, lib/demoMode.js): an empty board that never had a task offers a made-up demo board
+    // in its own folder, locked down on the server. On in lite and full; false hides the offer (Settings still opens it).
+    demoOffer: true,
   },
   // The modules that can be switched off (FEATURES above): { "cloud": true } turns one on. Unknown keys are ignored.
   features: FEATURES,

@@ -1,0 +1,1579 @@
+{
+ "_comment": "Demo data for the board (demo mode). Made by scripts/make-demo-snapshot.mjs from the Pebble seed; \"@rel:<ms>\" is a time relative to when the demo folder is made (lib/demoMode.js). Made-up project, no real data.",
+ "version": 1,
+ "name": "Pebble",
+ "config": {
+  "projectName": "pebble",
+  "baseBranch": "main",
+  "dataFolder": "data",
+  "timeLog": "data/times.jsonl",
+  "gates": {
+   "quick": [],
+   "full": []
+  },
+  "modules": [
+   {
+    "oid": "account",
+    "title": "Account",
+    "description": "Sign-in, profiles and settings"
+   },
+   {
+    "oid": "data",
+    "title": "Data and sync",
+    "description": "Storage, sync and offline"
+   },
+   {
+    "oid": "money",
+    "title": "Billing",
+    "description": "Plans, payments and invoices"
+   },
+   {
+    "oid": "app",
+    "title": "App",
+    "description": "Screens and components"
+   }
+  ],
+  "projectModuleSuggestion": {
+   "auth": "account",
+   "sync": "data",
+   "offline": "data",
+   "billing": "money",
+   "ui": "app"
+  },
+  "documentFolders": [
+   "docs/plans"
+  ],
+  "board": {
+   "title": "Pebble queue"
+  }
+ },
+ "data": {
+  "queue.json": {
+   "created": "@rel:-12259",
+   "limits": {
+    "maxConcurrent": 5,
+    "maxDPlus": 2,
+    "maxPerDomain": 7
+   },
+   "resolved": [],
+   "projects": {
+    "tasks": {
+     "title": "Tasks",
+     "prefixes": [
+      "T-"
+     ]
+    },
+    "auth": {
+     "title": "Sign-in and accounts",
+     "prefixes": [
+      "AUTH-"
+     ],
+     "area": "account"
+    },
+    "sync": {
+     "title": "Cloud sync",
+     "prefixes": [
+      "SYNC-"
+     ],
+     "area": "data"
+    },
+    "billing": {
+     "title": "Subscriptions",
+     "prefixes": [
+      "BILL-"
+     ],
+     "area": "money"
+    },
+    "ui": {
+     "title": "Habit screens",
+     "prefixes": [
+      "UI-"
+     ],
+     "area": "app"
+    },
+    "offline": {
+     "title": "Offline mode",
+     "area": "data",
+     "phase": "plan"
+    }
+   },
+   "tasks": [
+    {
+     "value": 9,
+     "content_min": 100,
+     "migr_tens": 0,
+     "depends_on": [],
+     "waiting_on": [],
+     "owned_files": [
+      "src/auth/auth-1.ts"
+     ],
+     "owner_db": [],
+     "shared_patch": [],
+     "id": "AUTH-1",
+     "title": "Email and password sign-in",
+     "domain": "auth",
+     "class": "K",
+     "project": "auth",
+     "feature": "Sign-in",
+     "mission": "Build email and password sign-in: the sign-up and sign-in endpoints, password hashing and the email confirmation step, with tests.",
+     "plan": "PL-AUTH",
+     "status": "done",
+     "added_at": "@rel:-612300871",
+     "done": "@rel:-518400871",
+     "cost": {
+      "usd": 1.95,
+      "tokens": {
+       "input": 15000,
+       "output": 75000,
+       "cache_read": 6975000,
+       "cache_written": 435000,
+       "sum": 7500000
+      },
+      "turns": 45,
+      "agents": [
+       {
+        "agent": "a0",
+        "type": "track",
+        "usd": 1.95,
+        "source": "transcript"
+       }
+      ],
+      "measured": "@rel:-518400871"
+     },
+     "started": "@rel:-525900871",
+     "delivered": "@rel:-519600871"
+    },
+    {
+     "value": 8,
+     "content_min": 40,
+     "migr_tens": 0,
+     "depends_on": [],
+     "waiting_on": [],
+     "owned_files": [
+      "src/auth/auth-2.ts"
+     ],
+     "owner_db": [],
+     "shared_patch": [],
+     "id": "AUTH-2",
+     "title": "Session table and refresh tokens",
+     "domain": "auth",
+     "class": "D",
+     "project": "auth",
+     "feature": "Sign-in",
+     "mission": "Add the sessions table and refresh tokens that rotate on every use, with a test for a token used twice.",
+     "plan": "PL-AUTH",
+     "status": "done",
+     "added_at": "@rel:-565500871",
+     "done": "@rel:-432000871",
+     "cost": {
+      "usd": 5.6,
+      "tokens": {
+       "input": 56000,
+       "output": 280000,
+       "cache_read": 26040000,
+       "cache_written": 1624000,
+       "sum": 28000000
+      },
+      "turns": 118,
+      "agents": [
+       {
+        "agent": "a1",
+        "type": "track-d",
+        "usd": 5.6,
+        "source": "transcript"
+       }
+      ],
+      "measured": "@rel:-432000871"
+     },
+     "started": "@rel:-435900871",
+     "delivered": "@rel:-433200871",
+     "findings": {
+      "H": 0,
+      "M": 1,
+      "L": 2,
+      "deferrable": [
+       "1"
+      ],
+      "reports": 1
+     }
+    },
+    {
+     "value": 8,
+     "content_min": 30,
+     "migr_tens": 0,
+     "depends_on": [
+      "AUTH-2"
+     ],
+     "waiting_on": [],
+     "owned_files": [
+      "src/auth/auth-3.ts"
+     ],
+     "owner_db": [],
+     "shared_patch": [],
+     "id": "AUTH-3",
+     "title": "Rate limit on the login endpoint",
+     "domain": "auth",
+     "class": "D+",
+     "project": "auth",
+     "feature": "Security",
+     "mission": "Rate limit the sign-in endpoint per IP address and per account. Over the limit it answers 429 with Retry-After and the same message as a wrong password.",
+     "plan": "PL-AUTH",
+     "sources": [
+      {
+       "path": "docs/plans/auth.md",
+       "anchor": "§ 1"
+      },
+      {
+       "path": "docs/plans/auth.md",
+       "anchor": "§ 2.3",
+       "role": "spec"
+      }
+     ],
+     "status": "done",
+     "added_at": "@rel:-201600849",
+     "done": "@rel:-18000849",
+     "started": "@rel:-28800849",
+     "delivered": "@rel:-19080849",
+     "resumed": [
+      {
+       "reason": "fix",
+       "round": 1,
+       "at": "@rel:-23040849"
+      }
+     ]
+    },
+    {
+     "value": 6,
+     "content_min": 90,
+     "migr_tens": 0,
+     "depends_on": [],
+     "waiting_on": [
+      "Q-SSO"
+     ],
+     "owned_files": [
+      "src/auth/auth-4.ts"
+     ],
+     "owner_db": [],
+     "shared_patch": [],
+     "id": "AUTH-4",
+     "title": "Sign in with Apple",
+     "domain": "auth",
+     "class": "K",
+     "project": "auth",
+     "feature": "Social sign-in",
+     "mission": "Add Sign in with Apple to the iOS sign-in screen and the auth API.",
+     "plan": "PL-AUTH",
+     "status": "waiting",
+     "added_at": "@rel:-432000847"
+    },
+    {
+     "value": 7,
+     "content_min": 90,
+     "migr_tens": 0,
+     "depends_on": [
+      "AUTH-1"
+     ],
+     "waiting_on": [],
+     "owned_files": [
+      "src/auth/auth-5.ts"
+     ],
+     "owner_db": [],
+     "shared_patch": [],
+     "id": "AUTH-5",
+     "title": "Password reset by email",
+     "domain": "auth",
+     "class": "K",
+     "project": "auth",
+     "feature": "Sign-in",
+     "mission": "Build password reset by email: a one-time link valid for 30 minutes that ends the other sessions when it is used.",
+     "plan": "PL-AUTH",
+     "status": "review",
+     "added_at": "@rel:-129601463",
+     "delivered": "@rel:-1463"
+    },
+    {
+     "value": 6,
+     "content_min": 60,
+     "migr_tens": 0,
+     "depends_on": [],
+     "waiting_on": [],
+     "owned_files": [
+      "src/auth/auth-6.ts"
+     ],
+     "owner_db": [],
+     "shared_patch": [],
+     "id": "AUTH-6",
+     "title": "Review of the token storage on mobile",
+     "domain": "auth",
+     "class": "U",
+     "project": "auth",
+     "feature": "Security",
+     "mission": "Review how the mobile apps store tokens and report the findings. Change no code.",
+     "plan": "PL-AUTH",
+     "status": "done",
+     "added_at": "@rel:-523500851",
+     "done": "@rel:-345600851",
+     "cost": {
+      "usd": 1.78,
+      "tokens": {
+       "input": 12870,
+       "output": 64350,
+       "cache_read": 5984550,
+       "cache_written": 373230,
+       "sum": 6435000
+      },
+      "turns": 42,
+      "agents": [
+       {
+        "agent": "a2",
+        "type": "track",
+        "usd": 1.78,
+        "source": "transcript"
+       }
+      ],
+      "measured": "@rel:-345600851"
+     },
+     "started": "@rel:-350700851",
+     "delivered": "@rel:-346800851"
+    },
+    {
+     "value": 8,
+     "content_min": 60,
+     "migr_tens": 0,
+     "depends_on": [],
+     "waiting_on": [],
+     "owned_files": [
+      "src/sync/sync-1.ts"
+     ],
+     "owner_db": [],
+     "shared_patch": [],
+     "id": "SYNC-1",
+     "title": "Sync protocol investigation",
+     "domain": "sync",
+     "class": "U",
+     "project": "sync",
+     "feature": "Protocol",
+     "mission": "Compare full snapshots, CRDTs and a change log with cursors for sync, measured on a test set. Write down the findings; build nothing.",
+     "plan": "PL-SYNC",
+     "status": "done",
+     "added_at": "@rel:-350700851",
+     "done": "@rel:-259200851",
+     "cost": {
+      "usd": 1.55,
+      "tokens": {
+       "input": 11180,
+       "output": 55900,
+       "cache_read": 5198700,
+       "cache_written": 324220,
+       "sum": 5590000
+      },
+      "turns": 36,
+      "agents": [
+       {
+        "agent": "a3",
+        "type": "track",
+        "usd": 1.55,
+        "source": "transcript"
+       }
+      ],
+      "measured": "@rel:-259200851"
+     },
+     "started": "@rel:-264300851",
+     "delivered": "@rel:-260400851"
+    },
+    {
+     "value": 8,
+     "content_min": 40,
+     "migr_tens": 0,
+     "depends_on": [
+      "SYNC-1"
+     ],
+     "waiting_on": [],
+     "owned_files": [
+      "src/sync/sync-2.ts"
+     ],
+     "owner_db": [],
+     "shared_patch": [],
+     "id": "SYNC-2",
+     "title": "Change log table with per-device cursor",
+     "domain": "sync",
+     "class": "D",
+     "project": "sync",
+     "feature": "Protocol",
+     "mission": "Add the server change log table and the per-device cursor, with an endpoint that returns the changes after a cursor.",
+     "plan": "PL-SYNC",
+     "status": "done",
+     "added_at": "@rel:-306300851",
+     "done": "@rel:-172800851",
+     "cost": {
+      "usd": 6.15,
+      "tokens": {
+       "input": 61500,
+       "output": 307500,
+       "cache_read": 28597500,
+       "cache_written": 1783500,
+       "sum": 30750000
+      },
+      "turns": 129,
+      "agents": [
+       {
+        "agent": "a4",
+        "type": "track-d",
+        "usd": 6.15,
+        "source": "transcript"
+       }
+      ],
+      "measured": "@rel:-172800851"
+     },
+     "started": "@rel:-176700851",
+     "delivered": "@rel:-174000851",
+     "findings": {
+      "H": 0,
+      "M": 1,
+      "L": 2,
+      "deferrable": [
+       "1"
+      ],
+      "reports": 1
+     }
+    },
+    {
+     "value": 7,
+     "content_min": 110,
+     "migr_tens": 0,
+     "depends_on": [
+      "SYNC-2"
+     ],
+     "waiting_on": [],
+     "owned_files": [
+      "src/sync/sync-3.ts"
+     ],
+     "owner_db": [],
+     "shared_patch": [],
+     "id": "SYNC-3",
+     "title": "Client sync queue with retry",
+     "domain": "sync",
+     "class": "K",
+     "project": "sync",
+     "feature": "Client",
+     "mission": "Build the client outbox and sync queue: send changes in batches, retry with backoff, and apply a retried batch only once.",
+     "plan": "PL-SYNC",
+     "status": "done",
+     "added_at": "@rel:-199800849",
+     "done": "@rel:-10800849",
+     "started": "@rel:-27000849",
+     "delivered": "@rel:-11520849"
+    },
+    {
+     "value": 6,
+     "content_min": 90,
+     "migr_tens": 0,
+     "depends_on": [
+      "SYNC-3"
+     ],
+     "waiting_on": [
+      "Q-CONFLICT"
+     ],
+     "owned_files": [
+      "src/sync/sync-4.ts"
+     ],
+     "owner_db": [],
+     "shared_patch": [],
+     "id": "SYNC-4",
+     "title": "Conflict handling",
+     "domain": "sync",
+     "class": "K",
+     "project": "sync",
+     "feature": "Client",
+     "mission": "Handle two devices that changed the same habit while offline, the way the owner chose.",
+     "plan": "PL-SYNC",
+     "status": "waiting",
+     "added_at": "@rel:-518400847"
+    },
+    {
+     "value": 6,
+     "content_min": 95,
+     "migr_tens": 0,
+     "depends_on": [],
+     "waiting_on": [],
+     "owned_files": [
+      "src/sync/sync-5.ts"
+     ],
+     "owner_db": [],
+     "shared_patch": [],
+     "id": "SYNC-5",
+     "title": "Sync status indicator in the header",
+     "domain": "sync",
+     "class": "K",
+     "project": "sync",
+     "feature": "Client",
+     "mission": "Show the sync state in the header: synced, syncing, or offline with the number of changes waiting.",
+     "plan": "PL-SYNC",
+     "labels": [
+      "visual"
+     ],
+     "status": "done",
+     "added_at": "@rel:-482400851",
+     "done": "@rel:-345600851",
+     "qa_status": "waiting",
+     "cost": {
+      "usd": 3.15,
+      "tokens": {
+       "input": 24200,
+       "output": 121000,
+       "cache_read": 11253000,
+       "cache_written": 701800,
+       "sum": 12100000
+      },
+      "turns": 73,
+      "agents": [
+       {
+        "agent": "a8",
+        "type": "track",
+        "usd": 3.15,
+        "source": "transcript"
+       }
+      ],
+      "measured": "@rel:-345600851"
+     },
+     "started": "@rel:-352800851",
+     "delivered": "@rel:-346800851"
+    },
+    {
+     "value": 7,
+     "content_min": 40,
+     "migr_tens": 0,
+     "depends_on": [],
+     "waiting_on": [],
+     "owned_files": [
+      "src/billing/bill-1.ts"
+     ],
+     "owner_db": [],
+     "shared_patch": [],
+     "id": "BILL-1",
+     "title": "Plans and prices table",
+     "domain": "billing",
+     "class": "D",
+     "project": "billing",
+     "feature": "Plans",
+     "mission": "Add the plans and prices table, prices in minor units per currency, with rows for Pebble Plus monthly and yearly.",
+     "plan": "PL-BILL",
+     "status": "done",
+     "added_at": "@rel:-263100851",
+     "done": "@rel:-86400851",
+     "cost": {
+      "usd": 5.5,
+      "tokens": {
+       "input": 55000,
+       "output": 275000,
+       "cache_read": 25575000,
+       "cache_written": 1595000,
+       "sum": 27500000
+      },
+      "turns": 116,
+      "agents": [
+       {
+        "agent": "a5",
+        "type": "track-d",
+        "usd": 5.5,
+        "source": "transcript"
+       }
+      ],
+      "measured": "@rel:-86400851"
+     },
+     "started": "@rel:-90300851",
+     "delivered": "@rel:-87600851",
+     "findings": {
+      "H": 0,
+      "M": 1,
+      "L": 2,
+      "deferrable": [
+       "1"
+      ],
+      "reports": 1
+     }
+    },
+    {
+     "value": 8,
+     "content_min": 100,
+     "migr_tens": 0,
+     "depends_on": [
+      "BILL-1"
+     ],
+     "waiting_on": [],
+     "owned_files": [
+      "src/billing/bill-2.ts"
+     ],
+     "owner_db": [],
+     "shared_patch": [],
+     "id": "BILL-2",
+     "title": "Stripe checkout",
+     "domain": "billing",
+     "class": "K",
+     "project": "billing",
+     "feature": "Checkout",
+     "mission": "Build Stripe Checkout for Pebble Plus. The subscription changes only when the webhook arrives, never on the redirect.",
+     "plan": "PL-BILL",
+     "status": "running",
+     "added_at": "@rel:-102600849",
+     "started": "@rel:-16200849",
+     "blocks": [
+      {
+       "code": "merge-conflict",
+       "from": "@rel:-7200849"
+      }
+     ]
+    },
+    {
+     "value": 7,
+     "content_min": 60,
+     "migr_tens": 0,
+     "depends_on": [
+      "BILL-1"
+     ],
+     "waiting_on": [
+      "Q-TRIAL"
+     ],
+     "owned_files": [
+      "src/billing/bill-3.ts"
+     ],
+     "owner_db": [],
+     "shared_patch": [],
+     "id": "BILL-3",
+     "title": "Free trial",
+     "domain": "billing",
+     "class": "K",
+     "project": "billing",
+     "feature": "Plans",
+     "mission": "Add the free trial for Pebble Plus, one per account, with the length the owner chose.",
+     "plan": "PL-BILL",
+     "status": "waiting",
+     "added_at": "@rel:-432000847"
+    },
+    {
+     "value": 6,
+     "content_min": 30,
+     "migr_tens": 0,
+     "depends_on": [
+      "BILL-2"
+     ],
+     "waiting_on": [
+      "Q-VAT"
+     ],
+     "owned_files": [
+      "src/billing/bill-4.ts"
+     ],
+     "owner_db": [],
+     "shared_patch": [],
+     "id": "BILL-4",
+     "title": "VAT on invoices",
+     "domain": "billing",
+     "class": "D+",
+     "project": "billing",
+     "feature": "Invoices",
+     "mission": "Add VAT to invoices with Stripe Tax, for the countries the owner chose.",
+     "plan": "PL-BILL",
+     "status": "waiting",
+     "added_at": "@rel:-518400847"
+    },
+    {
+     "value": 9,
+     "content_min": 25,
+     "migr_tens": 0,
+     "depends_on": [
+      "BILL-2"
+     ],
+     "waiting_on": [],
+     "owned_files": [
+      "src/billing/bill-5.ts"
+     ],
+     "owner_db": [],
+     "shared_patch": [],
+     "id": "BILL-5",
+     "title": "Webhook signature check",
+     "domain": "billing",
+     "class": "D+",
+     "project": "billing",
+     "feature": "Checkout",
+     "mission": "Check the signature of every Stripe webhook before reading it, and apply an event id only once.",
+     "plan": "PL-BILL",
+     "status": "waiting",
+     "added_at": "@rel:-172800847"
+    },
+    {
+     "value": 7,
+     "content_min": 90,
+     "migr_tens": 0,
+     "depends_on": [],
+     "waiting_on": [],
+     "owned_files": [
+      "src/ui/ui-1.ts"
+     ],
+     "owner_db": [],
+     "shared_patch": [],
+     "id": "UI-1",
+     "title": "Habit card component",
+     "domain": "ui",
+     "class": "K",
+     "project": "ui",
+     "feature": "Today",
+     "mission": "Build the habit card for the Today screen: name, icon, today's check and the current streak, in light and dark mode.",
+     "labels": [
+      "visual"
+     ],
+     "status": "done",
+     "added_at": "@rel:-654900851",
+     "done": "@rel:-518400851",
+     "qa_status": "waiting",
+     "cost": {
+      "usd": 2.52,
+      "tokens": {
+       "input": 19400,
+       "output": 97000,
+       "cache_read": 9021000,
+       "cache_written": 562600,
+       "sum": 9700000
+      },
+      "turns": 58,
+      "agents": [
+       {
+        "agent": "a6",
+        "type": "track",
+        "usd": 2.52,
+        "source": "transcript"
+       }
+      ],
+      "measured": "@rel:-518400851"
+     },
+     "started": "@rel:-525300851",
+     "delivered": "@rel:-519600851"
+    },
+    {
+     "value": 6,
+     "content_min": 100,
+     "migr_tens": 0,
+     "depends_on": [
+      "UI-1"
+     ],
+     "waiting_on": [],
+     "owned_files": [
+      "src/ui/ui-2.ts"
+     ],
+     "owner_db": [],
+     "shared_patch": [],
+     "id": "UI-2",
+     "title": "Streak calendar",
+     "domain": "ui",
+     "class": "K",
+     "project": "ui",
+     "feature": "History",
+     "mission": "Build the streak calendar on the History screen: one dot per day for the last 12 weeks.",
+     "labels": [
+      "visual"
+     ],
+     "status": "waiting",
+     "added_at": "@rel:-345600847"
+    },
+    {
+     "value": 5,
+     "content_min": 90,
+     "migr_tens": 0,
+     "depends_on": [],
+     "waiting_on": [],
+     "owned_files": [
+      "src/ui/ui-3.ts"
+     ],
+     "owner_db": [],
+     "shared_patch": [],
+     "id": "UI-3",
+     "title": "Dark mode colours",
+     "domain": "ui",
+     "class": "K",
+     "project": "ui",
+     "feature": "Theme",
+     "mission": "Set the dark mode colours as theme tokens and use them on every screen.",
+     "labels": [
+      "visual"
+     ],
+     "status": "done",
+     "added_at": "@rel:-525300851",
+     "done": "@rel:-432000851",
+     "qa_status": "waiting",
+     "cost": {
+      "usd": 2.18,
+      "tokens": {
+       "input": 16800,
+       "output": 84000,
+       "cache_read": 7812000,
+       "cache_written": 487200,
+       "sum": 8400000
+      },
+      "turns": 50,
+      "agents": [
+       {
+        "agent": "a7",
+        "type": "track",
+        "usd": 2.18,
+        "source": "transcript"
+       }
+      ],
+      "measured": "@rel:-432000851"
+     },
+     "started": "@rel:-438900851",
+     "delivered": "@rel:-433200851"
+    },
+    {
+     "value": 3,
+     "content_min": 20,
+     "migr_tens": 0,
+     "depends_on": [],
+     "waiting_on": [],
+     "owned_files": [
+      "src/ui/ui-4.ts"
+     ],
+     "owner_db": [],
+     "shared_patch": [],
+     "id": "UI-4",
+     "title": "Empty states on all screens",
+     "domain": "ui",
+     "class": "K",
+     "project": "ui",
+     "feature": "Today",
+     "mission": "Give every screen an empty state with one line of text and one action.",
+     "status": "waiting",
+     "added_at": "@rel:-518400847"
+    },
+    {
+     "value": 2,
+     "content_min": 10,
+     "migr_tens": 0,
+     "depends_on": [],
+     "waiting_on": [],
+     "owned_files": [
+      "src/ui/ui-5.ts"
+     ],
+     "owner_db": [],
+     "shared_patch": [],
+     "id": "UI-5",
+     "title": "Fix typo in the onboarding text",
+     "domain": "ui",
+     "class": "K",
+     "project": "ui",
+     "feature": "Onboarding",
+     "mission": "Fix the typo on the second onboarding screen (\"remeber\" to \"remember\").",
+     "status": "waiting",
+     "added_at": "@rel:-172800847"
+    },
+    {
+     "value": 4,
+     "content_min": 25,
+     "migr_tens": 0,
+     "depends_on": [],
+     "waiting_on": [],
+     "owned_files": [
+      "src/ui/ui-6.ts"
+     ],
+     "owner_db": [],
+     "shared_patch": [],
+     "id": "UI-6",
+     "title": "Accessible labels on icon buttons",
+     "domain": "ui",
+     "class": "K",
+     "project": "ui",
+     "feature": "Today",
+     "mission": "Give every icon button an accessible label.",
+     "status": "waiting",
+     "added_at": "@rel:-259200847"
+    },
+    {
+     "value": 6,
+     "content_min": 90,
+     "migr_tens": 0,
+     "depends_on": [],
+     "waiting_on": [],
+     "owned_files": [
+      "src/ui/ui-7.ts"
+     ],
+     "owner_db": [],
+     "shared_patch": [],
+     "id": "UI-7",
+     "title": "Reminder notification settings screen",
+     "domain": "ui",
+     "class": "K",
+     "project": "ui",
+     "feature": "Reminders",
+     "mission": "Build the reminder settings screen: time of day, days of the week and a test notification.",
+     "status": "picked",
+     "added_at": "@rel:-129601152",
+     "picked_by": "Sam",
+     "picked_at": "@rel:-1152",
+     "branch": "queue/UI-7",
+     "migr_block": null
+    },
+    {
+     "value": 7,
+     "content_min": 40,
+     "migr_tens": 0,
+     "depends_on": [],
+     "waiting_on": [],
+     "owned_files": [
+      "src/auth/auth-7.ts"
+     ],
+     "owner_db": [],
+     "shared_patch": [],
+     "id": "AUTH-7",
+     "title": "Lock the account after 10 failed sign-ins",
+     "domain": "auth",
+     "class": "D",
+     "project": "auth",
+     "feature": "Security",
+     "mission": "Lock an account for 15 minutes after 10 failed sign-ins in a row, and email the user a reset link.",
+     "plan": "PL-AUTH",
+     "source": "review of AUTH-2, finding M1",
+     "status": "proposed",
+     "added_at": "@rel:-108000847"
+    },
+    {
+     "value": 5,
+     "content_min": 90,
+     "migr_tens": 0,
+     "depends_on": [],
+     "waiting_on": [],
+     "owned_files": [
+      "src/sync/sync-6.ts"
+     ],
+     "owner_db": [],
+     "shared_patch": [],
+     "id": "SYNC-6",
+     "title": "Compress the sync payloads",
+     "domain": "sync",
+     "class": "K",
+     "project": "sync",
+     "feature": "Protocol",
+     "mission": "Compress sync payloads over 4 KB and measure the gain on the test set.",
+     "plan": "PL-SYNC",
+     "status": "proposed",
+     "added_at": "@rel:-108000847"
+    }
+   ],
+   "changed": "@rel:-6",
+   "areas": {
+    "account": {
+     "title": "Account",
+     "description": "Sign-in, profiles and settings"
+    },
+    "data": {
+     "title": "Data and sync",
+     "description": "Storage, sync and offline"
+    },
+    "money": {
+     "title": "Billing",
+     "description": "Plans, payments and invoices"
+    },
+    "app": {
+     "title": "App",
+     "description": "Screens and components"
+    }
+   },
+   "changelog": [],
+   "question": {
+    "Q-TRIAL": {
+     "type": "question",
+     "text": "How long should the free trial be?",
+     "recommendation": "14 days",
+     "context": "Habits take about two weeks to stick, so a 7-day trial ends before users see the value. 30 days delays revenue with little gain in the beta data.",
+     "source": "PL-BILL",
+     "category": "product",
+     "if_yes": "BILL-3 builds a 14-day trial this round, and the beta can measure who converts after two weeks.",
+     "if_no": "BILL-3 builds the trial you pick: 7 days ends before habits stick, 30 days delays revenue by a month.",
+     "choices": [
+      "7 days",
+      "14 days",
+      "30 days"
+     ],
+     "added_at": "@rel:-172800849"
+    },
+    "Q-VAT": {
+     "type": "condition",
+     "text": "Which countries do we charge VAT in at launch?",
+     "recommendation": "Start with the EU only; add others when there are customers there.",
+     "context": "Stripe Tax can collect EU VAT from day one. Other countries need their own registration, which costs time before there is any revenue.",
+     "source": "PL-BILL",
+     "added_at": "@rel:-14400849"
+    },
+    "Q-SSO": {
+     "type": "question",
+     "text": "Do we offer sign-in with Apple and Google from day one?",
+     "recommendation": "Yes for Apple, Google later.",
+     "context": "Apple requires Sign in with Apple on iOS when an app offers any other social sign-in. Google adds a second consent screen and review for little gain in the beta.",
+     "source": "PL-AUTH",
+     "category": "security",
+     "if_yes": "AUTH-4 adds Apple sign-in now, which iOS review requires; Google waits for a later round.",
+     "if_no": "Both providers in one round: a second consent screen and a Google review before the beta ships.",
+     "added_at": "@rel:-172800849"
+    },
+    "Q-CONFLICT": {
+     "type": "owner-task",
+     "text": "Decide how sync conflicts are shown: silent last-write-wins or a choice for the user.",
+     "source": "PL-SYNC",
+     "added_at": "@rel:-172800849"
+    }
+   },
+   "terminal_since": {
+    "AUTH-1": "@rel:-8807",
+    "AUTH-2": "@rel:-8204",
+    "AUTH-3": "@rel:-2516",
+    "AUTH-6": "@rel:-7622",
+    "SYNC-1": "@rel:-6969",
+    "SYNC-2": "@rel:-6211",
+    "SYNC-3": "@rel:-2059",
+    "SYNC-5": "@rel:-3722",
+    "BILL-1": "@rel:-5517",
+    "UI-1": "@rel:-4910",
+    "UI-3": "@rel:-4285"
+   },
+   "focus": {
+    "name": "Today screen, then billing",
+    "from": "@rel:-16",
+    "to": null,
+    "order": [
+     "feature:ui/Theme",
+     "feature:ui/Today",
+     "project:billing"
+    ],
+    "rest": "fill",
+    "drag_with_dependencies": true
+   }
+  },
+  "plans.json": {
+   "version": 1,
+   "created": "@rel:-10378",
+   "changed": "@rel:-10367",
+   "entries": [
+    {
+     "id": "PL-AUTH",
+     "title": "Accounts and sign-in",
+     "project": "auth",
+     "priority": "now",
+     "maturity": "ready",
+     "priority_reason": "Nothing works without accounts.",
+     "sources": [
+      {
+       "path": "docs/plans/auth.md",
+       "anchor": "§ 1",
+       "role": "plan"
+      },
+      {
+       "path": "docs/plans/auth.md",
+       "anchor": "§ 2",
+       "role": "spec"
+      },
+      {
+       "path": "docs/plans/auth.md",
+       "anchor": "§ 4",
+       "role": "history"
+      }
+     ],
+     "priority_set_by": "owner",
+     "created": "@rel:-10377"
+    },
+    {
+     "id": "PL-SYNC",
+     "title": "Cloud sync between devices",
+     "project": "sync",
+     "priority": "now",
+     "maturity": "ready",
+     "priority_reason": "The most requested feature in the beta.",
+     "sources": [
+      {
+       "path": "docs/plans/sync.md",
+       "anchor": "§ 1",
+       "role": "plan"
+      },
+      {
+       "path": "docs/plans/sync.md",
+       "anchor": "§ 2",
+       "role": "spec"
+      },
+      {
+       "path": "docs/plans/sync.md",
+       "anchor": "§ 3",
+       "role": "investigation"
+      }
+     ],
+     "priority_set_by": "owner",
+     "created": "@rel:-10374"
+    },
+    {
+     "id": "PL-BILL",
+     "title": "Paid plans with a free trial",
+     "project": "billing",
+     "priority": "now",
+     "maturity": "ready",
+     "priority_reason": "Needed before the public launch.",
+     "sources": [
+      {
+       "path": "docs/plans/billing.md",
+       "anchor": "§ 1",
+       "role": "plan"
+      },
+      {
+       "path": "docs/plans/billing.md",
+       "anchor": "§ 2",
+       "role": "spec"
+      },
+      {
+       "path": "docs/plans/billing.md",
+       "anchor": "§ 4",
+       "role": "reference"
+      }
+     ],
+     "priority_set_by": "owner",
+     "created": "@rel:-10373"
+    },
+    {
+     "id": "PL-OFFLINE",
+     "title": "Full offline mode for the mobile app",
+     "project": "offline",
+     "priority": "owner",
+     "maturity": "idea",
+     "priority_reason": "Big effort; owner must weigh it against sync.",
+     "priority_set_by": "owner",
+     "created": "@rel:-10373"
+    },
+    {
+     "id": "PL-WIDGETS",
+     "title": "Home screen widgets",
+     "project": "ui",
+     "priority": "later",
+     "maturity": "investigated",
+     "priority_reason": "Nice to have after launch.",
+     "priority_set_by": "owner",
+     "created": "@rel:-10373"
+    },
+    {
+     "id": "PL-SOCIAL",
+     "title": "Share streaks with friends",
+     "project": "ui",
+     "priority": "later",
+     "maturity": "idea",
+     "priority_reason": "Wait for usage data.",
+     "priority_set_by": "owner",
+     "created": "@rel:-10373"
+    },
+    {
+     "id": "PL-EXPORT",
+     "title": "Data export (CSV and JSON)",
+     "project": "sync",
+     "priority": "drop",
+     "maturity": "idea",
+     "priority_reason": "Covered by the sync API for now.",
+     "drop_reason": "The sync API already gives users their data.",
+     "priority_set_by": "owner",
+     "created": "@rel:-10372"
+    }
+   ],
+   "archive": {},
+   "changelog": [],
+   "documents": [],
+   "active_session": [
+    {
+     "entry": "PL-SYNC",
+     "at": "@rel:-10115",
+     "by": "ravenseat"
+    }
+   ]
+  },
+  "seen.json": {
+   "at": "@rel:-32400848",
+   "by": "board",
+   "previous": null
+  },
+  "owner-log.json": {
+   "version": 1,
+   "since": "@rel:-12235",
+   "entries": []
+  }
+ },
+ "timeLog": [
+  {
+   "time": "@rel:-30600835",
+   "event": "queue-start",
+   "command": "fill"
+  },
+  {
+   "time": "@rel:-23400835",
+   "event": "gate",
+   "kind": "quick",
+   "track": "AUTH-3",
+   "ok": false,
+   "failed": [
+    "npm test"
+   ]
+  },
+  {
+   "time": "@rel:-23040835",
+   "event": "fixRound",
+   "task": "AUTH-3",
+   "reason": "fix",
+   "round": 1
+  },
+  {
+   "time": "@rel:-12960835",
+   "event": "gate",
+   "kind": "quick",
+   "track": "SYNC-3",
+   "ok": true,
+   "failed": [],
+   "duration_s": 52,
+   "wait_sec": 35
+  },
+  {
+   "time": "@rel:-18000835",
+   "event": "baseGate",
+   "tip": "a3c91e0",
+   "ok": true,
+   "skipped": "the merge commit has the tree of the track tip, and ravenseat's own gate run was green on it",
+   "duration_s": null,
+   "made_red_by": null
+  },
+  {
+   "time": "@rel:-10800835",
+   "event": "baseGate",
+   "tip": "s3d4b17",
+   "ok": true,
+   "skipped": null,
+   "duration_s": 48,
+   "made_red_by": null
+  },
+  {
+   "time": "@rel:-7200835",
+   "event": "mergeConflict",
+   "task": "BILL-2",
+   "files": 2
+  },
+  {
+   "time": "@rel:-5400835",
+   "event": "push",
+   "task_count": 2,
+   "branch": "main"
+  },
+  {
+   "time": "@rel:-3600835",
+   "event": "queue-idle",
+   "duration_s": 27000
+  },
+  {
+   "time": "@rel:-34200835",
+   "event": "session",
+   "session_id": "demo-night",
+   "orchestrator": true,
+   "usd": 4.1
+  },
+  {
+   "time": "@rel:-14400835",
+   "event": "session",
+   "session_id": "demo-night",
+   "orchestrator": true,
+   "usd": 11.8
+  },
+  {
+   "time": "@rel:-3600835",
+   "event": "session",
+   "session_id": "demo-night",
+   "orchestrator": true,
+   "usd": 18.45
+  },
+  {
+   "time": "@rel:-519600871",
+   "wave": "queue",
+   "track": "AUTH-1",
+   "event": "done",
+   "agent_id": "a0",
+   "agent_type": "track",
+   "cumulative": true,
+   "model": "claude-opus-5-5",
+   "tokens": {
+    "input": 15000,
+    "output": 75000,
+    "cache_read": 6975000,
+    "cache_written": 435000,
+    "sum": 7500000
+   },
+   "modelTurns": 45,
+   "toolCall": 59,
+   "cache_expiry": 0,
+   "context": {
+    "end": 120000,
+    "max": 120000
+   }
+  },
+  {
+   "time": "@rel:-433200871",
+   "wave": "queue",
+   "track": "AUTH-2",
+   "event": "done",
+   "agent_id": "a1",
+   "agent_type": "track-d",
+   "cumulative": true,
+   "model": "claude-opus-5-5",
+   "tokens": {
+    "input": 56000,
+    "output": 280000,
+    "cache_read": 26040000,
+    "cache_written": 1624000,
+    "sum": 28000000
+   },
+   "modelTurns": 118,
+   "toolCall": 153,
+   "cache_expiry": 0,
+   "context": {
+    "end": 288000,
+    "max": 288000
+   }
+  },
+  {
+   "time": "@rel:-346800851",
+   "wave": "queue",
+   "track": "AUTH-6",
+   "event": "done",
+   "agent_id": "a2",
+   "agent_type": "track",
+   "cumulative": true,
+   "model": "claude-opus-5-5",
+   "tokens": {
+    "input": 12870,
+    "output": 64350,
+    "cache_read": 5984550,
+    "cache_written": 373230,
+    "sum": 6435000
+   },
+   "modelTurns": 42,
+   "toolCall": 55,
+   "cache_expiry": 0,
+   "context": {
+    "end": 267000,
+    "max": 267000
+   }
+  },
+  {
+   "time": "@rel:-260400851",
+   "wave": "queue",
+   "track": "SYNC-1",
+   "event": "done",
+   "agent_id": "a3",
+   "agent_type": "track",
+   "cumulative": true,
+   "model": "claude-opus-5-5",
+   "tokens": {
+    "input": 11180,
+    "output": 55900,
+    "cache_read": 5198700,
+    "cache_written": 324220,
+    "sum": 5590000
+   },
+   "modelTurns": 36,
+   "toolCall": 47,
+   "cache_expiry": 0,
+   "context": {
+    "end": 246000,
+    "max": 246000
+   }
+  },
+  {
+   "time": "@rel:-174000851",
+   "wave": "queue",
+   "track": "SYNC-2",
+   "event": "done",
+   "agent_id": "a4",
+   "agent_type": "track-d",
+   "cumulative": true,
+   "model": "claude-opus-5-5",
+   "tokens": {
+    "input": 61500,
+    "output": 307500,
+    "cache_read": 28597500,
+    "cache_written": 1783500,
+    "sum": 30750000
+   },
+   "modelTurns": 129,
+   "toolCall": 168,
+   "cache_expiry": 0,
+   "context": {
+    "end": 225000,
+    "max": 225000
+   }
+  },
+  {
+   "time": "@rel:-87600851",
+   "wave": "queue",
+   "track": "BILL-1",
+   "event": "done",
+   "agent_id": "a5",
+   "agent_type": "track-d",
+   "cumulative": true,
+   "model": "claude-opus-5-5",
+   "tokens": {
+    "input": 55000,
+    "output": 275000,
+    "cache_read": 25575000,
+    "cache_written": 1595000,
+    "sum": 27500000
+   },
+   "modelTurns": 116,
+   "toolCall": 151,
+   "cache_expiry": 0,
+   "context": {
+    "end": 204000,
+    "max": 204000
+   }
+  },
+  {
+   "time": "@rel:-519600851",
+   "wave": "queue",
+   "track": "UI-1",
+   "event": "done",
+   "agent_id": "a6",
+   "agent_type": "track",
+   "cumulative": true,
+   "model": "claude-opus-5-5",
+   "tokens": {
+    "input": 19400,
+    "output": 97000,
+    "cache_read": 9021000,
+    "cache_written": 562600,
+    "sum": 9700000
+   },
+   "modelTurns": 58,
+   "toolCall": 75,
+   "cache_expiry": 0,
+   "context": {
+    "end": 183000,
+    "max": 183000
+   }
+  },
+  {
+   "time": "@rel:-433200851",
+   "wave": "queue",
+   "track": "UI-3",
+   "event": "done",
+   "agent_id": "a7",
+   "agent_type": "track",
+   "cumulative": true,
+   "model": "claude-opus-5-5",
+   "tokens": {
+    "input": 16800,
+    "output": 84000,
+    "cache_read": 7812000,
+    "cache_written": 487200,
+    "sum": 8400000
+   },
+   "modelTurns": 50,
+   "toolCall": 65,
+   "cache_expiry": 0,
+   "context": {
+    "end": 162000,
+    "max": 162000
+   }
+  },
+  {
+   "time": "@rel:-346800851",
+   "wave": "queue",
+   "track": "SYNC-5",
+   "event": "done",
+   "agent_id": "a8",
+   "agent_type": "track",
+   "cumulative": true,
+   "model": "claude-opus-5-5",
+   "tokens": {
+    "input": 24200,
+    "output": 121000,
+    "cache_read": 11253000,
+    "cache_written": 701800,
+    "sum": 12100000
+   },
+   "modelTurns": 73,
+   "toolCall": 95,
+   "cache_expiry": 0,
+   "context": {
+    "end": 141000,
+    "max": 141000
+   }
+  },
+  {
+   "time": "@rel:-600835",
+   "wave": "queue",
+   "track": "AUTH-3",
+   "event": "done",
+   "agent_id": "r0",
+   "agent_type": "track-d",
+   "cumulative": true,
+   "model": "claude-opus-5-5",
+   "tokens": {
+    "input": 8000,
+    "output": 40000,
+    "cache_read": 3720000,
+    "cache_written": 232000
+   },
+   "modelTurns": 25,
+   "toolCall": 33,
+   "cache_expiry": 0,
+   "context": {
+    "end": 90000,
+    "max": 90000
+   }
+  },
+  {
+   "time": "@rel:-1020835",
+   "wave": "queue",
+   "track": "SYNC-3",
+   "event": "done",
+   "agent_id": "r1",
+   "agent_type": "track",
+   "cumulative": true,
+   "model": "claude-opus-5-5",
+   "tokens": {
+    "input": 13000,
+    "output": 65000,
+    "cache_read": 6045000,
+    "cache_written": 377000
+   },
+   "modelTurns": 34,
+   "toolCall": 44,
+   "cache_expiry": 0,
+   "context": {
+    "end": 130000,
+    "max": 130000
+   }
+  },
+  {
+   "time": "@rel:-1440835",
+   "wave": "queue",
+   "track": "BILL-2",
+   "event": "done",
+   "agent_id": "r2",
+   "agent_type": "track",
+   "cumulative": true,
+   "model": "claude-opus-5-5",
+   "tokens": {
+    "input": 18000,
+    "output": 90000,
+    "cache_read": 8370000,
+    "cache_written": 522000
+   },
+   "modelTurns": 43,
+   "toolCall": 56,
+   "cache_expiry": 0,
+   "context": {
+    "end": 170000,
+    "max": 170000
+   }
+  }
+ ],
+ "docs": {
+  "docs/roadmap.md": "# Pebble roadmap\n\nWhere Pebble is going and why, written for people. The queue never reads this file: a task links to a plan entry\n(the PL- ids below), and the plan entry points at its plan document under docs/plans/.\n\n## 1. Where we are\n\nPebble 0.3 is a private beta with about 400 testers on iOS and Android. Habits, streaks and reminders work well on\none device. The testers ask for three things: an account, so a new phone does not lose their streaks; sync between\nphone and tablet; and a way to pay for an app they like.\n\n## 2. Before the public launch\n\n### 2.1 Accounts (PL-AUTH)\n\nEmail and password first, then Sign in with Apple once the owner has decided on social sign-in. Sessions must survive\na lost phone without giving the finder a way in.\n\n### 2.2 Sync between devices (PL-SYNC)\n\nThe most requested feature in the beta. A user's habits are the same on every device, also after a day offline.\nThis is the active plan.\n\n### 2.3 Paid plans (PL-BILL)\n\nPebble stays free for three habits. Pebble Plus unlocks the rest, with a free trial long enough for a habit to stick.\n\n## 3. After the launch\n\nHome screen widgets (PL-WIDGETS) and sharing streaks with friends (PL-SOCIAL). Both wait for usage data from the\nlaunch, so we build what people use and not what we guess.\n\n## 4. Open and dropped\n\n- Full offline mode (PL-OFFLINE) is open: a big effort that the owner weighs against sync.\n- Data export as files (PL-EXPORT) is dropped for now: the sync API already gives users their data.\n\n## 5. How this document is kept\n\nEdited by hand at each milestone. It names plan ids, never task ids, so it does not go stale when the queue moves.\n",
+  "docs/plans/auth.md": "# Accounts and sign-in\n\nPlan entry PL-AUTH. The roadmap tells the story; this document holds the rules the auth tasks build to.\n\n## 1. Scope and rules\n\nPebble gets accounts so a user keeps their habits and streaks when they change phones. Every auth task follows these\nrules:\n\n- An account is keyed on its user id (a UUID), never on the email address. The email can change.\n- No password, token or email address in a log line or an error message.\n- Every auth endpoint answers with the shared error shape `{ code, message }`, and the message never says whether an\n  email address has an account.\n- Times are stored in UTC.\n\n## 2. Design\n\n### 2.1 Email and password\n\nPasswords are hashed with argon2id (64 MB memory, 3 passes). A new account confirms its email before sync turns on.\nSign-in returns an access token (15 minutes) and a refresh token.\n\n### 2.2 Sessions and refresh tokens\n\nOne row per signed-in device in `sessions`: user id, device name, a hash of the refresh token, and the created and\nlast-used times. A refresh rotates the token, and the old one stops working at once. A refresh token used twice ends\nevery session of that user, since one of the two uses was not the user.\n\n### 2.3 Abuse protection\n\n- Sign-in is rate limited to 5 attempts per minute per IP address and 10 per hour per account. Over the limit the\n  endpoint answers 429 with `Retry-After` and the same message as a wrong password.\n- The counters live in Redis with a time to live, so nothing about a failed attempt is kept for long.\n- An account locks for 15 minutes after 10 failed sign-ins in a row, and the user gets an email with a reset link.\n\n### 2.4 Password reset\n\nA reset link is valid for 30 minutes and works once. Using it ends every other session of the account.\n\n### 2.5 Sign in with Apple\n\nFor the iOS app, and it waits on the owner question Q-SSO. An Apple relay address is stored like any other email.\n\n## 3. Build order\n\n1. AUTH-1 email and password sign-in, AUTH-2 sessions and refresh tokens.\n2. AUTH-3 rate limit, AUTH-5 password reset.\n3. AUTH-4 Sign in with Apple, after Q-SSO.\n4. AUTH-6 review of the token storage on mobile: tokens stay in the iOS Keychain and the Android Keystore.\n\n## 4. Decision log\n\n- 2026-10-02: argon2id over bcrypt, since the hosting has the memory for it.\n- 2026-10-20: refresh tokens rotate on every use.\n- 2026-11-12: lock the account after 10 failed sign-ins (review of AUTH-2, finding M1).\n",
+  "docs/plans/billing.md": "# Paid plans with a free trial\n\nPlan entry PL-BILL. The rules the billing tasks build to.\n\n## 1. Scope and rules\n\nPebble stays free for up to three habits. Pebble Plus unlocks unlimited habits, the full history and sync to more\nthan two devices.\n\n- Stripe handles cards and payment details. Pebble never sees or stores a card number.\n- Prices are stored in minor units (cents) with a currency code, never as a decimal number.\n- Only a Stripe webhook changes a subscription. The app never trusts its own checkout redirect.\n\n## 2. Design\n\n### 2.1 Plans and prices\n\n`plans` holds a monthly and a yearly price per currency (EUR, USD and NOK at launch). A price is never edited: a\nnew price is a new row, so an old invoice still shows what the user paid.\n\n### 2.2 Checkout\n\nStripe Checkout opens in the system browser and returns to the app with a deep link. The app shows \"Waiting for\npayment\" until the webhook has changed the subscription.\n\n### 2.3 Free trial\n\nOne trial per account. Its length waits on the owner question Q-TRIAL (the recommendation is 14 days).\n\n### 2.4 VAT and invoices\n\nStripe Tax collects the VAT; which countries at launch waits on Q-VAT. Invoices show the VAT on its own line.\n\n### 2.5 Webhooks\n\nEvery webhook's signature is checked with the signing secret before anything in it is read. Events are stored by\nevent id, so an event Stripe sends twice is applied once.\n\n## 3. Build order\n\n1. BILL-1 plans and prices.\n2. BILL-2 checkout, then BILL-5 webhook signatures.\n3. BILL-3 free trial after Q-TRIAL, BILL-4 VAT after Q-VAT.\n\n## 4. Stripe notes\n\n- Use Stripe's own test mode and its published test cards in development, never a real card.\n- The webhook events Pebble handles: checkout.session.completed, customer.subscription.updated and\n  customer.subscription.deleted.\n",
+  "docs/plans/sync.md": "# Cloud sync between devices\n\nPlan entry PL-SYNC. The rules the sync tasks build to.\n\n## 1. Scope and rules\n\nA user's habits, check-ins and streaks are the same on every device they sign in on, also after a day offline.\n\n- The server is the source of truth; each device keeps a local SQLite copy.\n- Every change is a row in an append-only change log. Nothing is updated in place on the server.\n- Sync survives a bad mobile network: every request can be retried without doing the work twice.\n- A sync response carries the signed-in user's own data and nothing else.\n\n## 2. Design\n\n### 2.1 Change log and cursors\n\n`changes` holds one row per change: user id, entity, entity id, operation, payload, server time and a sequence\nnumber. Each device keeps the last sequence number it has seen (its cursor) and asks for everything after it.\n\n### 2.2 Client queue and retry\n\nThe client writes each local change to an outbox table first, then sends the outbox in batches of up to 200 changes.\nA failed batch is retried with backoff (2, 4, 8 seconds and so on, at most 5 minutes). Every change carries a client\nid, so a retried batch is applied once.\n\n### 2.3 Conflicts\n\nTwo devices can change the same habit while offline. How the user sees that waits on the owner task Q-CONFLICT:\nsilent last-write-wins, or a choice for the user.\n\n### 2.4 Status in the header\n\nThe header shows one of three states: synced, syncing, or offline with the number of changes waiting.\n\n## 3. Protocol findings\n\nFrom the investigation SYNC-1. Three approaches were compared on a test set of 50,000 check-ins:\n\n| Approach | Data per sync | Effort | Verdict |\n|---|---|---|---|\n| Full snapshot | 1.8 MB | Low | Too heavy on mobile data |\n| CRDT per habit | 40 KB | High | More than a habit tracker needs |\n| Change log with cursor | 12 KB | Medium | Chosen |\n\nThe change log also gives support the history of a habit for free, which they asked for.\n\n## 4. Build order\n\n1. SYNC-1 investigation, SYNC-2 change log and cursors.\n2. SYNC-3 client queue with retry, SYNC-5 status in the header.\n3. SYNC-4 conflict handling, after Q-CONFLICT.\n"
+ }
+}

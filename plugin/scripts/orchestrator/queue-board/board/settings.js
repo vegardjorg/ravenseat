@@ -101,6 +101,8 @@ function drawSettings() {
         x.parts.map((p) => parts.draw(p)),
       ),
     ),
+    // The last row in every tab: "Show demo board" (board/demo.js).
+    demoSettingsSection(),
   );
   panel.scrollTop = scroll;
 }
