@@ -122,14 +122,19 @@ function commentBody({ id, title, mergeCommit, tip, fullGate, action }) {
 const healthWords = (h) => ({ green: 'base green', red: 'base RED', unknown: 'base not checked' })[h] ?? 'base not checked';
 
 /**
- * The draft pull request body for a batch (GH-4). Door and blast radius only when a task carries them (MS-1).
- * @param {{ tasks: { id: string, title: string, door?: string, blast?: string }[], tip: string, base: string,
- *   fullGate: string, health: string, caveats: string[] }} o
+ * The draft pull request body for a batch (GH-4). Door and blast radius only when a task carries them (MS-1,
+ * lib/mergeDanger.js prFields), and a reviewer's door when it differs from the track's: shown, never resolved.
+ * @param {{ tasks: { id: string, title: string, door?: string, blast?: string, reviewerDoor?: string }[], tip: string,
+ *   base: string, fullGate: string, health: string, caveats: string[] }} o
  */
 function prBody({ tasks, tip, base, fullGate, health, caveats = [] }) {
   const word = (v) => String(v ?? '').replace(/[^A-Za-z0-9 -]/g, '').trim().slice(0, 30);
   const list = (tasks ?? []).map((t) => {
-    const extra = [t.door ? `door ${word(t.door)}` : null, t.blast ? `blast radius ${word(t.blast)}` : null].filter(Boolean);
+    const extra = [
+      t.door ? `door ${word(t.door)}` : null,
+      t.blast ? `blast radius ${word(t.blast)}` : null,
+      t.reviewerDoor ? `reviewer says door ${word(t.reviewerDoor)}` : null,
+    ].filter(Boolean);
     return `- ${safeId(t.id)}: ${safeTitle(t.title)}${extra.length ? ` (${extra.join(', ')})` : ''}`;
   });
   const lines = [

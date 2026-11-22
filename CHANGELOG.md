@@ -6,6 +6,8 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 ## Unreleased
 
 ### Added
+- **Track reports state a one-way or two-way door and a one-word blast radius, the reviewer checks them, and Decisions,
+  `ravenseat decide` and the PR body show them, a one-way door first with a badge.** Display only, never a guard.
 - **`ravenseat board open --task <id>` opens the board on that card, your own edits count in Changed 24 h and History,
   and Statistics shows how often the gates ran twice after a merge and the gate queue wait.**
 - **`ravenseat schedule` plays the queue forward and shows when each focus step is expected done, plus the next tasks

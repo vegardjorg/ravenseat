@@ -362,7 +362,9 @@ a new answer, leaving the page or the timer writes it. Keys: `j` / `k` move, `En
 picks an answer (on a question's choices the number is its `--choice` number), `u` undoes. With nothing waiting it
 shows the listening status; **Decided today** (closed) is at the bottom, with **Decided for you** (closed) under it:
 proposals your rules approved and choices an agent made that receive spotted, each with how to undo it, never in the
-count ([queue.md](queue.md#decided-for-you)). The board opens on Decisions only when a
+count ([queue.md](queue.md#decided-for-you)). A delivery card (Check, or a stopped review) shows the track's door and
+blast radius and a reviewer who disagrees; a one-way door has the badge **One-way door: hard to undo** and comes first in
+its group. Display only, never a guard ([queue.md](queue.md#door-and-blast-radius)). The board opens on Decisions only when a
 decision is new since your last visit in this browser (it remembers what the room showed, `queue-board-decisions-seen`
 in the browser's storage; without that storage every visit counts as the first); otherwise it opens the queue view you
 used last.

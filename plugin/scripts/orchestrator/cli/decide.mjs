@@ -104,6 +104,11 @@ export function decisionLines(j, { width = WIDTH, max = Infinity, ravenseat = CL
       // recommendation, what each answer leads to, then why it is asked. An old post has none of the new lines.
       if (x.verb === 'decide' && x.categoryTitle) out.push(`   Category: ${x.categoryTitle}`);
       if (x.notFilled) out.push(`   ${DEC.NOT_FILLED}`);
+      // A delivery's door and blast radius (MS-1): the track's call, a reviewer who disagrees beside it. Never a guard.
+      if (x.danger) {
+        out.push(cut(`   ${x.danger.badge ? `${x.danger.badge}. ` : ''}${x.danger.text}`, width));
+        for (const d of x.danger.disagree) out.push(cut(`   Reviewer: ${d}`, width));
+      }
       if (x.verb === 'decide' && x.recommendation) out.push(cut(`   Recommendation: ${x.recommendation}`, width));
       if (x.ifYes) out.push(cut(`   ${DEC.IF_YES_LABEL}: ${x.ifYes}`, width));
       if (x.ifNo) out.push(cut(`   ${DEC.IF_NO_LABEL}: ${x.ifNo}`, width));
@@ -159,6 +164,8 @@ export function decidedForYouLines(list, { width = WIDTH } = {}) {
   const out = ['', `Decided for you: ${list.length} (not counted as waiting on you)`];
   for (const d of list) {
     out.push(cut(`  ${time(d.at)}  ${d.id}: ${d.category}: ${d.what} (${d.who}, ${d.why})`, width));
+    // The delivery's door and blast radius (MS-1), when receive stored them.
+    if (d.danger) out.push(cut(`         ${d.danger.badge ? `${d.danger.badge}. ` : ''}${d.danger.text}`, width));
     out.push(cut(`         undo: ${d.undo}`, width));
   }
   return out;

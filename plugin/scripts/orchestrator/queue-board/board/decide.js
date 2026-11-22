@@ -431,7 +431,7 @@ function decisionCard(item, focusKey, { check = false } = {}) {
       class: `decide-card${item.key === focusKey ? ' current' : ''}`,
       'data-key': item.key,
       tabindex: item.key === focusKey ? '0' : '-1',
-      'aria-label': `${item.kindName} ${item.id}: ${item.title}`,
+      'aria-label': `${item.kindName} ${item.id}: ${item.title}${item.danger?.badge ? `. ${item.danger.badge}` : ''}`,
       onfocus: (e) => {
         if (e.target !== e.currentTarget) return;
         t.decide.focusKey = item.key;
@@ -450,11 +450,28 @@ function decisionCard(item, focusKey, { check = false } = {}) {
           el('p', { class: 'decide-title', text: item.title }),
           el('p', { class: 'decide-impact', text: D.impactLine(item) }),
           ...item.context.slice(0, 2).map((c) => el('p', { class: 'decide-context', text: c })),
+          // A delivery: the track's door and blast radius (MS-1), with a reviewer who disagrees.
+          dangerBlock(item),
           // A machine card (approval, QA): what follows from each answer, from code (question.js consequenceBlock).
           consequenceBlock(item),
         ]),
     open ? decisionForm(item) : decisionButtons(item),
     keepRow(item),
+  );
+}
+
+/**
+ * A delivery's door and blast radius (MS-1, lib/queueDecisions.js dangerView): the track's call in words, and one line
+ * per reviewer who disagrees, shown side by side and never resolved. Display only: the buttons are the same either way.
+ */
+function dangerBlock(item) {
+  const d = item.danger;
+  if (!d) return null;
+  return el(
+    'div',
+    { class: `decide-danger${d.oneWay ? ' one-way' : ''}` },
+    el('p', { class: 'decide-danger-text', text: d.text }),
+    ...d.disagree.map((x) => el('p', { class: 'decide-danger-disagree', text: `Reviewer: ${x}` })),
   );
 }
 
@@ -866,6 +883,15 @@ function decidedForYouPart() {
             el('span', { class: 'decide-done-what', text: d.what }),
           ),
           el('span', { class: 'decide-for-meta', text: `${d.who}, ${d.why}` }),
+          // The delivery's door and blast radius (MS-1), when receive stored them; a one-way door has its badge in words.
+          d.danger
+            ? el(
+                'span',
+                { class: 'decide-for-meta' },
+                d.danger.badge ? el('span', { class: 'badge tone-warn sp-one-way', text: d.danger.badge }) : null,
+                ` ${d.danger.text}`,
+              )
+            : null,
           // The state in words, the command as code, the cost in words, so only the command reads as something to run.
           el(
             'span',

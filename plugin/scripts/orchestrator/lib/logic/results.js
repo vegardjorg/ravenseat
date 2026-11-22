@@ -533,6 +533,8 @@ function reviewPackageIndex({
   // no catalog, nothing for the task, or catalog.reviewExcerpt off.
   catalog = null,
   assumptions = null,
+  // The track's door and blast radius (lib/mergeDanger.js packageSection), as lines; null = none (a PARTIAL delivery).
+  mergeDanger = null,
   // A delta review after a fix round (lib/deltaReview.js): diff.patch and files/ hold only the commits since the last
   // review, and deltaSection (packageSection) says so. null = the whole package, as before.
   delta = null,
@@ -586,6 +588,7 @@ function reviewPackageIndex({
       '',
       assumptions,
     );
+  if (Array.isArray(mergeDanger)) lines.push(...mergeDanger);
   // The reviewers for this task (queueHelpers.reviewersForTask): the fixed ones for the class (the floor), then each
   // helper agent with one line on why it was chosen.
   if (Array.isArray(reviewers)) {
@@ -632,6 +635,11 @@ function reviewerPrompt({ o, type, folder, delta = null, classes = null }) {
     ...(delta ? [require('../deltaReview.js').reviewerLine(delta)] : []),
     // reviewer-gap also gets the fixed criteria and the done command (lib/doneCheck.js), one verdict line per criterion.
     ...(type === 'reviewer-gap' ? [require('../doneCheck.js').gapCriteriaBlock(o)].filter(Boolean) : []),
+    // The main reviewer checks the track's door and blast radius (MS-1) and writes its own call; a difference is shown
+    // to the owner, never resolved by code, and it is no finding by itself.
+    ...(type === 'reviewer' || type === 'reviewer-light'
+      ? ['After the FINDING lines, your own call on two lines: `Door: one-way|two-way` and `Blast radius: <one word>` (00-package.md has the track\'s).']
+      : []),
   ].join('\n');
 }
 

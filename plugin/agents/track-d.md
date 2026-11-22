@@ -41,6 +41,10 @@ branch, merging and pushing; you only do your track.
   data or features), architecture (a new module boundary, a pattern other modules will follow, moving responsibility
   between layers) and security or legal tradeoffs. Everything else you decide, and each non-trivial assumption
   goes in the "Assumptions" section of `track-result.md`. The mission has the full rule.
+- **Door and blast radius:** `track-result.md` has two lines, `Door: one-way` or `Door: two-way` (one-way: hard to
+  undo once merged or used, such as a data, schema or public API change) and `Blast radius: <one word>` (what breaks if
+  it is wrong, such as `local`, `module`, `users` or `data`). The owner sees them on the delivery; they never block or
+  approve anything.
 - Commit only on your own branch with `git commit -- <files>`. NEVER push, merge your branch into the base branch, run
   migration commands (write the file; the owner decides when it runs), start dev servers or previews.
 - Your answer to the orchestrator (last answer) is at most about 1,500 characters: the RESULT line first, at most 5

@@ -125,7 +125,8 @@ lines (owner questions with one sentence each, HIGH findings, what must be deplo
 while merging), then the path to `<folder>/track-result.md`. In `track-result.md`: status, branch and commits, the gate summary
 line, append-only files touched, deploy needs, **owner questions** in their own section, **Assumptions** in their
 own section (one line each: what, why, how to change it; "none" when there were none), and the wiring specification
-(the `WIRE` lines; each becomes an open item that `done` waits for).
+(the `WIRE` lines; each becomes an open item that `done` waits for). Also `Door: one-way` or `Door: two-way` (one-way:
+hard to undo) and `Blast radius: <one word>` (what breaks if it is wrong), each on its own line; never a guard.
 **Known bugs:** when you fixed a bug that another change could easily repeat, add one line `GATE <failure class> @ <file:line>` to
 `track-result.md`, with the class in general words and the place of the bug you fixed (`GATE a fetch result used without checking the error @ src/api.js:42`).
 Optionally use a class id and a sentence instead: `GATE <class> @ <file:line> | <one sentence>`, with a class from the
