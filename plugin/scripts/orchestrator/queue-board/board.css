@@ -3006,7 +3006,8 @@ body.with-option-line .toaster {
 }
 
 .decide-danger.one-way {
-  border-left-color: var(--color-tone-warn);
+  /* The text colour of the warn pair: the pale fill alone is too faint as a rule on the light surface. */
+  border-left-color: var(--color-on-tone-warn);
 }
 
 .decide-danger-text,
