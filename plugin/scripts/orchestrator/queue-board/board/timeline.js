@@ -138,8 +138,22 @@ function rowNotes(g) {
 }
 
 /** The chart: the fixed title column and the scrolling SVG. */
+// A turned phone or a narrowed window gets the chart again at its new width (the title column, the pixel scale and the
+// lanes all follow it), at most once per 150 ms while the window is dragged, and only when the width really changed.
+let tlDrawnWidth = 0;
+let tlResizeTimer = 0;
+window.addEventListener('resize', () => {
+  if (tlResizeTimer) return;
+  tlResizeTimer = setTimeout(() => {
+    tlResizeTimer = 0;
+    if (t.view !== 'timeline' || !t.timeline.data) return;
+    if (Math.abs((main.clientWidth || 1000) - tlDrawnWidth) >= 16) draw();
+  }, 150);
+});
+
 function timelineChart(d, rows, horizon) {
   const TL = window.QueueTimelineLayout;
+  tlDrawnWidth = main.clientWidth || 1000;
   const w = TL.windowOf(d, { horizonDays: horizon });
   const narrow = (main.clientWidth || 1000) < 640;
   const titleWidth = narrow ? 104 : 190;
@@ -172,9 +186,12 @@ function timelineChart(d, rows, horizon) {
   );
   // The axis: ticks with labels, a line per tick down through the rows (stronger at midnight).
   const axis = svgEl('g', { class: 'tl-axis', 'aria-hidden': 'true' });
+  const nowAt = sc.x(w.now);
   for (const k of TL.ticks(w, width)) {
     const x = sc.x(k.ms);
     axis.append(svgEl('line', { class: k.major ? 'tl-grid major' : 'tl-grid', x1: x, x2: x, y1: TL_AXIS - 6, y2: height }));
+    // A tick's label right at the "now" word would touch it; the grid line stays, the word "now" wins.
+    if (!k.major && x > nowAt - 34 && x < nowAt + 26) continue;
     axis.append(svgEl('text', { class: k.major ? 'tl-tick major' : 'tl-tick', x: x + 3, y: 13, text: k.label }));
   }
   axis.append(svgEl('line', { class: 'tl-axis-line', x1: 0, x2: width, y1: TL_AXIS - 0.5, y2: TL_AXIS - 0.5 }));
@@ -233,11 +250,10 @@ function timelineChart(d, rows, horizon) {
       for (const x of [b.bandX0, b.bandX1]) g.append(svgEl('line', { class: 'tl-band', x1: x, x2: x, y1: mid - 4, y2: mid + 4 }));
     }
     if (b.clippedRight) g.append(svgEl('path', { class: 'tl-more', d: `M${width - 7} ${y + 2} l5 ${b.h / 2 - 2} l-5 ${b.h / 2 - 2}` }));
-    const start = b.wait ? b.wait.x0 : b.x0;
-    const textX = Math.max(start, 0) + 4;
-    const end = Math.max(b.x1, b.bandX1 ?? 0);
-    if (end - textX > 34) g.append(svgEl('text', { class: 'tl-bar-text', x: textX, y: mid + 4, text: b.id }));
-    else g.append(svgEl('text', { class: 'tl-bar-text outside', x: end + 4, y: mid + 4, text: b.id }));
+    // The label place comes from the layout (inside when it fits, else after the bar), which also packed the lanes so
+    // that labels outside their bar never overlap.
+    const where = !b.text.inside ? ' outside' : b.text.on === 'rest' ? ' on-rest' : '';
+    g.append(svgEl('text', { class: `tl-bar-text${where}`, x: b.text.x, y: mid + 4, text: b.id }));
     bars.append(g);
   }
   svg.append(bars);
@@ -328,9 +344,9 @@ function timelineTable(d, rows) {
               r.title ? el('span', { class: 'tl-table-title', text: ` ${r.title}` }) : null,
             ),
             el('td', { text: r.row || '-' }),
-            el('td', { text: r.state }),
-            el('td', { text: r.starts || '-' }),
-            el('td', { text: r.takes || '-' }),
+            el('td', { class: 'tl-nowrap', text: r.state }),
+            el('td', { class: 'tl-nowrap', text: r.starts || '-' }),
+            el('td', { class: 'tl-nowrap', text: r.takes || '-' }),
             el('td', { text: r.note || '' }),
           ),
         ),

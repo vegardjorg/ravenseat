@@ -70,11 +70,20 @@ describe('the window and the scale', () => {
     expect(TL.horizonDays('x')).toBe(3);
     expect(TL.horizonDays(undefined)).toBe(3);
   });
-  it('from the earliest ran or running start (at most a day back) to now + horizon', () => {
+  it('from the earliest ran or running start (at most a day back) to an hour after the plan, the horizon at most', () => {
     const w = TL.windowOf(data(), { horizonDays: 3 });
     expect(w.now).toBe(NOW);
     expect(w.from).toBe(NOW - 6 * H);
-    expect(w.to).toBe(NOW + 72 * H);
+    expect(w.horizonEnd).toBe(NOW + 72 * H);
+    // The farthest drawn reach is EX-4's band (start + 2 h + 216 min = 5.6 h); EX-5 starts after the horizon and does
+    // not count. + 1 h, up to the whole hour: 7 h. A short plan does not squeeze into a corner of a 3-day axis.
+    expect(w.to).toBe(NOW + 7 * H);
+    // A plan that reaches past the horizon: the axis is the whole horizon.
+    const long = TL.windowOf(data(), { horizonDays: 1 });
+    expect(TL.windowOf(data({ schedule: sched({ tasks: [...sched().tasks, { ...sched().tasks[1], id: 'EX-7', start: iso(NOW + 20 * H), end: iso(NOW + 30 * H) }] }) }), { horizonDays: 1 }).to).toBe(NOW + 24 * H);
+    expect(long.horizonEnd).toBe(NOW + 24 * H);
+    // An empty plan still shows 6 h ahead.
+    expect(TL.windowOf(data({ ran: [], schedule: sched({ tasks: [], steps: [] }) }), { horizonDays: 3 }).to).toBe(NOW + 6 * H);
     const old = TL.windowOf(data({ ran: [{ ...ran[0], start: iso(NOW - 50 * H) }] }), { horizonDays: 1 });
     expect(old.from).toBe(NOW - 24 * H);
     const none = TL.windowOf(data({ ran: [], schedule: sched({ tasks: [] }) }), { horizonDays: 1 });
@@ -194,6 +203,33 @@ describe('bars', () => {
     const last = lay.groups[lay.groups.length - 1];
     expect(lay.height).toBe(last.y + last.h);
     expect(lay.groups[0].lanes).toBe(1);
+  });
+  it('a label that does not fit in its bar goes after the bar and its band, and lanes are packed with the label', () => {
+    const s = TL.scale({ from: NOW, to: NOW + 10 * H, now: NOW }, 1000);
+    const item = (id: string, from: number, to: number) => ({ id, title: '', class: 'K', kind: 'ran', s: from, e: to, delivered: null, lane: 0 });
+    // Two short ran bars 20 min apart: in time they do not overlap, but the first one's label reaches into the second.
+    const rows = [{ key: 'ran', kind: 'ran', title: 'Ran', items: [item('AUTH-12', NOW, NOW + 10 * 60_000), item('BILL-2', NOW + 30 * 60_000, NOW + 40 * 60_000)], laterItems: [], later: 0, unscheduled: 0, end: null, lanes: 1 }];
+    const lay = TL.layout(rows, s);
+    const [a, b] = lay.bars;
+    expect(a.text.inside).toBe(false);
+    expect(a.text.x).toBeGreaterThanOrEqual(a.x1);
+    expect(b.y).toBeGreaterThan(a.y);
+    expect(lay.groups[0].lanes).toBe(2);
+    // A wide bar keeps its label inside, at its start.
+    const wide = TL.layout([{ ...rows[0], items: [item('UI-4', NOW, NOW + 3 * H)] }], s);
+    expect(wide.bars[0].text).toEqual({ x: wide.bars[0].x0 + 4, inside: true });
+    // A label never runs past the right edge: it goes before the bar instead.
+    const edge = TL.layout([{ ...rows[0], items: [item('SYNC-4', NOW + 9.9 * H, NOW + 10 * H)] }], s);
+    expect(edge.bars[0].text.x + TL.textWidth('SYNC-4')).toBeLessThanOrEqual(1000);
+  });
+  it('a running bar puts its label on one part only: the ran part when it fits, else the rest part (its own color)', () => {
+    const s = TL.scale({ from: NOW - 5 * H, to: NOW + 5 * H, now: NOW }, 1000);
+    const run = (id: string, from: number, to: number) => ({ id, title: '', class: 'K', kind: 'running', s: from, e: to, remaining: 60, over: false, band: { low: to, high: to, label: 'rough' }, lane: 0 });
+    const row = (it: any) => [{ key: 'ran', kind: 'ran', title: 'Ran', items: [it], laterItems: [], later: 0, unscheduled: 0, end: null, lanes: 1 }];
+    const fresh = TL.layout(row(run('AUTH-5', NOW - 5 * 60_000, NOW + 2 * H)), s).bars[0];
+    expect(fresh.text).toEqual({ x: fresh.nowX + 4, inside: true, on: 'rest' });
+    const long = TL.layout(row(run('BILL-2', NOW - 4 * H, NOW + H)), s).bars[0];
+    expect(long.text).toEqual({ x: long.x0 + 4, inside: true, on: 'ran' });
   });
 });
 

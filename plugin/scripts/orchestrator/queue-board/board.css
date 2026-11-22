@@ -7356,6 +7356,11 @@ body.stale .summary.stuck::before {
   fill: var(--color-on-primary);
 }
 
+/* A running bar that just started: the label sits on the rough rest part, in that part's text color. */
+.tl-bar.running .tl-bar-text.on-rest {
+  fill: var(--color-on-primary-container);
+}
+
 .tl-svg .tl-bar-text.outside {
   fill: var(--color-on-surface);
 }
@@ -7411,10 +7416,17 @@ body.stale .summary.stuck::before {
   border-radius: var(--radius-md);
 }
 
+/* On a phone the table keeps readable columns and its box scrolls sideways, instead of squeezing "about 8.5 h ago"
+   into one word per line. */
 .tl-table {
   width: 100%;
+  min-width: 40rem;
   border-collapse: collapse;
   font-size: var(--text-sm);
+}
+
+.tl-table .tl-nowrap {
+  white-space: nowrap;
 }
 
 .tl-table caption {

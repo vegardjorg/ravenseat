@@ -6,11 +6,11 @@
 // tasks that ran in the last day, and the project of each task. Nothing here plays the queue or knows a queue rule; it
 // only turns times into rows, lanes and pixels, and into the table for screen readers:
 //   - windowOf, scale, ticks: the time axis. It starts at the earliest ran or running start (at most a day back) and
-//     ends at now + the horizon (board.timelineHorizonDays).
+//     ends an hour after the plan, at most at now + the horizon (board.timelineHorizonDays).
 //   - packLanes: overlapping bars of one row go to separate lanes (first free lane).
 //   - buildRows: the ran and running part first, then one row per focus step in the schedule's order (rest last) or
 //     one per project (board.timelineRows). A task that starts after the horizon is counted (later), not drawn.
-//   - layout: the y of each row and the geometry of each bar: the band of a planned bar (start + low to start + high),
+//   - layout: the y of each row and the geometry of each bar (lanes packed in pixels, labels counted): the band of a planned bar (start + low to start + high),
 //     a wait on the owner as its own segment, the phases of a ran bar (track, review).
 //   - tableRows: the same tasks as a table, with relative times only.
 // HONESTY: no text here gives a clock time for one task (the measured spread per task is a factor 2.5 to 3); a step's
@@ -34,6 +34,13 @@
   /** How far back the ran part reaches at most, and the margin before now when nothing ran. */
   const LOOKBACK = DAY;
   const MARGIN = HOUR;
+  /** The axis shows at least this far ahead of now, even for an empty or short plan. */
+  const AHEAD_MIN = 6 * HOUR;
+  /** A bar's label: about this many pixels per character (the ids are short and in the small text size), the gap
+   * between a bar and its label, and the least gap between two bars (labels counted) in one lane. */
+  const TEXT_PX = 7;
+  const LABEL_GAP = 4;
+  const LANE_GAP = 6;
   /** The least distance between two ticks on the axis, in pixels. */
   const MIN_TICK_PX = 56;
   /** The tick steps tried in order, in hours (the first that keeps MIN_TICK_PX wins). */
@@ -72,7 +79,12 @@
     return Number.isFinite(x) ? x : null;
   };
 
-  /** The time window: { from, to, now } in ms. */
+  /**
+   * The time window: { from, to, now, horizonEnd } in ms. horizonEnd is now + the horizon: a task that starts after it
+   * is counted, not drawn. `to` is where the axis ends: an hour after the farthest drawn reach (a bar's end or band, a
+   * step's end), up to the whole hour, at least AHEAD_MIN after now and at most horizonEnd. So a plan of a few hours
+   * fills the chart instead of the first eighth of a 3-day axis.
+   */
   function windowOf(d, option = {}) {
     const s = d?.schedule ?? {};
     const now = ms(s.now) ?? Date.now();
@@ -81,7 +93,21 @@
       ...(s.tasks ?? []).filter((r) => r.running).map((r) => ms(r.start)),
     ].filter((x) => x != null);
     const from = starts.length ? Math.max(now - LOOKBACK, Math.min(Math.min(...starts), now - MARGIN)) : now - MARGIN;
-    return { from, to: now + horizonDays(option.horizonDays) * DAY, now };
+    const horizonEnd = now + horizonDays(option.horizonDays) * DAY;
+    let reachEnd = now;
+    for (const r of s.tasks ?? []) {
+      const st = ms(r.start);
+      if (st == null || st >= horizonEnd) continue;
+      const e = ms(r.end) ?? st;
+      const high = r.band?.high_min != null ? st + r.band.high_min * MIN : e;
+      reachEnd = Math.max(reachEnd, e, high);
+    }
+    for (const st of s.steps ?? []) {
+      const e = ms(st.p50_end);
+      if (e != null && e <= horizonEnd) reachEnd = Math.max(reachEnd, e);
+    }
+    const to = Math.min(horizonEnd, Math.max(now + AHEAD_MIN, Math.ceil((reachEnd + MARGIN) / HOUR) * HOUR));
+    return { from, to, now, horizonEnd };
   }
 
   /** The linear scale from the window to 0..width pixels, clamped (one decimal, so the SVG stays small). */
@@ -227,7 +253,7 @@
 
     const planned = (s.tasks ?? []).filter((r) => !r.running).map(plannedItem).filter((it) => it.s != null && it.e != null);
     planned.sort((x, y) => x.s - y.s || x.id.localeCompare(y.id));
-    const split = (items) => ({ items: items.filter((it) => it.s < w.to), laterItems: items.filter((it) => it.s >= w.to) });
+    const split = (items) => ({ items: items.filter((it) => it.s < w.horizonEnd), laterItems: items.filter((it) => it.s >= w.horizonEnd) });
 
     if (by === 'step') {
       const steps = s.steps ?? [];
@@ -241,9 +267,9 @@
           kind: 'step',
           title: st.step == null ? (whole ? 'Planned' : 'Rest') : `${st.step + 1} ${st.title ?? ''}`.trim(),
           ...split(mine),
-          later: mine.filter((it) => it.s >= w.to).length,
+          later: mine.filter((it) => it.s >= w.horizonEnd).length,
           unscheduled: st.unscheduled ?? 0,
-          end: end != null && end <= w.to ? end : null,
+          end: end != null && end <= w.horizonEnd ? end : null,
         });
       }
     } else {
@@ -275,7 +301,7 @@
           kind: 'project',
           title: title(p),
           ...split(mine),
-          later: mine.filter((it) => it.s >= w.to).length,
+          later: mine.filter((it) => it.s >= w.horizonEnd).length,
           unscheduled: cannot.get(p) ?? 0,
           end: null,
         });
@@ -293,17 +319,52 @@
     return `${head}: starts ${relativeText(it.s, now)}, ${it.band.label}${it.waitsOnYou ? ', waits on you first' : ''}`;
   }
 
+  /** The width of a bar's label in pixels (an estimate: TEXT_PX per character). */
+  function textWidth(text) {
+    return String(text ?? '').length * TEXT_PX;
+  }
+
+  /**
+   * Where a bar's label (its id) goes: inside the bar at its start when it fits, else after the bar and its band, else
+   * (at the right edge) before the bar. { x, inside }.
+   */
+  function textOf(b, width) {
+    const start = Math.max(b.wait ? b.wait.x0 : b.x0, 0);
+    const tw = textWidth(b.id);
+    // A running bar has two fills (the part that ran, the rough rest): the label sits on one of them only, so its
+    // color can match that part (`on`); the ran part first, as for a bar that ran.
+    if (b.kind === 'running') {
+      if (b.nowX - (start + LABEL_GAP) >= tw + 2) return { x: start + LABEL_GAP, inside: true, on: 'ran' };
+      if (b.x1 - (b.nowX + LABEL_GAP) >= tw + 2) return { x: b.nowX + LABEL_GAP, inside: true, on: 'rest' };
+    }
+    if (b.kind !== 'running' && b.x1 - (start + LABEL_GAP) >= tw + 2) return { x: start + LABEL_GAP, inside: true };
+    const after = Math.max(b.x1, b.bandX1 ?? 0) + LABEL_GAP;
+    if (after + tw <= width) return { x: after, inside: false };
+    return { x: Math.max(0, Math.min(b.x0, start) - LABEL_GAP - tw), inside: false };
+  }
+
   /**
    * The geometry: { height, groups: [{ key, kind, title, y, h, lanes, end, endX, later, unscheduled }], bars: [...] }.
-   * A bar: { id, title, class, kind, x0, x1, y, h, label, clippedLeft, clippedRight } plus bandX0/bandX1 (planned,
-   * running), wait { x0, x1 } (planned that waits on the owner), nowX (running), phases [{ phase, x0, x1 }] (ran).
+   * A bar: { id, title, class, kind, x0, x1, y, h, lane, label, text { x, inside }, clippedLeft, clippedRight } plus
+   * bandX0/bandX1 (planned, running), wait { x0, x1 } (planned that waits on the owner), nowX (running), phases
+   * [{ phase, x0, x1 }] (ran).
    */
   function layout(rows, sc) {
     const groups = [];
     const bars = [];
     let y = 0;
     for (const r of rows) {
-      const lanes = Math.max(1, r.lanes);
+      // The lanes are packed here in pixels, with a label outside its bar counted, so two short bars never put their
+      // labels over each other (buildRows' lanes in time are only the first guess and are not used for drawing).
+      const mine = r.items.map((it) => barOf(it, r, sc));
+      const packed = packLanes(
+        mine.map((b, i) => {
+          const left = Math.min(b.x0, b.wait ? b.wait.x0 : b.x0, b.text.x);
+          const right = Math.max(b.x1, b.bandX1 ?? b.x1, b.text.inside ? b.x1 : b.text.x + textWidth(b.id));
+          return { i, s: left, e: right + LANE_GAP };
+        }),
+      );
+      const lanes = Math.max(1, packed.lanes);
       const h = SIZE.head + lanes * SIZE.lane + SIZE.gap;
       groups.push({
         key: r.key,
@@ -311,48 +372,57 @@
         title: r.title,
         y,
         h,
-        lanes: r.lanes,
+        lanes: packed.lanes,
         end: r.end,
         endX: r.end == null ? null : sc.x(r.end),
         later: r.later,
         unscheduled: r.unscheduled,
       });
-      for (const it of r.items) {
-        const b = {
-          id: it.id,
-          title: it.title,
-          class: it.class,
-          kind: it.kind,
-          row: r.key,
-          x0: sc.x(it.s),
-          x1: sc.x(it.e),
-          y: y + SIZE.head + it.lane * SIZE.lane + (SIZE.lane - SIZE.bar) / 2,
-          h: SIZE.bar,
-          label: labelOf(it, sc.now),
-          clippedLeft: it.s < sc.from,
-          clippedRight: it.e > sc.to,
-        };
-        if (it.kind === 'planned') {
-          b.bandX0 = sc.x(it.band.low);
-          b.bandX1 = sc.x(it.band.high);
-          b.wait = it.waitsOnYou ? { x0: sc.x(sc.now), x1: sc.x(it.s) } : null;
-        }
-        if (it.kind === 'running') {
-          b.nowX = sc.x(sc.now);
-          b.over = it.over;
-          b.bandX0 = sc.x(Math.max(sc.now, it.band.low));
-          b.bandX1 = sc.x(Math.max(sc.now, it.band.high));
-        }
-        if (it.kind === 'ran') {
-          const cut = it.delivered != null && it.delivered > it.s && it.delivered < it.e ? it.delivered : it.e;
-          b.phases = [{ phase: 'track', x0: sc.x(it.s), x1: sc.x(cut) }];
-          if (cut < it.e) b.phases.push({ phase: 'review', x0: sc.x(cut), x1: sc.x(it.e) });
-        }
+      for (const p of packed.items) {
+        const b = mine[p.i];
+        b.lane = p.lane;
+        b.y = y + SIZE.head + p.lane * SIZE.lane + (SIZE.lane - SIZE.bar) / 2;
         bars.push(b);
       }
       y += h;
     }
     return { height: y, groups, bars };
+  }
+
+  /** One bar's x geometry, words and label place (layout adds the lane and y). */
+  function barOf(it, r, sc) {
+    const b = {
+      id: it.id,
+      title: it.title,
+      class: it.class,
+      kind: it.kind,
+      row: r.key,
+      x0: sc.x(it.s),
+      x1: sc.x(it.e),
+      y: 0,
+      h: SIZE.bar,
+      label: labelOf(it, sc.now),
+      clippedLeft: it.s < sc.from,
+      clippedRight: it.e > sc.to,
+    };
+    if (it.kind === 'planned') {
+      b.bandX0 = sc.x(it.band.low);
+      b.bandX1 = sc.x(it.band.high);
+      b.wait = it.waitsOnYou ? { x0: sc.x(sc.now), x1: sc.x(it.s) } : null;
+    }
+    if (it.kind === 'running') {
+      b.nowX = sc.x(sc.now);
+      b.over = it.over;
+      b.bandX0 = sc.x(Math.max(sc.now, it.band.low));
+      b.bandX1 = sc.x(Math.max(sc.now, it.band.high));
+    }
+    if (it.kind === 'ran') {
+      const cut = it.delivered != null && it.delivered > it.s && it.delivered < it.e ? it.delivered : it.e;
+      b.phases = [{ phase: 'track', x0: sc.x(it.s), x1: sc.x(cut) }];
+      if (cut < it.e) b.phases.push({ phase: 'review', x0: sc.x(cut), x1: sc.x(it.e) });
+    }
+    b.text = textOf(b, sc.width);
+    return b;
   }
 
   /**
@@ -415,6 +485,7 @@
     packLanes,
     buildRows,
     layout,
+    textWidth,
     tableRows,
   };
 });

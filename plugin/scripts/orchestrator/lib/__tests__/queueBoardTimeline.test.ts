@@ -169,6 +169,22 @@ describe('the chart', () => {
     expect(document.querySelector('#tl-hatch')).toBeTruthy();
   });
 
+  it('a turned phone or a narrowed window gets the chart again at the new width (narrow title column)', async () => {
+    const main = $('board'); // the board's `main` (board/core.js)
+    const wide = (document.querySelector('.tl-titles') as HTMLElement).style.getPropertyValue('--tl-w');
+    expect(wide).toBe('190px');
+    Object.defineProperty(main, 'clientWidth', { configurable: true, get: () => 360 });
+    window.dispatchEvent(new Event('resize'));
+    await new Promise((r) => setTimeout(r, 200));
+    await flush();
+    expect((document.querySelector('.tl-titles') as HTMLElement).style.getPropertyValue('--tl-w')).toBe('104px');
+    delete (main as any).clientWidth;
+    window.dispatchEvent(new Event('resize'));
+    await new Promise((r) => setTimeout(r, 200));
+    await flush();
+    expect((document.querySelector('.tl-titles') as HTMLElement).style.getPropertyValue('--tl-w')).toBe('190px');
+  });
+
   it('the tasks that cannot start are listed with the reason', () => {
     const list = document.querySelector('.tl-cannot') as HTMLElement;
     expect(list.textContent).toContain('Cannot start (1)');
