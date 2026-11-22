@@ -713,6 +713,16 @@
 //         when the last undoable entry is no. n, so the board's "Undo" never rolls back someone else's change.
 //         The changelog (`changelog`, the last 50) is kept by edit, edit-many, rank, park, continue, project
 //         and classify.)
+//   node scripts/orchestrator/queue.mjs undo <id> [--dry] [--yes]
+//        (takes a merged task back out of baseBranch: finds its merge commit (merge_commit, else the "Merge branch" subject
+//         on baseBranch's first-parent line), shows the plan (the files, the later tasks that share a file or depend on
+//         it, the hand commits that share one, the tasks that will wait for it again), asks y/N (--yes for scripts; no
+//         terminal and no --yes: nothing done; --dry: only the plan), then `git revert -m 1` as ONE new local commit (never
+//         force, reset or push), the task back to waiting with a note (merge_commit moves to `undone`), and the base gate
+//         on the new tip as after a merge (red: exit 9 and a base fix task). Refused, nothing changed: in a track worktree,
+//         the main checkout not on baseBranch, uncommitted tracked changes, the merge lock held, a git operation in
+//         progress, a cut-off merge, not in baseBranch, not a merge commit, undone before. A conflicting revert is aborted
+//         (git revert --abort) with the steps by hand. cli/undo.mjs, lib/undoMerge.js.)
 //   node scripts/orchestrator/queue.mjs classify [--file <in.json>] [--without-project] [--disagree] [--execute] [--json]
 //        (project proposals: longest prefix, the plan in source/mission, fileRoot (`project <pid> --file-root <path ...>`).
 //         Without --file: tasks in the queue, "move" (confident proposals for tasks without a project; --execute sets them) and
@@ -1071,6 +1081,9 @@ if (command === 'init') {
   (await import('./cli/projects.mjs')).cmdContinue();
 } else if (command === 'rank') {
   (await import('./cli/projects.mjs')).cmdRank();
+} else if (command === 'undo' && a[1] && !a[1].startsWith('-')) {
+  // ravenseat undo <id>: revert the task's merge (GS-3); bare `undo` is the changelog undo below
+  await (await import('./cli/undo.mjs')).cmdUndoMerge();
 } else if (command === 'undo') {
   (await import('./cli/taskEdit.mjs')).cmdUndo();
 } else if (command === 'plan') {

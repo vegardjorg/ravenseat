@@ -6,6 +6,8 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 ## Unreleased
 
 ### Added
+- **`ravenseat undo <id>` takes a merged task back out with one new revert commit, after showing what else touches the
+  same files and a y/N.**
 - **Since you left: what merged, recovered, got stuck, waits on you and cost while you were away, in Decisions and
   `ravenseat since`.** `board.sinceLast` on, `board.sinceLastWindow` `last-seen` (or `24h`, `7d`).
 - **`ravenseat catalog deps --audit` checks your lockfiles against OSV.dev, only when you run it.** `deps.audit` `manual`.

@@ -614,8 +614,8 @@ The base gate (`baseGate` in `queue.config.json`, `lib/baseHealth.js`) records t
   fix task: `ravenseat merge` stops for the owner, and `--resume` goes on once it is settled. The same goes for `ravenseat receive`.
   As orchestrator, pass the message to the owner and wait: `ravenseat surface accept --by owner` is theirs to run or to
   say (see [queue.md](queue.md), Git hooks and config). Never accept a difference on your own judgement.
-- **Red after a merge.** The merge stays (never reverted automatically; the message gives the `git revert -m 1 <sha>`
-  line to do it by hand). A fix task `<id>-BASE<n>` is added: value 10, `fixes` the merged task, the base gate as its
+- **Red after a merge.** The merge stays (never reverted automatically; the message gives `ravenseat undo <id>` and the
+  `git revert -m 1 <sha>` line to do it by hand). An undo runs the base gate on its revert commit the same way. A fix task `<id>-BASE<n>` is added: value 10, `fixes` the merged task, the base gate as its
   `done_when`, and a mission that names the merge commit and the tail file. An open fix task is reused instead of a
   second one; a red tip no merge is known to have caused gets `BASE-<sha7>`. When the quick gates are red the merge
   flow stops as before (the task stays in review with `gate-red`; set it done after the fix task); when only other

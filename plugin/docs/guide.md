@@ -343,7 +343,8 @@ data) get cheaper to make. These eleven rules work in any stack; take the ones t
 5. Agents never deploy and never see production credentials.
 6. Staging first; production is a separate, deliberate step.
 7. Database changes go forward only, are tried on staging first, with a backup before production.
-8. Have backups you have restored once, and know how to revert a merge (`git revert -m 1 <merge>`).
+8. Have backups you have restored once, and know how to take a merged task back out: `ravenseat undo <id>` shows what
+   else touches the same files, asks y/N and reverts the merge as one new local commit (`--dry` only shows the plan).
 9. Commit the lockfile and audit your dependencies now and then.
 10. Keep large and binary files (dumps, exports, builds) out of git.
 11. Keep CI cheap: cancel superseded runs, skip docs-only pushes, push in batches.
