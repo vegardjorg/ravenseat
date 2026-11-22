@@ -346,9 +346,9 @@ function schedule(queue, option = {}) {
     steps,
     end: ends.length ? iso(Math.max(...ends)) : null,
     precision:
-      'Rough: one task often takes 2.5 to 3 times more or less than its bar, so no task has a promised time; a focus ' +
-      'step with many tasks evens out to roughly 25 to 40 % either way. This plays the queue as it is now: new tasks ' +
-      'that rank in ahead, fix rounds and changes in quota or load are not in it.',
+      'Rough: for one task the middle half of measured outcomes spans a factor 2.5 to 3, so no task has a promised ' +
+      'time; a focus step with many tasks evens out to roughly 25 to 40 % either way. This plays the queue as it is ' +
+      'now: new tasks that rank in ahead, fix rounds and changes in quota or load are not in it.',
   };
 }
 

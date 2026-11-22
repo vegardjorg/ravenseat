@@ -419,8 +419,8 @@ tasks in 28 days, else the class, else the model alone), never the raw minute es
 left (never below zero; past it, "over its estimate"); an open owner question gets the median answer time (4 hours
 until 5 answers are measured) and the task is marked "waits on you"; with `nightRun` off nothing starts in the night
 window. What the numbers mean: a focus step's expected end is the last expected end in it, and with many tasks it is
-roughly right to 25 to 40 %. What they do not mean: one task's start and end are rough (a factor 2.5 to 3 either way is
-normal), so they are shown relative to now and never as a promised time, and the whole plan holds only for the queue as
+roughly right to 25 to 40 %. What they do not mean: one task's start and end are rough (the middle half of measured
+outcomes spans a factor 2.5 to 3), so they are shown relative to now and never as a promised time, and the plan holds only for the queue as
 it is now (new tasks that rank in ahead, fix rounds and changes in quota or load are not in it). For when the work is
 done with a spread, use `forecast`. `--json` gives every task with `rough: true` and a band. The logic is
 `lib/queueSchedule.js`.
