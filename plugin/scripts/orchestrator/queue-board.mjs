@@ -166,6 +166,7 @@ const ZONES = require('./lib/catalogZones.js');
  * no mission files: the inline mission and the description stand in for the mission text.
  */
 function zonesNow(fresh) {
+  if (demoOn) return null; // the demo has no catalog, and the real one is never read for it
   const zf = ZONES.zonesOnDisk({ root: MAIN_TREE, dataFolder: FOLDER, cfg: fresh });
   if (zf.empty) return null;
   return (o) => {
@@ -202,18 +203,27 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 // worktree, config().root already points to the main tree.
 const ROOT = require('./lib/projectRoot.js').roots().tree;
 const MAIN_TREE = CONFIG.root;
-const FOLDER = KK.dataFolder();
-const FILE = path.join(FOLDER, 'queue.json');
-const CURSOR = path.join(FOLDER, 'orchestrator.json');
-const PLAN_FILE = path.join(FOLDER, 'plans.json');
+// DEMO MODE (lib/demoMode.js): the paths below are `let`, since demo mode points the board's reads and writes at
+// <dataFolder>/demo/ (useDemo further down) and back. REAL keeps the real ones; nothing else reassigns them.
+let FOLDER = KK.dataFolder();
+let FILE = path.join(FOLDER, 'queue.json');
+let CURSOR = path.join(FOLDER, 'orchestrator.json');
+let PLAN_FILE = path.join(FOLDER, 'plans.json');
 // The "Follow up" entries (queue.mjs follow writes; the board only reads).
-const FOLLOW_FILE = path.join(FOLDER, 'follow.json');
+let FOLLOW_FILE = path.join(FOLDER, 'follow.json');
 // The base gate's state file (cli/baseHealth.mjs writes it after ravenseat merge).
-const BASE_HEALTH_FILE = path.join(FOLDER, 'base-health.json');
+let BASE_HEALTH_FILE = path.join(FOLDER, 'base-health.json');
 // Documents in the reading view live in the main tree, like the source paths in the plan register (same env var as queue.mjs).
-const SOURCE_ROOT = process.env.QUEUE_PLAN_SOURCE_ROOT ?? MAIN_TREE;
-const GIT_ROOT = process.env.QUEUE_GIT ?? MAIN_TREE;
-const TIME_LOG = KK.timeLog();
+let SOURCE_ROOT = process.env.QUEUE_PLAN_SOURCE_ROOT ?? MAIN_TREE;
+let GIT_ROOT = process.env.QUEUE_GIT ?? MAIN_TREE;
+let TIME_LOG = KK.timeLog();
+const REAL = Object.freeze({ FOLDER, FILE, CURSOR, PLAN_FILE, FOLLOW_FILE, BASE_HEALTH_FILE, SOURCE_ROOT, GIT_ROOT, TIME_LOG });
+const DEMO = require('./lib/demoMode.js');
+const DEMO_OFFER = require('./lib/demoOffer.js');
+/** The demo folder's paths (always under the REAL data folder). */
+const DEMO_PATHS = DEMO.paths(REAL.FOLDER);
+/** Is demo mode on? In memory only: a restarted board always starts on the real queue. */
+let demoOn = false;
 // The time log's monthly archives (lib/timeLogArchive.js, owner decision B5): read across them, windowed where it can.
 const TA = require('./lib/timeLogArchive.js');
 // The archive of done tasks (lib/queueArchive.js, owner decision B5): statistics, plans and lookups by id read it too.
@@ -455,7 +465,8 @@ async function refreshLatest() {
 }
 /** What the banner says now (null = nothing). The setup record is read on every state build (a tiny file). */
 const updateNotice = () =>
-  U.notice({
+  // In demo mode the demo banner has the top; the update notice comes back on the real board.
+  demoOn ? null : U.notice({
     mode: INSTALL.mode,
     installed: INSTALL.version,
     latest: latestPublished,
@@ -469,7 +480,9 @@ const updateNotice = () =>
 const THEME_CSS = T.themeCss(T.PALETTE);
 
 // ---- Git (uncommitted files in the main tree, the branches <branchPrefix><id>) ----------------------------------
-const gitRead = G.makeGit(GIT_ROOT);
+const realGitRead = G.makeGit(REAL.GIT_ROOT);
+// Demo mode has no git: every read answers "nothing" (null), so branches and diffs are empty in the demo.
+const gitRead = (args) => (demoOn ? null : realGitRead(args));
 const BRANCH_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,80}$/;
 const BRANCH_PREFIX = String(CONFIG.branchPrefix ?? 'queue/');
 /** The branch a task is built on: `branch` in the queue, otherwise <branchPrefix><id>. */
@@ -489,6 +502,7 @@ function branchInfo(branch) {
 // At the same time <remote>/<baseBranch> is read, and the paths changed locally since it (for "Suitable for cloud").
 let gitStatus = { time: 0, uncommitted: [], error: false, pushedHead: null, sincePush: [] };
 function uncommitted() {
+  if (demoOn) return gitStatus; // reset to empty when demo mode starts (useDemo), never read from git in the demo
   if (Date.now() - gitStatus.time > 60_000) {
     const u = G.readUncommitted(gitRead);
     const pushedHead =
@@ -920,6 +934,7 @@ function pushBatchNow(baseHealth) {
 // It reads git and the files, so it runs in the background at most once a minute, and the board shows the last answer.
 let checksCache = { time: 0, data: null, running: false };
 function checksNow() {
+  if (demoOn) return null; // kickstart reads the repo: never in the demo
   if (!checksCache.running && Date.now() - checksCache.time > 60_000) {
     checksCache.running = true;
     queueMjs(['kickstart', '--json']).then((r) => {
@@ -942,6 +957,8 @@ function checksNow() {
  */
 let notBuildingCache = { key: null, list: [] };
 function notBuildingNow() {
+  // The catalog is the real project's (MAIN_TREE): the demo shows none.
+  if (demoOn) return { key: 'demo', list: [], groups: [] };
   try {
     const dir = path.join(MAIN_TREE, ...CATALOG.DIR.split('/'));
     const ledgerFile = path.join(FOLDER, CATALOG.LEDGER_FILE);
@@ -1009,7 +1026,7 @@ async function checksReportNow(fresh) {
  */
 let markerRunning = false;
 function checksMarkerNow(panelOn) {
-  if (!panelOn) return false;
+  if (!panelOn || demoOn) return false; // no background checks run in the demo
   if (!markerRunning && Date.now() - checksReport.time > 120_000) {
     markerRunning = true;
     checksReportNow(false)
@@ -1487,17 +1504,19 @@ let planCache = null;
 // The lead of a plan without a summary, read from its plan document (P3 of plans/plans-tab-ux-review-2026-11-19.md;
 // queueBoard.planLeadReader: the /api/doc guard, cached per file by time and size). One reader for the process, so the
 // cache lives as long as the board.
-const planLead = T.planLeadReader(SOURCE_ROOT, { fs, path });
+// `let`: demo mode makes both again on the demo folder's documents (useDemo), and back.
+let planLead = T.planLeadReader(SOURCE_ROOT, { fs, path });
 // P5: the full-text search in the plan documents (queueBoard.planDocSearcher: the same source, guard and cap as the
 // lead, passages cached per file by time and size). One searcher for the process, like the lead reader.
-const planSearch = T.planDocSearcher(SOURCE_ROOT, { fs, path });
+let planSearch = T.planDocSearcher(SOURCE_ROOT, { fs, path });
 // PG-1/PG-3: the decision section's state for a large plan's detail panel (queueBoard.planDecisionReader: the same
 // guard, cached per file by time and size). The zones are read again with each new plans() answer, so an accepted zone
 // shows within a minute; plans.decisionNote off reads nothing (the caller passes no reader).
 const planDecisionFor = () => {
   let zonesFor = null;
   try {
-    zonesFor = require('./lib/catalogZones.js').zonesOnDisk();
+    // The demo has no catalog: the real project's zones are never read for it.
+    if (!demoOn) zonesFor = require('./lib/catalogZones.js').zonesOnDisk();
   } catch {
     // error-ignored: a zone only raises attention; the size rule still applies
   }
@@ -1708,7 +1727,8 @@ function setup(queue, stat) {
  */
 function missionFor(o) {
   const s = String(o.mission ?? '');
-  if (s && !s.includes('\n')) {
+  // The demo's missions are text; a path in one is never read from the real project.
+  if (s && !s.includes('\n') && !demoOn) {
     for (const root of [ROOT, MAIN_TREE]) {
       const filePath = path.resolve(root, s);
       if (!filePath.startsWith(root + path.sep)) continue;
@@ -1741,12 +1761,23 @@ function missionFor(o) {
 
 // ---- queue.mjs (all writing) ---------------------------------------------------------------------------------------
 function queueMjs(args) {
+  // Demo mode: the run gets the demo folder as its whole world (lib/demoMode.js childEnv: every QUEUE_* path there,
+  // git locked out, no tokens) and its cwd there. The folder and every path are checked again first, so a link planted
+  // since demo mode started cannot send the write anywhere else.
+  let place = { cwd: ROOT, env: process.env };
+  if (demoOn) {
+    const safe = DEMO.checkRoot(REAL.FOLDER);
+    const loose = DEMO.unconfinedVariables(DEMO_PATHS);
+    if (!safe.ok || loose.length)
+      return Promise.resolve({ ok: false, code: -1, out: '', error: safe.message ?? `Not in demo mode: ${loose.join(', ')} would point outside the demo folder.` });
+    place = { cwd: DEMO_PATHS.root, env: DEMO.childEnv(process.env, DEMO_PATHS) };
+  }
   return new Promise((resolve) => {
     execFile(
       process.execPath,
       [QUEUE_MJS, ...args],
       // RAVENSEAT_SURFACE: the decision rows in the time log (lib/decisionRows.js) say the answer came from the board.
-      { cwd: ROOT, env: { ...process.env, RAVENSEAT_SURFACE: 'board' }, timeout: 30_000, windowsHide: true, maxBuffer: 4 << 20 },
+      { cwd: place.cwd, env: { ...place.env, RAVENSEAT_SURFACE: 'board' }, timeout: 30_000, windowsHide: true, maxBuffer: 4 << 20 },
       (err, out, error) => {
         resolve({
           ok: !err,
@@ -1758,6 +1789,18 @@ function queueMjs(args) {
       },
     );
   });
+}
+
+/**
+ * Where the board puts the temporary input files it hands to queue.mjs (--file): the system temp folder, or in demo mode
+ * <dataFolder>/demo/tmp, so a demo write leaves nothing outside the demo folder. Throws when that place is not safe.
+ */
+function tmpDir() {
+  if (!demoOn) return os.tmpdir();
+  const c = DEMO.confined(DEMO_PATHS.root, path.join(DEMO_PATHS.tmp, 'x'));
+  if (!c.ok) throw new Error(`Not in demo mode: the demo folder is not safe (${c.reason})`);
+  fs.mkdirSync(DEMO_PATHS.tmp, { recursive: true });
+  return DEMO_PATHS.tmp;
 }
 
 // Writes run one at a time, so a move is always computed from the queue as it is after the previous write.
@@ -1782,7 +1825,7 @@ const cleanText = (x, max) =>
 
 /** Runs edit-many with the content in a temporary file (all or nothing), and cleans up the file afterwards. */
 async function editMany(content, run, what, extra = []) {
-  const tmp = path.join(os.tmpdir(), `queue-board-${process.pid}-${crypto.randomUUID()}.json`);
+  const tmp = path.join(tmpDir(), `queue-board-${process.pid}-${crypto.randomUUID()}.json`);
   fs.writeFileSync(tmp, JSON.stringify(content));
   try {
     return await run(['edit-many', '--file', tmp, ...extra], what);
@@ -1808,7 +1851,7 @@ async function queueJson(args) {
 
 /** edit-many with the content in a temporary file and the response as JSON (all or nothing); the file is cleaned up afterwards. */
 async function editManyJson(content, extra) {
-  const tmp = path.join(os.tmpdir(), `queue-board-${process.pid}-${crypto.randomUUID()}.json`);
+  const tmp = path.join(tmpDir(), `queue-board-${process.pid}-${crypto.randomUUID()}.json`);
   fs.writeFileSync(tmp, JSON.stringify(content));
   try {
     return await queueJson(['edit-many', '--file', tmp, '--json', ...extra]);
@@ -2117,7 +2160,7 @@ async function focus(b, queueNow) {
       answer: { ok: true, dry: true, changed: queue.changed ?? null, ...f, can: !f.error.length },
     };
   }
-  const tmp = path.join(os.tmpdir(), `queue-board-${process.pid}-${crypto.randomUUID()}.json`);
+  const tmp = path.join(tmpDir(), `queue-board-${process.pid}-${crypto.randomUUID()}.json`);
   fs.writeFileSync(tmp, JSON.stringify(input));
   let r;
   try {
@@ -2333,7 +2376,7 @@ async function planPrioritize(b) {
   const expectValue = b.expect == null ? null : String(b.expect);
   if (expectValue != null && !Number.isFinite(Date.parse(expectValue))) return no('invalid expect');
   const list = prioritizeList(call);
-  const tmp = path.join(os.tmpdir(), `queue-board-${process.pid}-${crypto.randomUUID()}.json`);
+  const tmp = path.join(tmpDir(), `queue-board-${process.pid}-${crypto.randomUUID()}.json`);
   fs.writeFileSync(tmp, JSON.stringify(list));
   let r;
   try {
@@ -2438,7 +2481,7 @@ async function planNew(b) {
   if (!expectValid(b.expect)) return no('invalid expect');
   const { entry, error } = PRIVACY.newEntryFromForm(b.form, b.path);
   if (error.length) return no(error.join('\n'));
-  const tmp = path.join(os.tmpdir(), `queue-board-${process.pid}-${crypto.randomUUID()}.json`);
+  const tmp = path.join(tmpDir(), `queue-board-${process.pid}-${crypto.randomUUID()}.json`);
   fs.writeFileSync(tmp, JSON.stringify(entry));
   try {
     const r = await queueJson(PRIVACY.newEntryArgs(tmp, { dry: b.dry === true, expect: b.expect }));
@@ -2478,7 +2521,7 @@ async function planCapture(b) {
     return no('Quick capture is off (features.plans.inbox in queue.config.json).', 403);
   const c = INBOX.captureInput(b);
   if (c.error.length) return no(c.error.join('\n'));
-  const tmp = path.join(os.tmpdir(), `queue-board-${process.pid}-${crypto.randomUUID()}.json`);
+  const tmp = path.join(tmpDir(), `queue-board-${process.pid}-${crypto.randomUUID()}.json`);
   fs.writeFileSync(tmp, JSON.stringify({ title: c.title, text: c.text }));
   try {
     const r = await queueJson(['plan', 'capture', '--file', tmp, '--json', '--by', 'theBoard']);
@@ -2509,7 +2552,7 @@ async function planProposal(b) {
     return no('The Inbox is off (features.plans.inbox in queue.config.json).', 403);
   const c = PROPOSALS.boardCall(b);
   if (c.error.length) return no(c.error.join('\n'));
-  const tmp = c.file ? path.join(os.tmpdir(), `queue-board-${process.pid}-${crypto.randomUUID()}.json`) : null;
+  const tmp = c.file ? path.join(tmpDir(), `queue-board-${process.pid}-${crypto.randomUUID()}.json`) : null;
   if (tmp) fs.writeFileSync(tmp, JSON.stringify(c.file));
   const done = {
     accept: `Accepted: ${c.id} has left the inbox.`,
@@ -3400,6 +3443,7 @@ const STATIC = {
   '/queueDecisions.js': [path.join('..', 'lib', 'queueDecisions.js'), 'text/javascript; charset=utf-8'],
   // The update banner's rules (lib/queueUpdate.js, the same file the tests use); board/start.js draws it.
   '/queueUpdate.js': [path.join('..', 'lib', 'queueUpdate.js'), 'text/javascript; charset=utf-8'],
+  '/demoOffer.js': [path.join('..', 'lib', 'demoOffer.js'), 'text/javascript; charset=utf-8'],
   // The structured search's rules (lib/boardSearch.js, J6, the same file the tests use); board/search.js draws.
   '/boardSearch.js': [path.join('..', 'lib', 'boardSearch.js'), 'text/javascript; charset=utf-8'],
   // The Timeline tab's layout (lib/timelineLayout.js, T-A, the same file the tests use); board/timeline.js draws.
@@ -3477,6 +3521,166 @@ function readBody(req, limit = BODY_MAX) {
 
 /** The time of the last POST /open (one per 2 s). */
 let lastOpen = 0;
+
+// ---- Demo mode (lib/demoMode.js, lib/demoOffer.js; docs/board.md "Demo mode") ---------------------------------------
+// useDemo(true) points every path the board reads and writes at <dataFolder>/demo/, puts the demo variables into this
+// process's environment (so the lib modules that ask KK.dataFolder(), KK.timeLog(), the config file or the transcripts
+// folder get the demo too), makes the plan document readers again on the demo's documents and drops every cache, so
+// nothing read from the real queue is shown in the demo or the other way. useDemo(false) puts all of it back. Both run
+// inside the write chain (oneAtATime), so no write ever runs half in one mode and half in the other.
+const DEMO_ENV_KEYS = Object.keys(DEMO.demoVariables(DEMO_PATHS));
+let savedEnv = null;
+
+/** Every cache back to its start value (the paths behind them have changed). */
+function resetCaches() {
+  gitStatus = { time: 0, uncommitted: [], error: false, pushedHead: null, sincePush: [] };
+  usageCache = { key: null, list: [] };
+  silentCache = { time: 0, key: null, list: [] };
+  reviewsCache = { key: null, list: [] };
+  spinCache = { time: 0, key: null, list: [] };
+  baseTipCache = { time: 0, tip: null };
+  pushBatchCache = { time: 0, batch: null, blocked: [], fullGate: 'off' };
+  checksCache = { time: 0, data: null, running: false };
+  notBuildingCache = { key: null, list: [] };
+  checksReport = { time: 0, report: null };
+  quick = null;
+  logCache = { key: null, rows: [], events: [], error: null };
+  revertedCache = { time: 0, commits: new Set() };
+  statCache = null;
+  scheduleCache = { key: null, data: null };
+  planCache = null;
+  tidyCache = null;
+  checkCache = null;
+  demoCountCache = { key: null, count: 0, archived: 0 };
+  // The live update watched the old data folder: close it (the next wait watches the new one) and answer the waiters.
+  if (planGuard) {
+    try {
+      planGuard.close();
+    } catch {
+      // error-ignored: a watcher that is already gone needs no closing
+    }
+  }
+  planGuard = null;
+  for (const v of [...PLAN_WAITERS]) v();
+}
+
+function useDemo(on) {
+  if (on === demoOn) return;
+  if (on) {
+    savedEnv = Object.fromEntries(DEMO_ENV_KEYS.map((k) => [k, process.env[k]]));
+    Object.assign(process.env, DEMO.demoVariables(DEMO_PATHS));
+    FOLDER = DEMO_PATHS.data;
+    FILE = DEMO_PATHS.queue;
+    CURSOR = path.join(DEMO_PATHS.data, 'orchestrator.json');
+    PLAN_FILE = DEMO_PATHS.plans;
+    FOLLOW_FILE = path.join(DEMO_PATHS.data, 'follow.json');
+    BASE_HEALTH_FILE = path.join(DEMO_PATHS.data, 'base-health.json');
+    SOURCE_ROOT = DEMO_PATHS.root;
+    GIT_ROOT = DEMO_PATHS.root;
+    TIME_LOG = DEMO_PATHS.timeLog;
+  } else {
+    for (const [k, v] of Object.entries(savedEnv ?? {})) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+    savedEnv = null;
+    ({ FOLDER, FILE, CURSOR, PLAN_FILE, FOLLOW_FILE, BASE_HEALTH_FILE, SOURCE_ROOT, GIT_ROOT, TIME_LOG } = REAL);
+  }
+  demoOn = on;
+  planLead = T.planLeadReader(SOURCE_ROOT, { fs, path });
+  planSearch = T.planDocSearcher(SOURCE_ROOT, { fs, path });
+  resetCaches();
+}
+
+/** The real queue's task count and archive count, read again only when queue.json or the archive changes. */
+let demoCountCache = { key: null, count: 0, archived: 0 };
+/**
+ * state().demo: { on, offer, setting }. The offer (lib/demoOffer.js offerShown) is read from the REAL queue: shown while it
+ * has never had a task, board.demoOffer is on and the project has not said "Don't show again". "Not now" is the
+ * browser's own (one visit, sessionStorage).
+ */
+function demoNow(fresh) {
+  const setting = fresh?.board?.demoOffer !== false;
+  if (demoOn) return { on: true, offer: false, setting };
+  let key = 'none';
+  try {
+    let arch = 0;
+    try {
+      arch = fs.statSync(QARCH.archiveFile(REAL.FOLDER)).mtimeMs;
+    } catch {
+      // error-ignored: no archive yet
+    }
+    key = `${fs.statSync(REAL.FILE).mtimeMs}:${arch}`;
+  } catch {
+    // error-ignored: no queue file yet counts as no task
+  }
+  if (demoCountCache.key !== key) {
+    let count = 0;
+    let archived = 0;
+    try {
+      count = (JSON.parse(fs.readFileSync(REAL.FILE, 'utf8')).tasks ?? []).length;
+      archived = QARCH.load(REAL.FOLDER).tasks.length;
+    } catch {
+      // error-ignored: an unreadable queue offers nothing (the board shows its own error)
+      count = 1;
+    }
+    demoCountCache = { key, count, archived };
+  }
+  const offer = DEMO_OFFER.offerShown({
+    setting,
+    dismissed: DEMO.readOffer(REAL.FOLDER).dismissed,
+    taskCount: demoCountCache.count,
+    archivedCount: demoCountCache.archived,
+  });
+  return { on: false, offer, setting };
+}
+
+/**
+ * POST /api/demo { action: enter | reset | leave | dismiss }: the offer card, the banner and the Settings row. Runs in
+ * the write chain. enter and reset make the demo folder fresh from the snapshot (lib/demoMode.js build: refused when
+ * the folder is or holds a link); leave points the board back at the real queue and deletes nothing.
+ */
+function demoAction(b) {
+  const action = String(b?.action ?? '');
+  const ok = (message) => ({ status: 200, answer: { ok: true, message, demo: demoOn } });
+  const refused = (message) => ({ status: 409, answer: { ok: false, message } });
+  if (action === 'dismiss') {
+    const r = DEMO.writeDismissed(REAL.FOLDER);
+    if (!r.ok) return { status: 500, answer: { ok: false, message: `Could not write demo-offer.json (${r.error}).` } };
+    quick = null;
+    return ok(DEMO_OFFER.TEXTS.neverDone);
+  }
+  if (action === 'leave') {
+    useDemo(false);
+    console.log(`${new Date().toLocaleTimeString('en-GB')} demo mode off: the board shows your queue again`);
+    return ok('Back on your board.');
+  }
+  if (action === 'enter' || action === 'reset') {
+    if (action === 'reset' && !demoOn) return refused('Demo mode is not on.');
+    // The demo gets the real project's mode (read before the switch and kept), so a lite user sees a lite demo board.
+    if (!demoOn) realConfig = KK.config({ fresh: true });
+    const mode = realConfig?.mode === 'lite' ? 'lite' : 'full';
+    const built = DEMO.build(REAL.FOLDER, { mode });
+    if (!built.ok) return refused(built.message);
+    if (demoOn) resetCaches();
+    else useDemo(true);
+    console.log(`${new Date().toLocaleTimeString('en-GB')} demo mode ${action === 'reset' ? 'reset' : 'on'} (${DEMO_PATHS.root})`);
+    return ok(action === 'reset' ? 'The demo is back to its start.' : 'Demo board on.');
+  }
+  return { status: 400, answer: { ok: false, message: `unknown demo action ${action.slice(0, 40)}` } };
+}
+/** The real project's config, read when demo mode is entered (QUEUE_CONFIG points at the demo while it is on). */
+let realConfig = null;
+
+/** Every POST in the write chain: /api/demo itself, then the demo allow-list while demo mode is on, then write(). */
+async function writeOrDemo(filePath, b) {
+  if (filePath === '/api/demo') return demoAction(b);
+  if (demoOn) {
+    const no = DEMO.refusal('POST', filePath, b);
+    if (no) return no;
+  }
+  return write(filePath, b);
+}
 
 const server = http.createServer(async (req, res) => {
   try {
@@ -3584,12 +3788,22 @@ const server = http.createServer(async (req, res) => {
         message: `The key is missing or old. Open the board again with ${require('./lib/projectRoot.js').cliCommand()} board open.`,
       });
 
+    // Demo mode (lib/demoMode.js refusal): every read that would run gates, git, the network or a start is refused here,
+    // before any handler, with "Not in demo mode" (409). The allow-list is the module's; anything not on it is refused.
+    if (demoOn && req.method !== 'POST') {
+      const no = DEMO.refusal(req.method === 'HEAD' ? 'GET' : req.method, filePath);
+      if (no) return json(res, no.status, no.answer);
+    }
+
     if (req.method === 'GET' && filePath === '/api/state') {
       try {
         const t = state();
-        if (url.searchParams.get('version') === t.version)
-          return json(res, 200, { version: t.version, unchanged: true });
-        return json(res, 200, { version: t.version, data: t.data });
+        // The demo field is outside the state cache (the offer follows the real queue and demo-offer.json), so it is part
+        // of the version: a change in it reaches the open board on its next poll.
+        const demo = demoNow(demoOn ? realConfig : KK.config({ fresh: true }));
+        const version = `${t.version}|demo:${demo.on ? 1 : 0}${demo.offer ? 1 : 0}${demo.setting ? 1 : 0}`;
+        if (url.searchParams.get('version') === version) return json(res, 200, { version, unchanged: true });
+        return json(res, 200, { version, data: { ...t.data, demo } });
       } catch (e) {
         return json(res, 503, {
           ok: false,
@@ -3809,7 +4023,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (!b || typeof b !== 'object' || Array.isArray(b))
       return json(res, 400, { ok: false, message: 'invalid body' });
-    const r = await oneAtATime(() => write(filePath, b));
+    const r = await oneAtATime(() => writeOrDemo(filePath, b));
     return json(res, r.status, r.answer);
   } catch (e) {
     return json(res, 500, { ok: false, message: `internal error (${e?.message ?? e})` });
