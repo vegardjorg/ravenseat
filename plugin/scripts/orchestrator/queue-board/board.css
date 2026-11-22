@@ -3345,6 +3345,11 @@ body.with-option-line .toaster {
   border: 3px solid var(--color-primary);
 }
 
+/* deps M4: review has its own ring colour; the word "in review" under the title says it too. */
+.graph-draw .t-review {
+  border: 3px solid var(--color-tertiary);
+}
+
 .graph-draw .t-sp {
   border-radius: var(--radius);
   border-color: var(--color-secondary);
@@ -3556,6 +3561,11 @@ body.with-option-line .toaster {
 
 .task.t-active .ring {
   stroke: var(--color-primary);
+  stroke-width: 3.5;
+}
+
+.task.t-review .ring {
+  stroke: var(--color-tertiary);
   stroke-width: 3.5;
 }
 

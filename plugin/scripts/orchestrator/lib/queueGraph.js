@@ -139,7 +139,9 @@
     if (col === 'batch') return 'batch';
     if (col === 'blocked') return 'blocked';
     if (col === 'queue') return k.ready ? 'ready' : 'blocked';
-    return 'active'; // running, picked, review, outside queue
+    // deps M4: review is its own state, so the graph never calls a task in review "in progress".
+    if (col === 'review' || k.status === 'review') return 'review';
+    return 'active'; // running, picked, outside queue
   }
 
   const compare = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
@@ -765,6 +767,7 @@
     ready: 'ready now',
     blocked: 'blocked',
     active: 'in progress',
+    review: 'in review',
     qa: 'done, waiting for QA',
     done: 'done',
     batch: 'in the batch queue: not started alone, packed into a track',
@@ -773,6 +776,7 @@
     ready: 'ready',
     blocked: 'blocked',
     active: 'in progress',
+    review: 'in review',
     qa: 'waiting for QA',
     done: 'done',
     batch: 'batch queue',

@@ -178,7 +178,7 @@ describe('buildGraph: which tasks are shown', () => {
     expect(g.edges).toEqual([]);
   });
 
-  it('status in the ring: ready, blocked, active (running/picked/review) and qa (done but waiting on QA)', () => {
+  it('status in the ring: ready, blocked, active (running/picked), review (its own state, deps M4) and qa (done but waiting on QA)', () => {
     const g = G.buildGraph(
       data([
         { id: 'K1', status: 'running' },
@@ -193,7 +193,20 @@ describe('buildGraph: which tasks are shown', () => {
     expect(node(g, 'K2').state).toBe('blocked');
     expect(node(g, 'K3').state).toBe('qa');
     expect(node(g, 'K4').state).toBe('ready');
-    expect(node(g, 'K5').state).toBe('active');
+    expect(node(g, 'K5').state).toBe('review');
+    // The column says review too, whatever the status field holds.
+    const c = G.buildGraph({
+      columns: {
+        queue: [{ id: 'C2', title: 'C2', depends_on: ['C1'], ready: false }],
+        batch: [],
+        blocked: [],
+        inProgress: [],
+        review: [{ id: 'C1', title: 'C1', status: 'picked' }],
+        built: [],
+      },
+      inbox: { question: [] },
+    });
+    expect(node(c, 'C1').state).toBe('review');
   });
 
   it('radius: the area follows the minutes, with a min and max limit', () => {

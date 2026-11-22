@@ -188,6 +188,8 @@
       chunk('t-ready', 'ready now'),
       chunk('t-blocked', 'blocked'),
       chunk('t-active', 'in progress'),
+      // deps M4: review has its own ring and word, so it is never read as "in progress".
+      chunk('t-review', 'in review'),
       // The batch queue has its own badge (dotted ring and "S").
       chunk('t-batch', 'in the batch queue (packed into a track)'),
       chunk('t-sp', 'owner question'),

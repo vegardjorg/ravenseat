@@ -245,6 +245,7 @@ describe('legend samples with a visible edge', () => {
     ['t-ready', '.task .ring'],
     ['t-blocked', '.task.t-blocked .ring'],
     ['t-active', '.task.t-active .ring'],
+    ['t-review', '.task.t-review .ring'],
     ['t-batch', '.task.t-batch .ring'],
     ['t-sp', '.sp .sp-box'],
   ];
@@ -375,5 +376,42 @@ describe('the empty state is one plain sentence (deps M2)', () => {
     const switches = [...empty.querySelectorAll('.graph-switch')].map((l) => l.textContent);
     expect(switches).toEqual(['Show standalone']);
     empty.remove();
+  });
+});
+
+describe('Review shows as review, not "in progress" (deps M4)', () => {
+  it('a task in review has its own state, ring, words and legend entry', () => {
+    const w = window as unknown as { QueueGraphView: { draw: (c: unknown) => void } };
+    const host = document.createElement('main');
+    document.body.append(host);
+    const d = data();
+    // R-1 waits in review; R-2 waits on it, so R-1 is part of a chain and drawn.
+    (d.columns as Record<string, unknown[]>).review = [
+      { id: 'R-1', title: 'Title R-1', project: 'a', status: 'review', estimate: 30, ready: false, depends_on: [] },
+    ];
+    d.columns.queue.push({ id: 'R-2', title: 'Title R-2', project: 'a', status: 'waiting', estimate: 30, ready: false, depends_on: ['R-1'] } as never);
+    w.QueueGraphView.draw({
+      el,
+      main: host,
+      version: 2,
+      filterKey: 'review',
+      data: d,
+      visible: () => true,
+      drawOnNew: () => {},
+      openPanel: () => {},
+      openDecisions: () => {},
+    });
+    const r1 = host.querySelector('.graph-svg .node[data-id="R-1"]') as SVGGElement;
+    expect(r1.classList.contains('t-review')).toBe(true);
+    expect(r1.classList.contains('t-active')).toBe(false);
+    expect(r1.getAttribute('aria-label')).toMatch(/^Title R-1, R-1, in review, /);
+    expect(r1.querySelector('.label-meta')?.textContent).toBe('R-1 · in review');
+    // The review ring is drawn, and differs from the in-progress ring (text says it too, colour is not alone).
+    expect(token(rule('.task.t-review .ring').stroke)).toBeTruthy();
+    expect(rule('.task.t-review .ring').stroke).not.toBe(rule('.task.t-active .ring').stroke);
+    const legend = [...host.querySelectorAll('.graph-draw li')].map((l) => l.textContent);
+    expect(legend).toContain('in review');
+    expect(legend).toContain('in progress');
+    host.remove();
   });
 });
