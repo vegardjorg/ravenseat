@@ -228,6 +228,9 @@ const REQUIRES = Object.freeze({
   'catalog.gateAfter': ['learning.proposals', 'catalog.checks'],
   // board/top.js applyFeatures: the Cloud tab comes with the cloud module.
   'board.showCloud': ['features.cloud'],
+  // board/timeline.js: with the Timeline tab off nothing is fetched or drawn, so its horizon and rows are not read.
+  'board.timelineHorizonDays': ['board.timeline'],
+  'board.timelineRows': ['board.timeline'],
   // cli/checks.mjs canaryFacts: with the canary off no transcript is read, so no shape is logged.
   'client.shapeLog': ['client.canary'],
   // lib/queueConfig.js features: a part is off while its parent is off.
@@ -1368,6 +1371,24 @@ const SETTINGS = Object.freeze([
   row('board.quickFilters', 'board', 'onoff', 'Quick filter buttons',
     'Buttons over the columns: Changed 24 h, Older than usual and Red gate. Each filters the cards; several combine. ' +
     'On in full mode, off in lite.', { defaultByMode: { lite: false, full: true } }),
+  // Roadmap TIDSLINJE T-A (gantt investigation 18.11, section 6). Friction: none for the work; it is one more tab that
+  // only reads the schedule (the same simulation as ravenseat schedule) and never changes the queue, costs no tokens.
+  // On in full since it answers "when is this step done"; off in lite, where there are no focus steps to show.
+  row('board.timeline', 'board', 'onoff', 'Timeline tab',
+    'A Timeline tab: what ran in the last day and what runs now, then the plan played forward as rough bars per focus ' +
+    'step (or per project), with a now line, a table view, and the tasks that cannot start with the reason. Read only. ' +
+    'On in full mode, off in lite.', { defaultByMode: { lite: false, full: true } }),
+  // T-A. Friction: none; it only sets how far the chart reaches. 3 days by default because beyond a few days new tasks
+  // rank in ahead and the plan is mostly noise (investigation section 2). 1 to 14; a value outside is clamped.
+  row('board.timelineHorizonDays', 'board', 'integer', 'Timeline: days ahead',
+    'How many days ahead the Timeline shows, 1 to 14 (3 by default). Tasks that start later are listed in the table ' +
+    'and counted on their row. The plan gets weaker the further out it goes.'),
+  // T-A. Friction: none; it only picks the rows. step by default because the focus steps are what decide the order;
+  // project is how many owners think. A viewer can switch on the tab for their own browser.
+  row('board.timelineRows', 'board', 'choice', 'Timeline: rows',
+    'step: one row per focus step, in the focus order (what decides what runs first). project: one row per project. ' +
+    'The ran and running part is always first. Each browser can switch on the tab itself; this is the default.',
+    { choices: ['step', 'project'] }),
   // Roadmap 3e AW-2 (owner answers 21.11 as recommended). Friction: display only, it never stops or slows work; it takes
   // some height at the top of Decisions, hidden when nothing happened and closable for the visit. On by default since
   // it answers the first question after a pause. Not a guard.

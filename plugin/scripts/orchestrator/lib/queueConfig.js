@@ -886,6 +886,13 @@ const STANDARD = Object.freeze({
     // Its window: last-seen (the seen mark in <dataFolder>/seen.json, 24 h when there is none), 24h or 7d. A browser
     // may pick another choice for itself on the band; this is the default.
     sinceLastWindow: 'last-seen',
+    // The Timeline tab (roadmap TIDSLINJE T-A): the schedule (lib/queueSchedule.js) as a read-only chart and table.
+    // Display only. Off in lite unless set (resolveOwn below), like the quick filters. Read fresh by the board server.
+    timeline: true,
+    // How many days ahead the Timeline shows (1 to 14; boardTimeline clamps). Beyond a few days the plan is mostly noise.
+    timelineHorizonDays: 3,
+    // The Timeline's rows: 'step' (one per focus step, what decides the order) or 'project'. A viewer can switch on the tab.
+    timelineRows: 'step',
   },
   // The modules that can be switched off (FEATURES above): { "cloud": true } turns one on. Unknown keys are ignored.
   features: FEATURES,
@@ -992,6 +999,8 @@ function resolveOwn(k, own = {}) {
     if (own.features?.focus === undefined) k.features = { ...k.features, focus: false };
     // The lite board stays simple: no quick filter row (J4, owner answer 6).
     if (own.board?.quickFilters === undefined) k.board = { ...k.board, quickFilters: false };
+    // Nor a Timeline tab (spec section 6: on in full, off in lite).
+    if (own.board?.timeline === undefined) k.board = { ...k.board, timeline: false };
   }
   // learning.idleGuardDays is the one row for the idle guard line (0x L2); the old switch off still means off.
   if (own.learning?.idleGuardInfo === false) k.learning = { ...k.learning, idleGuardDays: 0 };
@@ -1143,6 +1152,29 @@ function boardSince(cfg = config()) {
   };
 }
 
+/** The Timeline's row choices (board.timelineRows) and the horizon's bounds in days (board.timelineHorizonDays). */
+const TIMELINE_ROWS = Object.freeze(['step', 'project']);
+const TIMELINE_HORIZON = Object.freeze({ min: 1, max: 14 });
+/**
+ * The Timeline tab (roadmap TIDSLINJE T-A): board.timeline, .timelineHorizonDays (a whole number, clamped to 1..14) and
+ * .timelineRows, each a real value or its STANDARD default (lite already resolved by resolveOwn). Read fresh by the
+ * board server, so `settings set` reaches an open board on its next poll.
+ * @param {object|null} [cfg] the configuration (default: config())
+ * @returns {{ on: boolean, horizonDays: number, rows: 'step'|'project' }}
+ */
+function boardTimeline(cfg = config()) {
+  const b = isObject(cfg?.board) ? cfg.board : {};
+  const h = b.timelineHorizonDays;
+  return {
+    on: typeof b.timeline === 'boolean' ? b.timeline : STANDARD.board.timeline,
+    horizonDays:
+      typeof h === 'number' && Number.isFinite(h)
+        ? Math.min(TIMELINE_HORIZON.max, Math.max(TIMELINE_HORIZON.min, Math.round(h)))
+        : STANDARD.board.timelineHorizonDays,
+    rows: TIMELINE_ROWS.includes(b.timelineRows) ? b.timelineRows : STANDARD.board.timelineRows,
+  };
+}
+
 /** The highest plans.roadmapFoldAfter (a larger number is taken as this; 0 already means never fold). */
 const ROADMAP_FOLD_MAX = 500;
 /**
@@ -1216,5 +1248,6 @@ module.exports = {
   boardDisplay,
   SINCE_WINDOWS,
   boardSince,
+  boardTimeline,
   plansView,
 };

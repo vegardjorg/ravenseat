@@ -44,6 +44,7 @@ const PALETTE_VIEWS = [
   { tab: 'show-lanes', what: 'One row per project', cmd: 'ravenseat show --grouped' },
   { tab: 'show-plan', what: 'In focus, not in focus and on pause', cmd: 'ravenseat focus' },
   { tab: 'show-graph', what: 'Which tasks wait on which', cmd: null },
+  { tab: 'show-timeline', what: 'What ran, what runs and the rough plan ahead', cmd: 'ravenseat schedule' },
   { tab: 'show-cloud', what: 'Tasks that can run in the cloud', cmd: 'ravenseat cloud-bundles' },
   { tab: 'show-statistics', what: 'Throughput, lead time and usage', cmd: 'ravenseat cost' },
   { tab: 'show-checks', what: 'What the project has for checking its code', cmd: 'ravenseat checks' },

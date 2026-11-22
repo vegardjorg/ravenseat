@@ -233,6 +233,8 @@ const getAll = () => {
   update();
   if (t.view === 'statistics') getStatistics();
   if (t.view === 'cloud') getCloudQueue();
+  // The Timeline (T-A): "unchanged" until the queue or the minute moves (the running bars and the now line).
+  if (t.view === 'timeline') getTimeline();
 };
 setInterval(() => {
   if (!document.hidden) getAll();

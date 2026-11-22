@@ -32,6 +32,8 @@
     <script src="/queueDecisions.js" defer></script>
     <!-- The structured search's rules (lib/boardSearch.js, J6), before board/cards.js and board/search.js. -->
     <script src="/boardSearch.js" defer></script>
+    <!-- The Timeline tab's layout (lib/timelineLayout.js, T-A), before board/timeline.js. -->
+    <script src="/timelineLayout.js" defer></script>
     <!-- The board itself: classic scripts in board/ that share one scope, in this order (start.js runs the board).
          Each must come after the scripts whose names it uses while it loads (see docs/board.md). -->
     <script src="/board/core.js" defer></script>
@@ -52,6 +54,7 @@
     <script src="/board/interact.js" defer></script>
     <script src="/board/top.js" defer></script>
     <script src="/board/cloud.js" defer></script>
+    <script src="/board/timeline.js" defer></script>
     <script src="/board/route.js" defer></script>
     <script src="/board/keys.js" defer></script>
     <script src="/board/palette.js" defer></script>
@@ -222,6 +225,20 @@
             title="Which tasks are waiting on which"
           >
             Dependencies
+          </button>
+          <!-- T-A: hidden until the state says board.timeline is on (board/timeline.js applyTimelineTab). -->
+          <button
+            type="button"
+            id="show-timeline"
+            class="toggles-button"
+            role="tab"
+            aria-controls="board"
+            aria-selected="false"
+            tabindex="-1"
+            hidden
+            title="What ran, what runs now and the plan played forward, as rough bars or a table"
+          >
+            Timeline
           </button>
           <button
             type="button"
