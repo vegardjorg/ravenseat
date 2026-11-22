@@ -782,10 +782,11 @@
    * What the owner decided since the start of today (local time), newest first, from the queue's own timestamps:
    * resolutions (time, by), approved (not by the auto-accept), qa_ok (not auto), an answer to what a track asked (the round
    * it made), and the remarks of a decline and a QA deviation.
+   * `from` (ms) starts the list at a window instead (the "Since you left" window, roadmap 3e AW-8).
    * @returns {{ verb: string, id: string, what: string, at: string, by: string|null }[]}
    */
-  function decidedToday(queue, { now = Date.now(), max = 50 } = {}) {
-    const from = dayStart(now);
+  function decidedToday(queue, { now = Date.now(), max = 50, from: start = null } = {}) {
+    const from = typeof start === 'number' && Number.isFinite(start) ? start : dayStart(now);
     const today = (iso) => {
       const ms = Date.parse(iso ?? '');
       return Number.isFinite(ms) && ms >= from && ms <= now + 60_000;

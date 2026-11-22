@@ -50,6 +50,21 @@ const HELP = [
     ],
   },
   {
+    id: 'since',
+    title: 'Since you left',
+    text: [
+      'The band at the top of Decisions sums up what happened while you were away: merged, recovered without you ' +
+        '(fix rounds and base fixes that ended green with no action from you), blocked now, waiting on you and the ' +
+        'session cost, then the latest events with failures marked. An event with a task opens its card. The band is ' +
+        'hidden when nothing happened.',
+      '"Since last seen" starts at your seen mark, kept by the queue (not by this browser), so ravenseat since shows ' +
+        'the same. The mark moves when Decisions has been on screen for a few seconds with the band shown, when you ' +
+        'press "Mark seen", or with ravenseat since --mark; never when a tab is merely hidden. Without a mark, or one ' +
+        'older than 7 days, it shows the last 24 hours. "Decided" below follows the same window. Off in Settings, ' +
+        'Board: "Since you left".',
+    ],
+  },
+  {
     id: 'panel',
     title: 'The task panel',
     text: [

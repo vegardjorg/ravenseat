@@ -26,6 +26,7 @@ ravenseat cost                      # USD per merged change, cost per task (all 
 ravenseat cost --reads              # the files tracks most often read whole: candidates for a catalog excerpt or a split
 ravenseat calibrate                 # how far minute and cost estimates are off, per class
 ravenseat decide                    # everything waiting on you, most impact first (/ravenseat:decide walks it; the board's Decisions room is the same list)
+ravenseat since [--window last-seen|24h|7d] [--json] [--mark]   # what happened while you were away: Done, Stuck, Waiting on you, Spend and the latest events (the board's "Since you left"); --mark moves the seen mark to now
 ravenseat proposals                 # the proposals waiting, and the auto-accept rules
 ravenseat approve <ID>              # lets a proposal start (`ravenseat set <ID> cancelled` declines it)
 ravenseat conflicts                 # predicted merge conflicts between running tracks and the base

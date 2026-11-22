@@ -5948,6 +5948,145 @@ body.stale .summary.stuck::before {
   color: var(--color-on-surface);
   overflow-wrap: anywhere;
 }
+/* "Since you left" (roadmap 3e AW-2): a calm band under the Decisions head, the card surface with a quiet border. The
+   numbers wrap on a phone; failures carry the word "Failed", so color is never the only signal. */
+.since {
+  display: flex;
+  flex-direction: column;
+  gap: var(--distance-sm);
+  padding: var(--distance-md);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-container-lowest);
+  color: var(--color-on-surface);
+  min-width: 0;
+}
+.since-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--distance-xs) var(--distance-sm);
+}
+.since-title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+.since-window {
+  font-size: var(--text-sm);
+  color: var(--color-on-surface-variant);
+}
+.since-tools {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--distance-sm);
+}
+.since-window-choice {
+  min-height: 36px;
+  padding: 0 var(--distance-sm);
+  border: 1px solid var(--color-outline);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-container-lowest);
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--color-on-surface);
+}
+.since-close {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: transparent;
+  color: var(--color-on-surface-variant);
+  cursor: pointer;
+}
+.since-close:hover {
+  background-image: linear-gradient(var(--state-hover), var(--state-hover));
+}
+.since-close svg {
+  width: 16px;
+  height: 16px;
+}
+.since-window-choice:focus-visible,
+.since-close:focus-visible,
+.since-text a:focus-visible {
+  outline: var(--focus);
+  outline-offset: 2px;
+}
+.since-note {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-on-surface-variant);
+}
+.since-numbers {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--distance-xs) var(--distance-lg);
+}
+.since-number {
+  display: flex;
+  align-items: baseline;
+  gap: var(--distance-xs);
+  font-size: var(--text-sm);
+  color: var(--color-on-surface-variant);
+}
+.since-number strong {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-on-surface);
+}
+.since-number.warn strong {
+  color: var(--color-on-tone-danger);
+}
+.since-events summary {
+  cursor: pointer;
+  font-size: var(--text-sm);
+  color: var(--color-on-surface-variant);
+}
+.since-list {
+  list-style: none;
+  margin: var(--distance-sm) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--distance-xs);
+}
+.since-event {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--distance-sm);
+  font-size: var(--text-xs);
+  color: var(--color-on-surface-variant);
+  min-width: 0;
+}
+.since-time {
+  flex: none;
+  min-width: 5.5em;
+  font-variant-numeric: tabular-nums;
+}
+.since-text {
+  color: var(--color-on-surface);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.since-text a {
+  color: var(--color-primary);
+}
+.badge.since-fail {
+  background: var(--color-tone-danger);
+  color: var(--color-on-tone-danger);
+}
 /* "Not building" at the bottom of Decisions (roadmap 0f): folded like "Decided today", with the Tasks room's search. */
 .decide-nb .decide-hint {
   margin: var(--distance-sm) 0;

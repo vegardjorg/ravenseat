@@ -90,6 +90,11 @@
 //         owner's rules would take), INSPECTION (a proposal the hourly scan would add). --include-owner adds FOR THE
 //         OWNER: open questions and finished cloud tracks waiting on a yes, never ACTION. Writes only the orchestrator
 //         marker; never starts, receives, merges, accepts or collects. Exit 2 on a usage error. cli/pulseCheck.mjs)
+//   node scripts/orchestrator/queue.mjs since [--window last-seen|24h|7d] [--json] [--mark] [--max <n>]
+//        (what happened while you were away: Done, Stuck, Waiting on you and Spend, one line each, and the latest events
+//         with failures marked; the same numbers as the board's "Since you left" band (lib/awaySummary.js). The window is
+//         since the seen mark (<dataFolder>/seen.json), 24 hours without one; --mark sets the mark to now after printing.
+//         Read only without --mark. Exit 2 on a usage error. cli/since.mjs)
 //
 // Owner questions:
 //   node scripts/orchestrator/queue.mjs resolve <question> [...] [--answer "..."] [--by "..."]   (the owner's answer has come: with
@@ -1036,6 +1041,8 @@ if (command === 'init') {
   (await import('./cli/cloud.mjs')).cmdExternal();
 } else if (command === 'pulse-check') {
   (await import('./cli/pulseCheck.mjs')).cmdPulseCheck();
+} else if (command === 'since') {
+  (await import('./cli/since.mjs')).cmdSince();
 } else if (command === 'orchestrator') {
   (await import('./cli/orchestrator.mjs')).cmdOrchestrator();
 } else if (command === 'deliveries') {
@@ -1104,7 +1111,7 @@ if (command === 'init') {
     'Use: ravenseat <init|add|approve|ask|show|next|start|set|edit|resolve|resolutions|question|limit|state|trackFile|' +
       'projects|project|edit-many|pickable|pick|deliver|release|qa|external|orchestrator|cloud|cloud-package|batch|' +
       'area|areas|focus|park|continue|rank|undo|classify|plan|fill|receive|merge|info|explain|activeOnes|next-migr|migr|' +
-      'capacity|compact|diagnose|doctor|instructions|machine|finding|cost|handover|deliveries|resume|attempt|follow|triage|wait|decide|unlock|surface|catalog|owner-log|settings|wiring|review-item|issues|pr|release-notes|pulse-check> ...  (see the top of the file)',
+      'capacity|compact|diagnose|doctor|instructions|machine|finding|cost|handover|deliveries|resume|attempt|follow|triage|wait|decide|unlock|surface|catalog|owner-log|settings|wiring|review-item|issues|pr|release-notes|pulse-check|since> ...  (see the top of the file)',
     command ? 1 : 0,
   );
 }
