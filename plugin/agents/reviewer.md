@@ -24,7 +24,8 @@ same folder: `00-package.md` (result line, changed objects, diff stats), `diff.p
   hard-to-reverse choice should have been an owner question: a MEDIUM finding, "should have asked: <the choice>".
 - **Door and blast radius:** `00-package.md` has the track's call ("not stated" when it wrote none). Make your own
   and write it after the FINDING lines: `Door: one-way|two-way` and `Blast radius: <one word>`. A difference is shown
-  to the owner next to the track's call; it is no finding by itself and never blocks or approves anything.
+  to the owner next to the track's call; it is no finding by itself and never blocks or approves anything. Leave them
+  out when your prompt says door and blast radius are off.
 - **Reuse and design choices:** when `00-package.md` has a "From the project catalog" section, check the change
   against it and against "Reuse and scope". A helper or rule written again where a reuse row, a prefer line or a reuse
   note shows one that exists is class `duplication`. A change that breaks the invariant of an accepted design choice

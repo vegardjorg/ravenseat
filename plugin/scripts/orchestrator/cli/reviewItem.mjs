@@ -98,7 +98,8 @@ export function registerReviewItems(id, reports) {
  */
 export function registerReviewerDanger(o) {
   try {
-    if (!o?.merge_danger) return;
+    // mergeDanger.show off (lib/doorShow.js): nothing to record, even on a record kept from before the switch.
+    if (!o?.merge_danger || !require('./lib/doorShow.js').on(CONFIG)) return;
     const MDG = require('./lib/mergeDanger.js');
     const want = new Set(Array.isArray(o.review_reviewers) ? o.review_reviewers : []);
     const calls = MDG.reviewerCalls(

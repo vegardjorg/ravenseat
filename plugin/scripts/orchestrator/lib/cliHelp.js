@@ -71,6 +71,8 @@ const LITE_GROUPS = [
       { cmd: 'fill', usage: 'fill --scratchpad <dir>', text: 'start the next tasks as agents' },
       { cmd: 'receive', usage: 'receive <id>', text: 'take in a finished task' },
       { cmd: 'merge', usage: 'merge <id>', text: 'merge it and mark it done' },
+      // Friction review 22.11 (Q2): the lite user is the one who cannot `git revert`; undo asks y/N and never pushes.
+      { cmd: 'undo', usage: 'undo <id>', text: 'take a merged task back out (asks first)' },
     ],
   },
   {
@@ -230,6 +232,14 @@ function unknownCommandMessage(word, candidates, ravenseat = 'ravenseat') {
   return `Unknown command "${word}".${mean} See ${ravenseat} help.`;
 }
 
+/**
+ * The first line of a bare `undo` (the changelog undo) in text form. The same word with an id takes a merged task back
+ * out (cli/undo.mjs), so the bare form says which one it is and where the other lives. Not printed with --json.
+ */
+function undoHint(ravenseat = 'ravenseat') {
+  return `Undo the last queue edit. To take a merged task back out: ${ravenseat} undo <id>.`;
+}
+
 /** Every word ravenseat accepts as a command: the queue commands, the aliases, the scripts and help. */
 function knownCommands(scripts = []) {
   return [...QUEUE_COMMANDS, ...Object.keys(ALIASES), ...scripts, 'help'];
@@ -249,5 +259,6 @@ module.exports = {
   editDistance,
   suggest,
   unknownCommandMessage,
+  undoHint,
   knownCommands,
 };

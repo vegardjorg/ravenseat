@@ -1098,7 +1098,8 @@ if (command === 'init') {
   // ravenseat undo <id>: revert the task's merge (GS-3); bare `undo` is the changelog undo below
   await (await import('./cli/undo.mjs')).cmdUndoMerge();
 } else if (command === 'undo') {
-  (await import('./cli/taskEdit.mjs')).cmdUndo();
+  // The changelog undo (cli/taskEdit.mjs cmdUndo), with one line first that points to undo <id> (cli/undo.mjs)
+  await (await import('./cli/undo.mjs')).cmdUndoLast();
 } else if (command === 'plan') {
   // ---- The plan register (see the top of the file and lib/queuePlan.js) ----
   (await import('./cli/plans.mjs')).planCommand();

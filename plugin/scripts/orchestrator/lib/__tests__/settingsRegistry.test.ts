@@ -310,6 +310,11 @@ describe('requires: a row that has an effect only while another one is on (M3)',
     expect(withRequires().length).toBe(Object.keys(R.REQUIRES).length);
   });
 
+  // Friction review 22.11: board/palette.js opens on Ctrl+K only while board.shortcuts is on too, so Settings marks it.
+  it('the command palette requires the keyboard shortcuts', () => {
+    expect(reqOf(byKey.get('board.palette'))).toEqual(['board.shortcuts']);
+  });
+
   it('no cycles: following requires never comes back to the row', () => {
     const walk = (key: string, path: string[]): void => {
       expect(path, `a cycle: ${[...path, key].join(' -> ')}`).not.toContain(key);
@@ -482,6 +487,17 @@ describe('lite scope in the registry follows what lite really has (finding 5)', 
     expect(row('helpers').modes).toEqual(['lite', 'full']);
     expect(row('limits.maxDPlus').modes).toEqual(['full']);
     expect(row('limits.maxPerDomain').modes).toEqual(['full']);
+  });
+
+  // Friction review 22.11: rows that do nothing in lite are full only there, with the reason in one line.
+  it('the plan review needs the intake triage (off in lite) and plans.checkpoint is skipped by the lite skill', () => {
+    const row = (k: string) => ROWS.find((x) => x.key === k) as Row;
+    for (const k of ['planReview.mode', 'planReview.classes']) {
+      expect(row(k).modes, k).toEqual(['full']);
+      expect(row(k).fullWhy, k).toMatch(/intake triage is off in lite/);
+    }
+    expect(row('plans.checkpoint').modes).toEqual(['full']);
+    expect(row('plans.checkpoint').fullWhy).toMatch(/lite/);
   });
 });
 

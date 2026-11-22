@@ -44,7 +44,7 @@ branch, merging and pushing; you only do your track.
 - **Door and blast radius:** `track-result.md` has two lines, `Door: one-way` or `Door: two-way` (one-way: hard to
   undo once merged or used, such as a data, schema or public API change) and `Blast radius: <one word>` (what breaks if
   it is wrong, such as `local`, `module`, `users` or `data`). The owner sees them on the delivery; they never block or
-  approve anything.
+  approve anything. Leave them out when the mission says door and blast radius are off.
 - Commit only on your own branch with `git commit -- <files>`. NEVER push, merge your branch into the base branch, run
   migration commands (write the file; the owner decides when it runs), start dev servers or previews.
 - Your answer to the orchestrator (last answer) is at most about 1,500 characters: the RESULT line first, at most 5

@@ -160,6 +160,8 @@ const CATALOG = require('./lib/catalog.js');
 const NOT_BUILDING = require('./lib/notBuilding.js');
 // The sensitive zones a task meets (PG-5, lib/catalogZones.js): the badge on the card and the panel fact.
 const ZONES = require('./lib/catalogZones.js');
+// The switch for door and blast radius (mergeDanger.show): off hides a stored record from every card.
+const DOOR = require('./lib/doorShow.js');
 
 /**
  * The accepted zones per task for the board (PG-5), or null when zones.detect is off or no zone exists. The board reads
@@ -1063,10 +1065,13 @@ function state() {
   // zones.detect (PG-5): read fresh and part of the key. The zones themselves live in the decisions folder, whose names,
   // times and the owner's record are already notBuilding.key.
   const zonesDetect = ZONES.zonesSetup(fresh).detect;
+  // mergeDanger.show (lib/doorShow.js): read fresh and part of the key; off hides a stored door and blast radius.
+  const doorOn = DOOR.on(fresh);
   if (
     quick &&
     quick.notBuildingKey === notBuilding.key &&
     quick.zonesDetect === zonesDetect &&
+    quick.doorOn === doorOn &&
     quick.listening === listening &&
     quick.panelMode === panelMode &&
     quick.displayKey === displayKey &&
@@ -1080,7 +1085,7 @@ function state() {
     quick.stat === stat
   )
     return quick;
-  const queue = JSON.parse(fs.readFileSync(FILE, 'utf8'));
+  const queue = DOOR.hideStored(JSON.parse(fs.readFileSync(FILE, 'utf8')), fresh);
   const branches = {};
   for (const o of queue.tasks ?? []) {
     if (o.status !== 'picked') continue;
@@ -1206,6 +1211,7 @@ function state() {
     displayKey,
     captureAnswers,
     zonesDetect,
+    doorOn,
     notBuildingKey: notBuilding.key,
     updateKey,
     baseKey,
@@ -1456,12 +1462,14 @@ function scheduleData() {
  * board.sinceLast off only { on: false } (nothing is read).
  */
 function sinceData({ choice = null, from = null } = {}) {
-  const setup = KK.boardSince(KK.config({ fresh: true }));
+  const fresh = KK.config({ fresh: true });
+  const setup = KK.boardSince(fresh);
   if (!setup.on) return { on: false, default_choice: setup.window };
   const now = Date.now();
   const seen = SEEN.readSeen(FOLDER);
   const w = AWAY.resolveWindow({ choice: choice ?? setup.window, seen, from, now });
-  const queue = QARCH.withArchive(JSON.parse(fs.readFileSync(FILE, 'utf8')), FOLDER);
+  // Decided for you carries a delivery's door and blast radius; hidden while mergeDanger.show is off (lib/doorShow.js).
+  const queue = DOOR.hideStored(QARCH.withArchive(JSON.parse(fs.readFileSync(FILE, 'utf8')), FOLDER), fresh);
   const log = timeLogRows();
   // What waits on the owner now: the same count as "Waiting on you" (null when the state could not be built).
   let waiting = null;

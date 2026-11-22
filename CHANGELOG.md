@@ -82,6 +82,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   Decisions lists them by kind as Project catalog.** Design entries reach missions and reviewer-design, and accepted
   stack entries reach the Checks tab and the dependency notes (`catalog.stackFacts`, on).
 - **A green gate where no tests ran ("No test files found", "0 passing", "collected 0 items") gets a NOTE at receive, a line in the review package and a "no tests ran" badge on the card; never a stop.**
+- **Door and blast radius has a setting, so a project can turn it off everywhere.** `mergeDanger.show`, on by default.
 ### Changed
 - **`ravenseat decide` lists a one-way door first among its kind, as the board's groups do.** Display only, no setting.
 - **A reviewer who disagrees reads as one sentence, "Reviewer says door one-way (the track says two-way)", on the board and in `ravenseat decide`.** Display only, no setting.
@@ -106,6 +107,9 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **Plans: Filter and Sort menus like the Tasks room replace the left column; plans show their progress in words.**
 - **Plans: polish: clearer empty states, sticky Roadmap column headers, start lines in one Copy menu, and the deadline
   band only when there is a deadline.** On a phone the room tabs stay on one line.
+- **The lite help lists `undo <id>`, and bare `undo` first says it undoes the last queue edit and points to `undo <id>`.**
+- **Settings in lite puts `planReview.*` and `plans.checkpoint` under Full mode only, since they do nothing there.**
+- **Settings marks the command palette (`board.palette`) as having no effect while `board.shortcuts` is off.**
 ### Fixed
 - **The owner-question examples in the add-to-queue, review and plans skills carry the card fields, so a copied example is no longer refused.** No setting: they are examples.
 - **Moving a card on the board counts as your edit and stamps `edited_at`, also with its dependencies.** No setting: it is a recorded timestamp.

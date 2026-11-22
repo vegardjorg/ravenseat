@@ -231,6 +231,8 @@ const REQUIRES = Object.freeze({
   // board/timeline.js: with the Timeline tab off nothing is fetched or drawn, so its horizon and rows are not read.
   'board.timelineHorizonDays': ['board.timeline'],
   'board.timelineRows': ['board.timeline'],
+  // board/palette.js paletteOn: Ctrl+K opens the palette only while the shortcuts are on as well.
+  'board.palette': ['board.shortcuts'],
   // cli/checks.mjs canaryFacts: with the canary off no transcript is read, so no shape is logged.
   'client.shapeLog': ['client.canary'],
   // lib/queueConfig.js features: a part is off while its parent is off.
@@ -292,6 +294,8 @@ const QUEUE = { store: 'queue' };
 const WHY_ONE_TYPE = 'lite has one task type (class K)';
 const WHY_ONE_DOMAIN = 'lite has one domain (general)';
 const WHY_PLANS = 'lite uses the plan register as a plain list; areas, documents and rules are full mode structure';
+// The same words as the triage rows, so the lite fold line names the reason once (board/settings.js joins unique ones).
+const WHY_PLAN_REVIEW = 'the intake triage is off in lite';
 
 const SETTINGS = Object.freeze([
   // ---- 1. Project and git ----
@@ -1092,6 +1096,14 @@ const SETTINGS = Object.freeze([
     'The environments a migration push may go to. Merge pushes migrations only when the linked environment file names ' +
     'one of them, so a wrong link cannot reach the wrong database.',
     { protects: 'A migration pushed to the wrong database because the wrong environment is linked.' }),
+  // MS-1 (lib/mergeDanger.js; the switch lib/doorShow.js; friction review 22.11 Top 4). Friction: a few tokens per track
+  // report and per review (two lines each) and one DOOR line per receive; display only, it never stops, blocks or
+  // approves anything. On by default in both modes because it is what makes a one-way door visible before a merge.
+  // Here, not under Review and agents (at its cap of 25 rows): it is about how hard a merge is to undo.
+  row('mergeDanger.show', 'push', 'onoff', 'Door and blast radius',
+    'Tracks and reviewers write two lines: a one-way or two-way door (one-way: hard to undo once merged) and a one-word ' +
+    'blast radius. Receive prints them, and Decisions, decide and the PR body show them; a one-way door is marked. ' +
+    'Never a stop. Off: the agents are told to leave the lines out, and nothing is shown.'),
 
   // ---- 10. Review and agents ----
   row('helpers', 'review', 'object', 'Helper agents',
@@ -1139,14 +1151,16 @@ const SETTINGS = Object.freeze([
   // the triage's step, only for risky tasks (class D+ by default, or a task in an accepted zone, none by default); its
   // notes go into the mission. Block can stop a start (an "ask" becomes an owner question), so it is off. Advisory is the
   // default: D+ is rare, it is where a wrong plan costs most, and advisory never stops work.
+  // Full only in lite (friction review 22.11): the review runs on the intake triage's step (lib/queueTriage.js, off in
+  // lite) and lite has no D+, so the rows would do nothing there.
   row('planReview.mode', 'review', 'choice', 'Plan review before a risky task',
     'Before a risky task starts, the triage step also checks the plan against the code: data model and migrations, ' +
     'public interfaces, irreversible steps, file boundaries, assumptions the code contradicts (file:line or no note). ' +
     'Advisory: the notes go into the mission and the task starts. Block: a point for you becomes a question before the ' +
-    'start. Off: no plan review.', { choices: ['block', 'advisory', 'off'] }),
+    'start. Off: no plan review.', { choices: ['block', 'advisory', 'off'], fullWhy: WHY_PLAN_REVIEW }),
   row('planReview.classes', 'review', 'list', 'Plan review for classes',
     'The task classes that get the plan review (default D+). A task in an accepted sensitive zone (catalog kind zone) ' +
-    'gets it whatever its class.'),
+    'gets it whatever its class.', { fullWhy: WHY_PLAN_REVIEW }),
   // DR-2. Friction: none for a task without risk_first (the mission is unchanged); with one, the track checks it first
   // and stops with PARTIAL and one owner question when it fails, the PARTIAL path the owner already handles. On: the
   // block appears only when the field is set (or the task is in an accepted zone, none by default).
@@ -1601,7 +1615,8 @@ const SETTINGS = Object.freeze([
     'A large plan (L, XL or a sensitive zone), or "smallest version first": /add-to-queue offers to queue the first ' +
     'part and the rest waiting on one checkpoint question, which opens when the first part is done (Continue, Adjust ' +
     'or Stop). offer (default): offered, you choose per plan. always: without asking. off: all tasks start as usual.',
-    { choices: ['offer', 'always', 'off'] }),
+    // Full only in lite (friction review 22.11): the lite path of /add-to-queue skips the planning steps, staging too.
+    { choices: ['offer', 'always', 'off'], fullWhy: 'the lite /add-to-queue adds one task per thing asked and skips staged queueing' }),
   // PG-5 (lib/catalogZones.js). Friction: none while no zone is accepted (Ravenseat ships none; `catalog zones` only
   // proposes). With accepted zones: one NOTE line at add and a card badge, never a stop. On by default for that reason.
   row('zones.detect', 'plans', 'onoff', 'Match tasks against sensitive zones',

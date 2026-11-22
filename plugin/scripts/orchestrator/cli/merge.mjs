@@ -1197,9 +1197,11 @@ export function cmdReceive() {
   // Door and blast radius (lib/mergeDanger.js, MS-1): the track's two lines, from the report, else the reply. One DOOR
   // line, a section in the package for the reviewer, merge_danger on the task for Decisions and the PR body. Written by
   // the agent, so NEVER a guard: missing or malformed is "not stated", nothing is blocked or approved by it. A PARTIAL
-  // delivery is unfinished, so it gets none.
+  // delivery is unfinished, so it gets none. mergeDanger.show off (lib/doorShow.js): none either, so the line, the
+  // section and the record are all left out (and an earlier record is removed below).
   const MDG = require('./lib/mergeDanger.js');
-  const dangerValues = result?.status === 'PARTIAL' ? null : MDG.fromTrack({ report: reportText, reply: trackReply });
+  const doorOn = require('./lib/doorShow.js').on(CONFIG);
+  const dangerValues = result?.status === 'PARTIAL' || !doorOn ? null : MDG.fromTrack({ report: reportText, reply: trackReply });
   if (dangerValues) console.log(MDG.receiveLine(id, dangerValues));
   // Red on base (lib/redOnBase.js): do the new tests fail without the change? Off unless gates.redOnBase is set; a
   // PARTIAL track is unfinished, so not for it. A warning, never a stop.
@@ -1302,7 +1304,7 @@ export function cmdReceive() {
   })();
   const prompts = reviewers.map((type) => {
     const file = path.join(folder, `reviewer-${type}.md`);
-    fs.writeFileSync(file, L.reviewerPrompt({ o: o0, type, folder, base: BASE, delta }) + '\n');
+    fs.writeFileSync(file, L.reviewerPrompt({ o: o0, type, folder, base: BASE, delta, door: doorOn }) + '\n');
     return { type, file };
   });
   const r = edit((queue) => {
