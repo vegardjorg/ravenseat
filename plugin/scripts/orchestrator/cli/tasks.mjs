@@ -332,7 +332,8 @@ export function cmdAdd() {
       newOnes.splice(0, newOnes.length, ...k.tasks);
     }
     // The questions are validated together with the tasks: all or nothing.
-    const sp = L.setQuestion(queue, newQuestion);
+    // strict: a new plain question needs the card fields (owner question 7); the branch says which track asked.
+    const sp = L.setQuestion(queue, newQuestion, undefined, { strict: true, track });
     error.push(...sp.error.map((f) => `question ${f}`));
     for (const n of newOnes) {
       // validate also checks that the id does not already exist in the queue, and (when the register has projects) that an

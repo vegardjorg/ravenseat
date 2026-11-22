@@ -97,7 +97,62 @@ function approve(queue, ids, now = new Date().toISOString()) {
 
 /** The types an owner question can have. `condition` is answered with how the condition is fulfilled. */
 const QUESTION_TYPES = ['question', 'condition', 'lawyer', 'owner-task'];
-const QUESTION_FIELD = new Set(['type', 'text', 'recommendation', 'context', 'source', 'choices', 'after', 'added_at']);
+const QUESTION_FIELD = new Set([
+  'type', 'text', 'recommendation', 'context', 'source', 'choices', 'after', 'added_at', 'category', 'if_yes', 'if_no',
+]);
+/**
+ * The card fields (section 6.1 of plans/autonomi-nivaa-utredning.md): `category` (a key of ask-catalog/categories.json),
+ * `context` (what it is about and why it came up now), `if_yes` (what happens when the recommendation is followed) and
+ * `if_no` (what happens otherwise). With 3-4 choices if_yes reads "if you follow the recommendation" and if_no "if you
+ * choose something else". A NEW plain question from `ravenseat question` or `add` must have them all (strict, owner
+ * question 7); the limits below hold for every write.
+ */
+const CARD_CONTEXT_MAX = 600;
+const CARD_IF_MAX = 300;
+/** The types that never need the card fields: a condition, a lawyer's word and an owner task are not choices. */
+const CARD_TYPES = new Set(['question']);
+/** What a strict new question must have filled, in this order (the error names the missing ones). */
+const CARD_REQUIRED = ['category', 'context', 'if_yes', 'if_no', 'recommendation'];
+/** Same text, ignoring case and whitespace. */
+const sameText = (x, y) =>
+  String(x ?? '').replace(/\s+/g, ' ').trim().toLowerCase() === String(y ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+/**
+ * The errors for the card fields of one question (setQuestion). `merged` is the question as it will be (input over the
+ * earlier post); `strict` asks for the full card (a new plain question from a person or an agent). The message says how to
+ * fix it, since the agent that gets it is the one that must.
+ */
+function cardError(id, s, merged, { strict = false, isNew = false } = {}) {
+  const AC = require('../askCatalog.js');
+  const f = [];
+  if (s.category != null) {
+    const e = AC.categoryError(s.category);
+    if (e) f.push(e);
+  }
+  for (const [k, max] of [['if_yes', CARD_IF_MAX], ['if_no', CARD_IF_MAX]]) {
+    const v = s[k];
+    if (v != null && (typeof v !== 'string' || v.length > max)) f.push(`${k} must be at most ${max} characters of text`);
+  }
+  if (!strict || !isNew || !CARD_TYPES.has(merged.type)) return f;
+  if (typeof s.context === 'string' && s.context.length > CARD_CONTEXT_MAX)
+    f.push(`context must be at most ${CARD_CONTEXT_MAX} characters`);
+  const filled = (k) => typeof merged[k] === 'string' && merged[k].trim();
+  const missing = CARD_REQUIRED.filter((k) => !filled(k));
+  if (missing.length)
+    f.push(
+      `a new question needs the card fields (missing: ${missing.join(', ')}). Register it with ` +
+        `ravenseat question ${id} --text "<the question in one sentence>" --category <${AC.KEYS.join('|')}> ` +
+        `--context "<what it is about and why it came up now>" --if-yes "<what happens if the recommendation is followed>" ` +
+        `--if-no "<what happens otherwise>" --recommendation "<one of the choices>" --choice "<a>" --choice "<b>" ` +
+        '(in a JSON file: category, context, if_yes, if_no, recommendation, choices)',
+    );
+  if (filled('if_yes') && filled('if_no') && sameText(merged.if_yes, merged.if_no))
+    f.push('if_yes and if_no say the same: say what follows from the recommendation, and what follows from the other choice');
+  if (filled('recommendation') && Array.isArray(merged.choices) && merged.choices.length)
+    if (!merged.choices.some((c) => sameText(c, merged.recommendation)))
+      f.push(`the recommendation must be one of the choices (${merged.choices.join(' / ')}), word for word`);
+  return f;
+}
 /**
  * `after` (optional, PG-4 checkpoint, lib/checkpoint.js): the task ids the question waits for before the owner sees it.
  * While any of them is not done (or cancelled), the question is hidden: not on "Waiting on you", not in `decide`, and
@@ -204,9 +259,14 @@ function validQuestionId(id) {
  * @param {object} queue the queue (changed when the error list is empty)
  * @param {Record<string, { type?: string, text?: string, recommendation?: string|null, context?: string|null, source?: string|null,
  *   choices?: string[]|null }>} input
+ * The card fields (cardError): `category`, `if_yes` and `if_no` are checked on every write. `opts.strict` (the
+ * `question` and `add` commands, never a system question) refuses a NEW plain question without the full card; the types
+ * condition, lawyer and owner-task and an update of an earlier post are never refused for it. `opts.track` (set by the
+ * tool from the branch it runs on, never from the input) records which track registered the question, so receive can
+ * compare it with the report's ownerQuestions=<n>.
  * @returns {{ set: string[], error: string[] }}
  */
-function setQuestion(queue, input, now = new Date().toISOString()) {
+function setQuestion(queue, input, now = new Date().toISOString(), { strict = false, track = null } = {}) {
   if (!input || typeof input !== 'object' || Array.isArray(input))
     return { set: [], error: ['question must be an object: { "<id>": { type, text, … } }'] };
   const error = [];
@@ -235,12 +295,16 @@ function setQuestion(queue, input, now = new Date().toISOString()) {
     }
     if (s.choices != null) f.push(...choicesError(s.choices));
     if (s.after != null) f.push(...afterError(s.after));
+    const pick = (k) => (s[k] !== undefined ? s[k] : previous[k]);
+    const merged = { type, choices: pick('choices') };
+    for (const k of ['recommendation', 'context', 'category', 'if_yes', 'if_no']) merged[k] = pick(k);
+    f.push(...cardError(id, s, merged, { strict, isNew: !queue.question?.[id] }));
     if (f.length) {
       error.push(`${id}: ${f.join('; ')}`);
       continue;
     }
     const fresh = { type, text: text.trim() };
-    for (const k of ['recommendation', 'context', 'source']) {
+    for (const k of ['recommendation', 'context', 'source', 'category', 'if_yes', 'if_no']) {
       const v = s[k] !== undefined ? s[k] : previous[k];
       if (typeof v === 'string' && v.trim()) fresh[k] = v.trim();
     }
@@ -248,6 +312,9 @@ function setQuestion(queue, input, now = new Date().toISOString()) {
     if (Array.isArray(choices) && choices.length) fresh.choices = choices.map((c) => String(c).trim());
     const after = s.after !== undefined ? s.after : previous.after;
     if (Array.isArray(after) && after.length) fresh.after = [...after];
+    // Who registered it: the tool's word (the branch), kept from the first registration.
+    const by = previous.track ?? track;
+    if (typeof by === 'string' && by) fresh.track = by;
     fresh.added_at = previous.added_at ?? now;
     newOnes[id] = fresh;
   }
@@ -359,6 +426,10 @@ function questionOverview(queue) {
         context: q?.context ?? null,
         source: q?.source ?? null,
         choices: Array.isArray(q?.choices) ? q.choices : [],
+        // The card fields (section 6.1); an old post is "uncategorized" and has no if_yes or if_no.
+        category: require('../askCatalog.js').categoryOf(q),
+        if_yes: q?.if_yes ?? null,
+        if_no: q?.if_no ?? null,
         resolved: resolved.has(sp),
         answer: queue.resolutions?.[sp]?.answer ?? null,
         tasks: waiting.get(sp) ?? [],
@@ -575,6 +646,8 @@ module.exports = {
   statusAtAdd,
   approve,
   QUESTION_TYPES,
+  CARD_CONTEXT_MAX,
+  CARD_IF_MAX,
   validQuestionId,
   setQuestion,
   choicesError,

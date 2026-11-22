@@ -1,0 +1,62 @@
+[
+  {
+    "key": "legal",
+    "title": "Legal and privacy",
+    "covers": "Legal requirements, personal data, terms and licenses.",
+    "enforcement": "Agent's judgment"
+  },
+  {
+    "key": "security",
+    "title": "Security and access",
+    "covers": "Sign-in, access, encryption and the handling of keys.",
+    "enforcement": "Agent's judgment"
+  },
+  {
+    "key": "architecture",
+    "title": "Big design choices",
+    "covers": "The data model, a public API, a file format, a new framework.",
+    "enforcement": "Agent's judgment"
+  },
+  {
+    "key": "database",
+    "title": "Database changes",
+    "covers": "Migrations and the schema.",
+    "enforcement": "Stopped"
+  },
+  {
+    "key": "dependency",
+    "title": "New libraries",
+    "covers": "A new external package.",
+    "enforcement": "Stopped in full, Spotted in lite"
+  },
+  {
+    "key": "delete",
+    "title": "Removing data or features",
+    "covers": "Deleting data or a feature.",
+    "enforcement": "Agent's judgment, partly Spotted"
+  },
+  {
+    "key": "product",
+    "title": "What a feature should do",
+    "covers": "Unclear requirements.",
+    "enforcement": "Agent's judgment"
+  },
+  {
+    "key": "followups",
+    "title": "Follow-up tasks",
+    "covers": "Batched tasks and other proposals from an approved task.",
+    "enforcement": "Stopped (for agents)"
+  },
+  {
+    "key": "ui",
+    "title": "Small UI choices",
+    "covers": "Text, placement and small visual choices.",
+    "enforcement": "Agent's judgment"
+  },
+  {
+    "key": "technical",
+    "title": "Small technical choices",
+    "covers": "Names, structure, an implementation without a library.",
+    "enforcement": "Agent's judgment"
+  }
+]

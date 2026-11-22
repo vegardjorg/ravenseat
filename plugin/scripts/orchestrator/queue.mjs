@@ -146,8 +146,13 @@
 //                                                                  duplicates; kept in the written order, so the number
 //                                                                  is the --choice number; let --recommendation be the
 //                                                                  exact text of one to mark it)
-//   node scripts/orchestrator/queue.mjs question --file <json>         ({ "<id>": { type, text, recommendation?, context?, source?, choices? } };
-//                                                                  all or nothing)
+//        [--category <key>] [--if-yes "..."] [--if-no "..."]            (the card: a NEW plain question must have
+//                                                                  --category (ask-catalog/categories.json), --context
+//                                                                  (at most 600), --if-yes and --if-no (at most 300 each,
+//                                                                  not the same) and --recommendation (one of the
+//                                                                  choices); condition, lawyer and owner-task need none)
+//   node scripts/orchestrator/queue.mjs question --file <json>         ({ "<id>": { type, text, category, context, if_yes, if_no,
+//                                                                  recommendation, source?, choices? } }; all or nothing)
 //
 // Limits, capacity and guards:
 //   node scripts/orchestrator/queue.mjs limit [<name> <val>]       (show or set limits: maxConcurrent, maxDPlus,

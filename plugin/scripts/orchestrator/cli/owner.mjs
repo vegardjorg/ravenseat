@@ -16,7 +16,7 @@ import { spawnSync } from 'node:child_process';
 
 import {
   a, autoAcceptContext, autoAcceptRules, autoCleanFocus, CLI, CONFIG, cut, die, edit, FOLDER, focusCleanOut, GIT_ROOT, L, positional,
-  PR, read, require, val, WIDTH,
+  PR, queueBranchId, read, require, val, WIDTH,
 } from './context.mjs';
 import { guardWeakening, logWeakened } from './settings.mjs';
 import { captureOn, draftFromAnswer, notFromTrack, writeProposal } from './catalog.mjs';
@@ -169,15 +169,17 @@ export function cmdResolutions() {
 /** `ravenseat question` (the usage is at the top of queue.mjs). */
 export function cmdQuestion() {
   const file = val('--file');
-  const [id] = positional(1, ['--file', '--text', '--type', '--recommendation', '--context', '--source', '--choice']);
-  const fields = ['--text', '--type', '--recommendation', '--context', '--source', '--choice', '--no-choices'].some((f) =>
+  // The card fields (section 6.1 of plans/autonomi-nivaa-utredning.md): the flag and the field it sets.
+  const card = [['--category', 'category'], ['--if-yes', 'if_yes'], ['--if-no', 'if_no']];
+  const [id] = positional(1, ['--file', '--text', '--type', '--recommendation', '--context', '--source', '--choice', ...card.map((c) => c[0])]);
+  const fields = ['--text', '--type', '--recommendation', '--context', '--source', '--choice', '--no-choices', ...card.map((c) => c[0])].some((f) =>
     a.includes(f),
   );
   if (file || id || fields) {
     if (!file && !id)
       die(
-        'question <id> --text "..." [--type ...] [--recommendation "..."] [--context "..."] [--source "..."] ' +
-          '[--choice "..." (2-4 times) | --no-choices]',
+        'question <id> --text "..." --category <key> --context "..." --if-yes "..." --if-no "..." --recommendation "..." ' +
+          '[--choice "..." (2-4 times) | --no-choices] [--type ...] [--source "..."]',
       );
     let input;
     if (file) input = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -186,13 +188,16 @@ export function cmdQuestion() {
       const field = {};
       for (const k of ['text', 'type', 'recommendation', 'context', 'source'])
         if (a.includes(`--${k}`)) field[k] = val(`--${k}`) ?? '';
+      for (const [flag, k] of card) if (a.includes(flag)) field[k] = val(flag) ?? '';
       // Each --choice is one answer option (setQuestion checks 2-4, length and duplicates); --no-choices removes them.
       if (a.includes('--choice')) field.choices = repeated('--choice');
       else if (a.includes('--no-choices')) field.choices = null;
       input = { [id]: field };
     }
+    // strict: a new plain question must carry the card (owner question 7); the branch says which track asked.
+    const track = queueBranchId();
     const r = edit((queue) => {
-      const s = L.setQuestion(queue, input);
+      const s = L.setQuestion(queue, input, undefined, { strict: true, track });
       if (s.error.length) die(`Nothing changed (${s.error.length} error(s)):\n  ${s.error.join('\n  ')}`);
       return s;
     });
@@ -215,8 +220,11 @@ export function cmdQuestion() {
         `  ${cut(r.text ?? '(missing text: ravenseat question <id> --text "...")', WIDTH - 2)}`,
       );
       for (const line of L.choiceLines(r)) console.log(`    ${cut(line, WIDTH - 4)}`);
+      if (r.category !== 'uncategorized') console.log(`  category: ${r.category}`);
       if (r.recommendation) console.log(`  ${cut(`recommendation: ${r.recommendation}`, WIDTH - 2)}`);
       if (r.context) console.log(`  ${cut(`context: ${r.context}`, WIDTH - 2)}`);
+      if (r.if_yes) console.log(`  ${cut(`if you follow the recommendation: ${r.if_yes}`, WIDTH - 2)}`);
+      if (r.if_no) console.log(`  ${cut(`if you choose something else: ${r.if_no}`, WIDTH - 2)}`);
       if (r.choices.length && !r.resolved)
         console.log(`  answer: ravenseat resolve ${r.sp} --choice <1-${r.choices.length}> [--answer "note"]`);
     }

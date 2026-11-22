@@ -157,7 +157,12 @@ describe('the board server: an owner question answered with a choice button', ()
       DISABLE_UPDATES: '1',
     };
     expect(
-      await ravenseat(env, 'question', 'PICK-1', '--text', 'Which vendor?', '--choice', 'Vendor A', '--choice', 'Vendor B'),
+      await ravenseat(
+        env, 'question', 'PICK-1', '--text', 'Which vendor?', '--choice', 'Vendor A', '--choice', 'Vendor B',
+        // A new plain question carries the card fields (queueQuestionCard.test.ts).
+        '--recommendation', 'Vendor A', '--category', 'product', '--context', 'Two vendors offer it.',
+        '--if-yes', 'We sign with A.', '--if-no', 'We sign with B.',
+      ),
     ).toBe(0);
     const post = async (body: object) => {
       const r = await fetch(`${base}/api/action`, {

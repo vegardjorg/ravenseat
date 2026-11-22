@@ -201,6 +201,9 @@ describe('queue.mjs: question --choice, resolve --choice, and the lists', () => 
     writeFileSync(join(folder, 'queue.json'), JSON.stringify(queue));
   });
   afterEach(() => rmSync(folder, { recursive: true, force: true }));
+  // A new plain question carries the card fields (queueQuestionCard.test.ts tests the rule itself).
+  const CARD = { category: 'product', context: 'Two vendors offer the same service.', if_yes: 'We sign with it this week.', if_no: 'We sign with the other one.' };
+  const CARD_ARGS = ['--category', CARD.category, '--context', CARD.context, '--if-yes', CARD.if_yes, '--if-no', CARD.if_no];
 
   it('question <id> --choice ... (repeated) registers the choices; an invalid list stops and changes nothing', () => {
     const bad = run(['question', 'V1', '--text', 'Which vendor?', '--choice', 'A']);
@@ -210,7 +213,7 @@ describe('queue.mjs: question --choice, resolve --choice, and the lists', () => 
 
     const ok = run([
       'question', 'V1', '--text', 'Which vendor?', '--choice', 'Vendor A', '--choice', 'Vendor B',
-      '--recommendation', 'Vendor A',
+      '--recommendation', 'Vendor A', ...CARD_ARGS,
     ]);
     expect(ok.code, ok.error).toBe(0);
     expect(readQueue().question?.V1.choices).toEqual(['Vendor A', 'Vendor B']);
@@ -252,14 +255,14 @@ describe('queue.mjs: question --choice, resolve --choice, and the lists', () => 
 
     const ok = run([
       'add', '--file',
-      file('ok.json', { tasks: [task], question: { V2: { text: 'Go?', choices: ['Yes', 'No'] } } }),
+      file('ok.json', { tasks: [task], question: { V2: { text: 'Go?', choices: ['Yes', 'No'], recommendation: 'Yes', ...CARD } } }),
     ]);
     expect(ok.code, ok.error).toBe(0);
     expect(readQueue().question?.V2.choices).toEqual(['Yes', 'No']);
   });
 
   it('resolve <id> --choice <n|text> [--answer note] stores the choice text; resolutions prints the choices', () => {
-    run(['question', 'V1', '--text', 'Which vendor?', '--choice', 'Vendor A', '--choice', 'Vendor B']);
+    run(['question', 'V1', '--text', 'Which vendor?', '--choice', 'Vendor A', '--choice', 'Vendor B', '--recommendation', 'Vendor B', ...CARD_ARGS]);
     const wrong = run(['resolve', 'V1', '--choice', '3']);
     expect(wrong.code).toBe(1);
     expect(wrong.error).toContain('choice 3 does not exist (1. Vendor A, 2. Vendor B)');
