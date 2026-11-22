@@ -47,6 +47,8 @@ const SINKS = Object.freeze([
   row('lib/approvalWait.js', 'metadata', null, 'agent id, tool name and time of a permission wait'),
   row('lib/trackGuard.js', 'metadata', null, 'the compaction count cache: transcript positions and counts'),
   row('lib/usageLimit.js', 'metadata', null, 'the usage-limit pause: times only'),
+  // Names track-result.md only in the update task's mission text; it reads no agent text.
+  row('lib/osv.js', 'metadata', null, 'the dependency audit cache: package names, versions and OSV.dev advisories, no agent text'),
   row('cli/orchestrator.mjs', 'metadata', null, "the orchestrator's own handover note and follow reports, no track text"),
   row('hook-context.mjs', 'metadata', null, 'the pulse cursor and the cost guard state'),
   row('hook-track-context.mjs', 'metadata', null, 'per-agent state: which notices fired, compaction counts'),

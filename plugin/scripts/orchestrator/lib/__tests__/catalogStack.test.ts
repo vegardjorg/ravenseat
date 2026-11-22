@@ -121,9 +121,10 @@ describe('declared stack words', () => {
     expect(card.detail).toMatch(/`pnpm audit` \(D-0004 in the catalog says pnpm\)/);
     const cargo = CK.buildReport({ facts: C.withDeclaredStacks({ ...facts, stacks: [] }, [{ word: 'cargo', id: 'D-0006' }]), catalog, now: 'x' }).suggestions.find((s: { key: string }) => s.key === 'dep-audit');
     expect(cargo.detail).toMatch(/`cargo audit`/);
-    // Nothing declared: the card stays as it was.
+    // Nothing declared: no tool line, only the pointer to the audit that needs no install (roadmap 0å KD-4).
     const plain = CK.buildReport({ facts: { ...facts, stacks: ['Node'], declaredStacks: [] }, catalog, now: 'x' }).suggestions.find((s: { key: string }) => s.key === 'dep-audit');
-    expect(plain.detail).toBeNull();
+    expect(plain.detail).toMatch(/^Without installing anything: `ravenseat catalog deps --audit --dry`/);
+    expect(plain.detail).not.toMatch(/audit` \(D-/);
   });
 });
 

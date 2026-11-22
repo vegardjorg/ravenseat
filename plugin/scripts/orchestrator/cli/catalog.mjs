@@ -739,7 +739,7 @@ function find() {
   for (const l of CI.findLines(r, { query, index: idx })) console.log(l);
 }
 
-export function cmdCatalog() {
+export async function cmdCatalog() {
   const sub = a[1];
   if (sub === 'init') return init();
   if (sub === 'show') return show();
