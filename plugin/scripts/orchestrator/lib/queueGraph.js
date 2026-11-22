@@ -782,6 +782,14 @@
     batch: 'batch queue',
   };
 
+  /** A question's kind in plain words, for its name and tooltip (deps L3). */
+  const SP_KIND = {
+    question: 'owner question',
+    condition: 'waiting on a condition',
+    lawyer: 'waiting on a lawyer',
+    'owner-task': 'owner task',
+  };
+
   const plural = (n, one, more) => `${n} ${n === 1 ? one : more}`;
 
   /** "A", "A and B", "A, B and C"; over `max` names: the first max - 1 and "and N more". */
@@ -829,10 +837,18 @@
     // Tasks first (by id), questions after them.
     before.sort((a, b) => (a.art === b.art ? compare(a.id, b.id) : a.art === 'question' ? 1 : -1));
     after.sort((a, b) => compare(a.id, b.id));
-    const name = n.title || n.id;
     const waits = before.length ? `Waits on ${listText(before.map(refText))}` : null;
     const more = (n.locks ?? 0) > after.length ? ` (${plural(n.locks, 'task', 'tasks')} in all)` : '';
     const unlocks = after.length ? `Unlocks ${listText(after.map(refText))}${more}` : null;
+    const lower = (x) => (x === waits || x === unlocks ? x.charAt(0).toLowerCase() + x.slice(1) : x);
+    if (n.art === 'question') {
+      // deps L3: a question by its text first (a closing period dropped, so the joined name never says ".."), then
+      // its id, its kind in plain words and what answering it unlocks, the same order as a task.
+      const text = String(n.text ?? '').replace(/\s+/g, ' ').trim().replace(/\.+$/, '');
+      const lines = [text || null, n.sp ?? n.id, SP_KIND[n.type] ?? SP_KIND.question, unlocks].filter(Boolean);
+      return { lines, name: lines.map(lower).join(', ') };
+    }
+    const name = n.title || n.id;
     const lines = [
       n.role === 'neighbor' ? `${name}: hidden by the filter or search` : name,
       n.title ? n.id : null,
@@ -840,7 +856,6 @@
       waits,
       unlocks,
     ].filter(Boolean);
-    const lower = (x) => (x === waits || x === unlocks ? x.charAt(0).toLowerCase() + x.slice(1) : x);
     return { lines, name: lines.map(lower).join(', ') };
   }
 

@@ -18,13 +18,8 @@
 (function () {
   const NS = 'http://www.w3.org/2000/svg';
   const STORAGE = 'queue-board-graph';
-  const SP_TYPE = {
-    question: 'Question',
-    condition: 'Waiting on condition',
-    lawyer: 'Waiting on lawyer',
-    'owner-task': 'Owner-task',
-  };
-  // The state in words lives in queueGraph.js (STATE_TEXT for names, STATE_SHORT for the muted line under a title),
+  // The state in words lives in queueGraph.js (STATE_TEXT for names, STATE_SHORT for the muted line under a title,
+  // SP_KIND for a question's kind),
   // so the names, the tooltips and the labels say the same thing.
   const stateShort = (n) => window.QueueGraph?.STATE_SHORT?.[n.state] ?? n.status;
 
@@ -308,24 +303,16 @@
     return `M${x1} ${a.y}C${middle} ${a.y} ${back} ${b.y} ${x2} ${b.y}`;
   }
 
+  // The tooltip, from queueGraph.nodeWords. A task: the title first (deps H1), then the id, the state, what it waits on
+  // and what it unlocks, by title (H3). A neighbor is drawn small and gray because the filter or search hides it
+  // (QA-1e Q6): its first line says so, so a hover or a screen reader explains the gray before the state. A question:
+  // its text first, then its id, its kind and what answering it unlocks (deps L3).
   function nodeTitle(n) {
-    if (n.art === 'question')
-      return [
-        `${n.sp} (${SP_TYPE[n.type] ?? SP_TYPE.question})`,
-        n.text,
-        `Unlocks ${plural(n.locks, 'task', 'tasks')}`,
-      ]
-        .filter(Boolean)
-        .join('\n');
-    // A task (queueGraph.nodeWords): the title first (deps H1), then the id, the state, what it waits on and what it
-    // unlocks, by title (H3). A neighbor is drawn small and gray because the filter or search hides it (QA-1e Q6): its
-    // first line says so, so a hover or a screen reader explains the gray before the state.
     return window.QueueGraph.nodeWords(n, cache.setup).lines.join('\n');
   }
 
   /** The accessible name, with the same facts as the tooltip ("Streak calendar, UI-2, blocked, waits on ..."). */
   function nodeName(n) {
-    if (n.art === 'question') return nodeTitle(n).replace(/\n/g, '. ');
     return window.QueueGraph.nodeWords(n, cache.setup).name;
   }
 

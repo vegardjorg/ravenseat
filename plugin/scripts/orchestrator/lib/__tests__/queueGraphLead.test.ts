@@ -152,6 +152,36 @@ describe('nodeWords: what it is, what it waits on and what it unlocks', () => {
   });
 });
 
+describe('nodeWords for a question: its text first, no double period (deps L3)', () => {
+  it('the text, the id, the kind, and what answering it unlocks by title', () => {
+    const { o } = setup();
+    expect(G.nodeWords(byId(o, '?Q-SSO'), o).name).toBe(
+      'Which SSO providers do we support at launch?, Q-SSO, owner question, unlocks Sign in with Apple (4 tasks in all)',
+    );
+    expect(G.nodeWords(byId(o, '?Q-SSO'), o).lines).toEqual([
+      'Which SSO providers do we support at launch?',
+      'Q-SSO',
+      'owner question',
+      'Unlocks Sign in with Apple (4 tasks in all)',
+    ]);
+  });
+
+  it('a text that ends in a period loses it, so the name never says ".."; the kind is in plain words', () => {
+    const g = G.buildGraph({
+      ...data(),
+      inbox: {
+        question: [
+          { type: 'owner-task', sp: 'Q-OWN', text: 'Decide how conflicts are shown.', direct: ['BILL-4'], count: 1 },
+        ],
+      },
+    });
+    const o = G.layer(g);
+    const w = G.nodeWords(byId(o, '?Q-OWN'), o);
+    expect(w.name).toBe('Decide how conflicts are shown, Q-OWN, owner task, unlocks Family sharing');
+    expect(w.name).not.toMatch(/\.\./);
+  });
+});
+
 describe('chainText: the selection line names the task by title (deps M5)', () => {
   it('title first, the id in brackets, then how many are before and after it', () => {
     const { o } = setup();

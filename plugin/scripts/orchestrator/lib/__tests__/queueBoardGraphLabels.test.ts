@@ -319,6 +319,12 @@ describe('the view answers in words (deps H3 step 1, M2)', () => {
     expect(s1.getAttribute('aria-label')).toBe('Title S-1, S-1, ready now, unlocks Title S-2');
     expect(s1.querySelector('title')?.textContent).toBe('Title S-1\nS-1\nready now\nUnlocks Title S-2');
   });
+
+  it('a question is named by its text first, with no double period (deps L3)', () => {
+    const q = nodes().find((g) => g.dataset.sp === 'Q-1') as SVGGElement;
+    expect(q.getAttribute('aria-label')).toBe('Is Q-W wanted?, Q-1, owner question, unlocks Title Q-W');
+    expect(q.querySelector('title')?.textContent).toBe('Is Q-W wanted?\nQ-1\nowner question\nUnlocks Title Q-W');
+  });
 });
 
 describe('the legend explains every sign, and a dash means one thing (deps M3)', () => {
