@@ -32,14 +32,23 @@
     done: 'done',
     batch: 'in the batch queue: not started alone, packed into a track',
   };
+  // The state in a word or two, for the muted line under a title (the ring is never the only signal).
+  const STATE_SHORT = {
+    ready: 'ready',
+    blocked: 'blocked',
+    active: 'in progress',
+    qa: 'waiting for QA',
+    done: 'done',
+    batch: 'batch queue',
+  };
 
   // Where the ids sit (B33). A task's ring has radius r + RING_GAP, and its thickest stroke in board.css is
   // RING_STROKE_MAX (a selected node); half of that stroke lies outside the ring. The label hangs below that outer
   // edge with LABEL_GAP to spare (dominant-baseline: hanging in board.css, so the font size never moves its top).
-  // A question's square has a stroke of at most SP_STROKE_MAX (focus); its id sits above it, "unlocks N" below it.
+  // A question's label hangs at the same offset below its square (its stroke is at most 3, so it is clear too). The
+  // offset equals queueGraph's MEASURE.labelTop, the space the layout reserves (deps H1).
   const RING_GAP = 3;
   const RING_STROKE_MAX = 4;
-  const SP_STROKE_MAX = 3;
   const LABEL_GAP = 3;
   /** The y of a task's label (its top) below a circle with radius r: clear of the ring at every size. */
   const labelY = (r) => r + RING_GAP + RING_STROKE_MAX / 2 + LABEL_GAP;
@@ -308,10 +317,12 @@
         .join('\n');
     // A neighbor is drawn small and gray because the filter or search hides it (QA-1e Q6): its name says so first,
     // so a hover or a screen reader explains the gray before the state. A done predecessor's state line is "done".
+    // The title comes first (deps H1), the id after it, like the cards.
     return [
       n.role === 'neighbor'
-        ? `${n.id} ${n.title}: hidden by the filter or search`
-        : `${n.id}: ${n.title}`,
+        ? `${n.title || n.id}: hidden by the filter or search`
+        : n.title || n.id,
+      n.title ? n.id : null,
       STATE[n.state] ?? n.status,
       n.locks ? `Unlocks ${plural(n.locks, 'task', 'tasks')}` : null,
     ]
@@ -319,12 +330,33 @@
       .join('\n');
   }
 
+  /** The accessible name: the tooltip's lines joined, title first ("Streak calendar, UI-2, blocked"). */
+  function nodeName(n) {
+    if (n.art === 'question') return nodeTitle(n).replace(/\n/g, '. ');
+    return nodeTitle(n).split('\n').join(', ');
+  }
+
+  /**
+   * The title label below a node (deps H1): the clamped title lines (from queueGraph.buildGraph), then a muted line
+   * with the id and, for a task, its state in words (so the ring is never the only signal) or, for a question, how
+   * many tasks answering it unlocks. Every line has a reserved slot in the layout (queueGraph.labelBox).
+   */
+  function titleLabel(n, meta) {
+    const line = window.QueueGraph?.MEASURE?.labelLine ?? 15;
+    return s(
+      'text',
+      { class: 'label titled', y: labelY(n.r) },
+      n.label.map((text, i) => s('tspan', { class: 'label-title', x: 0, dy: i ? line : null, text })),
+      s('tspan', { class: 'label-meta', x: 0, dy: n.label.length ? line : null }, ...meta),
+    );
+  }
+
   function nodeEl(n) {
     const common = {
       'data-id': n.id,
       tabindex: 0,
       role: 'button',
-      'aria-label': nodeTitle(n).replace(/\n/g, '. '),
+      'aria-label': nodeName(n),
       transform: `translate(${n.x} ${n.y})`,
     };
     if (n.art === 'question') {
@@ -335,15 +367,11 @@
         s('title', { text: nodeTitle(n) }),
         s('rect', { class: 'sp-box', x: -h, y: -h, width: 2 * h, height: 2 * h, rx: 6 }),
         s('text', { class: 'sp-badge', y: 5, text: '?' }),
-        n.locks
-          ? s('text', {
-              class: 'graph-locks',
-              y: h + SP_STROKE_MAX / 2 + LABEL_GAP,
-              text: `unlocks ${n.locks}`,
-            })
-          : null,
-        // Above the square: the alphabetic baseline sits LABEL_GAP above the edge (ids have no descenders).
-        s('text', { class: 'label above', y: -(h + SP_STROKE_MAX / 2 + LABEL_GAP + 1), text: n.sp }),
+        titleLabel(n, [
+          n.sp,
+          n.locks ? ' · ' : null,
+          n.locks ? s('tspan', { class: 'graph-locks', text: `unlocks ${n.locks}` }) : null,
+        ]),
       );
     }
     const classes = ['node', 'task', `t-${n.state}`, `role-${n.role}`];
@@ -372,7 +400,9 @@
             s('text', { y: 3.5, text: 'S' }),
           )
         : null,
-      s('text', { class: 'label', y: labelY(n.r), text: n.id }),
+      n.label
+        ? titleLabel(n, [`${n.id} · ${STATE_SHORT[n.state] ?? n.status}`])
+        : s('text', { class: 'label', y: labelY(n.r), text: n.id }),
     );
   }
 
@@ -461,6 +491,8 @@
     svg.style.setProperty('--graph-scale', String(Math.round(snippet.s * 1000) / 1000));
     svg.classList.toggle('zoom-medium', snippet.s >= 0.8);
     svg.classList.toggle('zoom-near', snippet.s >= 1.4);
+    // Zoomed so far out that a title would be under 6 px: the titles wait for hover, focus or a zoom in.
+    svg.classList.toggle('zoom-far', snippet.s < 0.5);
   }
   function customize() {
     const o = cache.setup;
@@ -470,7 +502,9 @@
     let sk =
       b && h && o.width && o.height ? Math.min(b / (o.width + 20), h / (o.height + 20), 1.5) : 1;
     // If the circles become unreadable with the whole picture visible: fill the width, start at the top, scroll down.
-    if (b && o.width && sk < (o.readableScale ?? 0)) sk = Math.min(b / (o.width + 20), 1.5);
+    // With title labels, at most 1 (the 12 px the labels are laid out for), so more of the graph stays in view.
+    if (b && o.width && sk < (o.readableScale ?? 0))
+      sk = Math.min(b / (o.width + 20), o.labelled ? 1 : 1.5);
     snippet = {
       s: sk,
       x: b ? (b - o.width * sk) / 2 : 0,

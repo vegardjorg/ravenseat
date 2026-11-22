@@ -13,7 +13,7 @@
 //   - Q6: the legend explains the dimmed states, and only the ones that apply right now: "faded: outside the selected
 //     chain" (while a chain is selected; its slot is kept so nothing moves), "small gray: hidden by your filter or
 //     search" (when neighbor nodes are drawn) and "pale: done" (when done predecessors are drawn).
-//   - Q6: a neighbor node is named "<id> <title>: hidden by the filter or search" and still opens on a click; a done
+//   - Q6: a neighbor node is named "<title>: hidden by the filter or search, <id>" and still opens on a click; a done
 //     node says "done".
 //   - Q8: cards keep the project short name and color dot in Project lanes and in Flat grouped by area or feature,
 //     and the card cache key no longer depends on the view or grouping (the same node is reused when they change).
@@ -224,10 +224,11 @@ describe('Q6: the legend explains the dimmed states that apply', () => {
 // ---- Q6: names -------------------------------------------------------------------------------------------------------
 
 describe('Q6: neighbor and done nodes say why they look dimmed', () => {
-  it('a neighbor is named "<id> <title>: hidden by the filter or search", in the tooltip too', () => {
+  // deps H1: the title first, the id after it (it was "<id> <title>: ...").
+  it('a neighbor is named "<title>: hidden by the filter or search, <id>", in the tooltip too', () => {
     const g = node('OT-1')!;
-    expect(g.getAttribute('aria-label')).toMatch(/^OT-1 Title OT-1: hidden by the filter or search\./);
-    expect(g.querySelector('title')!.textContent).toMatch(/^OT-1 Title OT-1: hidden by the filter or search\n/);
+    expect(g.getAttribute('aria-label')).toMatch(/^Title OT-1: hidden by the filter or search, OT-1, /);
+    expect(g.querySelector('title')!.textContent).toMatch(/^Title OT-1: hidden by the filter or search\nOT-1\n/);
   });
 
   it('a click on a neighbor still opens it', async () => {

@@ -82,7 +82,7 @@ function data() {
       review: [],
       built: [],
     },
-    inbox: { question: [{ type: 'question', sp: 'Q-1', direct: ['Q-W'], count: 1 }] },
+    inbox: { question: [{ type: 'question', sp: 'Q-1', text: 'Is Q-W wanted?', direct: ['Q-W'], count: 1 }] },
     projects: [{ pid: 'a', title: 'Project a', color: 'category-teal' }],
   };
 }
@@ -156,15 +156,58 @@ describe('labels sit outside the status ring', () => {
       expect(V.labelY(r)).toBeGreaterThanOrEqual(r + 3 + stroke / 2 + 2);
   });
 
-  it('a question id sits above its square and "unlocks N" hangs below it, both clear of the edge', () => {
+  it('a question label (its text, then the id and "unlocks N") hangs below its square, clear of the edge', () => {
     const q = nodes().find((g) => g.classList.contains('sp')) as SVGGElement;
     const h = Number(q.querySelector('rect.sp-box')?.getAttribute('width')) / 2;
     const label = Number(q.querySelector('text.label')?.getAttribute('y'));
-    expect(label).toBeLessThanOrEqual(-(h + 4));
-    const locks = q.querySelector('text.graph-locks');
-    expect(locks).toBeTruthy();
-    expect(Number(locks?.getAttribute('y'))).toBeGreaterThanOrEqual(h + 3);
-    expect(rule('.graph-svg .node .graph-locks')['dominant-baseline']).toBe('hanging');
+    expect(label).toBeGreaterThanOrEqual(h + 3);
+    const locks = q.querySelector('text.label .graph-locks');
+    expect(locks?.textContent).toBe('unlocks 1');
+    expect(rule('.graph-svg .node .label')['dominant-baseline']).toBe('hanging');
+  });
+});
+
+describe('the title is what you read first (deps H1)', () => {
+  const lines = (g: Element) => [...g.querySelectorAll('text.label > tspan')].map((t) => t.textContent);
+
+  it('every core task shows its title, then a muted line with the id', () => {
+    for (const g of nodes().filter((x) => x.classList.contains('role-core'))) {
+      const id = g.dataset.id as string;
+      const l = lines(g);
+      expect(l[0], id).toBe(`Title ${id}`);
+      expect(l[l.length - 1], id).toMatch(new RegExp(`^${id}\\b`));
+      expect(g.querySelector('tspan.label-meta')?.textContent, id).toMatch(new RegExp(`^${id}\\b`));
+      expect(g.querySelector('text.label')?.classList.contains('titled'), id).toBe(true);
+    }
+  });
+
+  it('small nodes are labelled too: the titled label is shown without hover or zoom', () => {
+    expect(rule('.graph-svg .node .label.titled').display).toBe('inline');
+    const small = nodes().find((g) => g.dataset.id === 'S-1') as SVGGElement;
+    expect(small.classList.contains('large')).toBe(false);
+    expect(lines(small)[0]).toBe('Title S-1');
+  });
+
+  it('a question shows its text first, its id muted after', () => {
+    const q = nodes().find((g) => g.classList.contains('sp')) as SVGGElement;
+    expect(lines(q)[0]).toBe('Is Q-W wanted?');
+    expect(q.querySelector('tspan.label-meta')?.textContent).toMatch(/^Q-1\b/);
+  });
+
+  it('the muted line uses the muted text token', () => {
+    expect(token(rule('.graph-svg .node .label .label-meta').fill)).toBe('on-surface-variant');
+  });
+
+  it('the accessible name and the tooltip start with the title, not the id', () => {
+    const t = nodes().find((g) => g.dataset.id === 'L-2') as SVGGElement;
+    expect(t.getAttribute('aria-label')).toMatch(/^Title L-2, L-2, /);
+    expect(t.querySelector('title')?.textContent).toMatch(/^Title L-2\n/);
+  });
+
+  it('the title font is fixed in graph units and capped at 14 px on screen when zoomed in', () => {
+    expect(rule('.graph-svg .node .label.titled')['font-size']).toBe(
+      'min(var(--text-xs), calc(var(--text-sm) / var(--graph-scale, 1)))',
+    );
   });
 });
 
