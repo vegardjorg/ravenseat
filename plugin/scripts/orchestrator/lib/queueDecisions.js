@@ -852,7 +852,8 @@
       return p('started', `${ravenseat} set ${o.id} cancelled`, 'the tokens it used are spent');
     if (s === 'review') return p('not merged', `${ravenseat} resume ${o.id} --reason fix --answer "<what to change>"`);
     if (s === 'done')
-      return o.merge_commit ? p('merged', `git revert -m 1 ${String(o.merge_commit).slice(0, 12)}`) : p('merged: revert its merge commit');
+      // `undo` finds the merge commit itself (merge_commit, else the merge log), shows the plan and asks y/N.
+      return p('merged', `${ravenseat} undo ${o.id}`);
     return p(`status ${s}`, `${ravenseat} show ${o.id}`);
   }
 

@@ -140,8 +140,8 @@ describe('the Decisions view', () => {
     expect(rows[1]).toContain('New package');
     expect(rows[1]).toContain('The agent decided, not asked');
     // The state in words, only the command as code.
-    expect(rows[1]).toContain('Undo (merged): git revert -m 1 abcdef123456');
-    expect(box.querySelectorAll('.decide-for-undo')[1].textContent).toBe('git revert -m 1 abcdef123456');
+    expect(rows[1]).toContain('Undo (merged): ravenseat undo EX-4');
+    expect(box.querySelectorAll('.decide-for-undo')[1].textContent).toBe('ravenseat undo EX-4');
     expect($('inbox').querySelector('.inbox-count')?.textContent).toBe('2');
   });
 

@@ -307,9 +307,9 @@ describe('decided for you (phase 1 of the question level study, section 5.2)', (
     expect(by('T-1', 'New package')).toMatchObject({ what: '1 new package: date-fns', why: 'not asked', title: 'Export' });
     expect(by('T-1', 'New package').undo).toBe('not merged: ravenseat resume T-1 --reason fix --answer "<what to change>"');
     expect(by('T-1', 'Migration or schema').why).toBe('asked you');
-    expect(by('T-2')).toMatchObject({ why: 'not asked, but said under Assumptions', undo: 'merged: git revert -m 1 0123456789ab' });
+    expect(by('T-2')).toMatchObject({ why: 'not asked, but said under Assumptions', undo: 'merged: ravenseat undo T-2' });
     // The parts the board shows apart: the state and the cost in words, the command as code.
-    expect(by('T-2').undo_parts).toEqual({ when: 'merged', cli: 'git revert -m 1 0123456789ab', note: null });
+    expect(by('T-2').undo_parts).toEqual({ when: 'merged', cli: 'ravenseat undo T-2', note: null });
     expect(by('F-2').undo_parts).toEqual({ when: 'started', cli: 'ravenseat set F-2 cancelled', note: 'the tokens it used are spent' });
     expect(by('F-3').undo_parts).toEqual({ when: 'undone already, back to proposed', cli: null, note: null });
   });
