@@ -483,6 +483,17 @@ describe('lite scope in the registry follows what lite really has (finding 5)', 
     expect(row('limits.maxDPlus').modes).toEqual(['full']);
     expect(row('limits.maxPerDomain').modes).toEqual(['full']);
   });
+
+  // Friction review 22.11: rows that do nothing in lite are full only there, with the reason in one line.
+  it('the plan review needs the intake triage (off in lite) and plans.checkpoint is skipped by the lite skill', () => {
+    const row = (k: string) => ROWS.find((x) => x.key === k) as Row;
+    for (const k of ['planReview.mode', 'planReview.classes']) {
+      expect(row(k).modes, k).toEqual(['full']);
+      expect(row(k).fullWhy, k).toMatch(/intake triage is off in lite/);
+    }
+    expect(row('plans.checkpoint').modes).toEqual(['full']);
+    expect(row('plans.checkpoint').fullWhy).toMatch(/lite/);
+  });
 });
 
 describe('the config table in queue.md follows the registry (step 11)', () => {

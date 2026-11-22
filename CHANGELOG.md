@@ -102,6 +102,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **Plans: polish: clearer empty states, sticky Roadmap column headers, start lines in one Copy menu, and the deadline
   band only when there is a deadline.** On a phone the room tabs stay on one line.
 - **The lite help lists `undo <id>`, and bare `undo` first says it undoes the last queue edit and points to `undo <id>`.**
+- **Settings in lite puts `planReview.*` and `plans.checkpoint` under Full mode only, since they do nothing there.**
 ### Fixed
 - A long answer button in Decisions wraps inside the card on a phone instead of running past its edge.
 - **A worktree is recognised under a short Windows path** (an 8.3 name such as `RUNNER~1`): commands on a queue branch no longer act as if they ran in the main checkout.
