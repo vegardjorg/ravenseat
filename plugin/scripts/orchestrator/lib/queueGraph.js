@@ -895,10 +895,88 @@
     };
   }
 
+  /**
+   * The selection line in Dependencies (deps M5): the selected task by its title, the id in brackets, then how many
+   * tasks are before and after it in the chain. A task that is not drawn (hidden right now) is named by its id.
+   * The card views keep their own line (QueueA11y.chainLead); only the graph names the title.
+   */
+  function chainText(id, chain, o) {
+    const n = (o?.nodes ?? []).find((x) => x.id === id && x.art === 'task');
+    const title = n?.title ? `${cutText(n.title, 60)} (${id})` : id;
+    const before = new Set(chain?.before ?? []).size;
+    const after = new Set(chain?.after ?? []).size;
+    // "1 task before it, 2 after it": the noun only once, on the first count.
+    const side = (k, first) => (k ? (first ? plural(k, 'task', 'tasks') : String(k)) : 'nothing');
+    return `Showing the chain of ${title}: ${side(before, true)} before it, ${side(after, !before)} after it`;
+  }
+
+  /**
+   * The box (graph units) around the nodes `ids` of a laid-out graph: their circles and their title labels.
+   * null when none of them is drawn.
+   */
+  function chainBox(o, ids) {
+    const want = new Set(ids);
+    let box = null;
+    const add = (b) => {
+      if (!b) return;
+      box = box
+        ? {
+            left: Math.min(box.left, b.left),
+            right: Math.max(box.right, b.right),
+            top: Math.min(box.top, b.top),
+            bottom: Math.max(box.bottom, b.bottom),
+          }
+        : { ...b };
+    };
+    for (const n of o?.nodes ?? []) {
+      if (!want.has(n.id) || !Number.isFinite(n.x)) continue;
+      const r = n.r ?? 0;
+      add({ left: n.x - r, right: n.x + r, top: n.y - r, bottom: n.y + r });
+      add(labelBox(n));
+    }
+    return box;
+  }
+
+  /**
+   * Pan (and if needed zoom out) the view so `box` (graph units) lies inside `area` (surface pixels, e.g. the part
+   * left of the side panel), deps M5. `view` is { s, x, y }: screen = x + graph * s. Returns the new view, or null when
+   * the box is already inside. It never zooms in, and never below `minScale` (0.5: where titles still show, see
+   * zoom-far); a chain too big even then is centred on `focus` (the selected task) instead.
+   */
+  function panInto(box, view, area, opt = {}) {
+    const pad = opt.pad ?? 16;
+    const s0 = view.s;
+    const inside =
+      view.x + box.left * s0 >= area.left &&
+      view.x + box.right * s0 <= area.right &&
+      view.y + box.top * s0 >= area.top &&
+      view.y + box.bottom * s0 <= area.bottom;
+    if (inside) return null;
+    const aw = Math.max(1, area.right - area.left - 2 * pad);
+    const ah = Math.max(1, area.bottom - area.top - 2 * pad);
+    const bw = Math.max(1, box.right - box.left);
+    const bh = Math.max(1, box.bottom - box.top);
+    const floor = Math.min(s0, opt.minScale ?? 0.5);
+    const s = Math.max(floor, Math.min(s0, aw / bw, ah / bh));
+    const along = (lo, hi, a0, a, focus) => {
+      // Fits: centred in the free area. Too big: the selected task in the middle, or the start of the chain.
+      if ((hi - lo) * s <= a) return a0 + pad + (a - (hi - lo) * s) / 2 - lo * s;
+      if (Number.isFinite(focus)) return a0 + pad + a / 2 - focus * s;
+      return a0 + pad - lo * s;
+    };
+    return {
+      s,
+      x: along(box.left, box.right, area.left, aw, opt.focus?.x),
+      y: along(box.top, box.bottom, area.top, ah, opt.focus?.y),
+    };
+  }
+
   return {
     COLUMNS,
     SP,
     MEASURE,
+    chainBox,
+    panInto,
     STATE_TEXT,
     STATE_SHORT,
     radius,
@@ -907,6 +985,7 @@
     listText,
     nodeWords,
     graphLead,
+    chainText,
     buildGraph,
     layer,
     graphNumber,

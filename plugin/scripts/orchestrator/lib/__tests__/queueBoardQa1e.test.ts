@@ -5,8 +5,8 @@
 // queueBoardQa1e.test.ts: why things are grayed in Dependencies, and the project name on lane cards (QA-1e: Q6, Q8).
 //
 // What the tests prove:
-//   - Q6: selecting a task in Dependencies shows a status line in the graph's top area ("Showing the chain of <id>
-//     (<n> tasks) · Clear selection"). The line is a polite live region that is always in the layout with a fixed
+//   - Q6: selecting a task in Dependencies shows a status line in the graph's top area ("Showing the chain of <title>
+//     (<id>): 1 task before it, 1 after it · Clear selection", title first since deps M5). The line is a polite live region that is always in the layout with a fixed
 //     height, so it never pushes the graph down. "Clear selection" and Esc both clear it. The card views say the
 //     same in the strip above the columns (plus "the rest is faded"); in Dependencies the strip leaves it to the graph
 //     line, so the chain is never explained twice.
@@ -153,18 +153,18 @@ describe('Q6: the chain status line in Dependencies', () => {
     expect(base('.graph-chain-status')['flex-basis']).toBe('100%');
   });
 
-  it('selecting a task shows "Showing the chain of <id> (<n> tasks) · Clear selection"', async () => {
+  it('selecting a task shows "Showing the chain of <title> (<id>): ... · Clear selection" (title first, deps M5)', async () => {
     const before = status();
     node('EX-2')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await flush();
     // The same element is updated (a live region is only announced when it was already in the page).
     expect(status()).toBe(before);
-    // EX-2's chain (the server's, open tasks only): EX-1 before it and EX-3 after it. 3 tasks with EX-2.
+    // EX-2's chain (the server's, open tasks only): EX-1 before it and EX-3 after it.
     const lead = status().querySelector('.graph-chain-text') as HTMLElement;
-    expect(lead.textContent).toBe('Showing the chain of EX-2 (3 tasks)');
+    expect(lead.textContent).toBe('Showing the chain of Title EX-2 (EX-2): 1 task before it, 1 after it');
     const clear = status().querySelector('button') as HTMLButtonElement;
     expect(clear.textContent).toBe('Clear selection');
-    expect(status().textContent).toMatch(/^Showing the chain of EX-2 \(3 tasks\) · .*Clear selection$/);
+    expect(status().textContent).toMatch(/^Showing the chain of Title EX-2 \(EX-2\): .* · .*Clear selection$/);
     // The strip above the graph does not say it a second time.
     expect($('stripe').querySelector('.chain-line')).toBeNull();
   });
@@ -180,9 +180,9 @@ describe('Q6: the chain status line in Dependencies', () => {
   it('Esc clears it too (the first Esc closes the panel, the next clears the chain)', async () => {
     node('EX-3')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await flush();
-    expect(status().textContent).toContain('Showing the chain of EX-3');
+    expect(status().textContent).toContain('Showing the chain of Title EX-3 (EX-3)');
     await closePanel();
-    expect(status().textContent).toContain('Showing the chain of EX-3');
+    expect(status().textContent).toContain('Showing the chain of Title EX-3 (EX-3)');
     key(document.body, 'Escape');
     await flush();
     expect(status().textContent).toBe('');

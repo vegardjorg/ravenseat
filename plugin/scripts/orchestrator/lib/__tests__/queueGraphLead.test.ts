@@ -25,6 +25,7 @@ const G = require('../queueGraph.js') as {
   ) => { lead: string | null; counts: string; critical: { path: string[]; edges: string[] } };
   nodeWords: (n: Node, o: Setup) => { name: string; lines: string[] };
   listText: (names: string[], max?: number) => string;
+  chainText: (id: string, chain: { before?: string[]; after?: string[] }, o: Setup) => string;
 };
 /* eslint-enable @typescript-eslint/no-require-imports */
 
@@ -148,6 +149,85 @@ describe('nodeWords: what it is, what it waits on and what it unlocks', () => {
       'Waits on Sign in with Apple',
       'Unlocks Empty states on all screens (2 tasks in all)',
     ]);
+  });
+});
+
+describe('chainText: the selection line names the task by title (deps M5)', () => {
+  it('title first, the id in brackets, then how many are before and after it', () => {
+    const { o } = setup();
+    expect(G.chainText('UI-2', { before: ['AUTH-4'], after: ['UI-4', 'UI-6'] }, o)).toBe(
+      'Showing the chain of Streak calendar (UI-2): 1 task before it, 2 after it',
+    );
+  });
+
+  it('says "nothing" on the side that is empty, and falls back to the id when the task is not drawn', () => {
+    const { o } = setup();
+    expect(G.chainText('AUTH-4', { before: [], after: ['UI-2'] }, o)).toBe(
+      'Showing the chain of Sign in with Apple (AUTH-4): nothing before it, 1 task after it',
+    );
+    expect(G.chainText('GONE-1', { before: ['A'], after: [] }, o)).toBe(
+      'Showing the chain of GONE-1: 1 task before it, nothing after it',
+    );
+  });
+});
+
+describe('the side panel never covers the selected chain (deps M5)', () => {
+  type Box = { left: number; right: number; top: number; bottom: number };
+  type View = { s: number; x: number; y: number };
+  const H = G as unknown as {
+    chainBox: (o: Setup, ids: Iterable<string>) => Box | null;
+    panInto: (box: Box, view: View, area: Box, opt?: { pad?: number; minScale?: number; focus?: { x: number; y: number } }) => View | null;
+  };
+  const screen = (b: Box, v: View) => ({
+    left: v.x + b.left * v.s,
+    right: v.x + b.right * v.s,
+    top: v.y + b.top * v.s,
+    bottom: v.y + b.bottom * v.s,
+  });
+
+  it('chainBox covers the circles and the title labels of the chain only', () => {
+    const { o } = setup();
+    const b = H.chainBox(o, ['AUTH-4', 'UI-2'])!;
+    const n = byId(o, 'UI-2') as Node & { x: number; y: number; r: number };
+    expect(b.right).toBeGreaterThanOrEqual(n.x + n.r);
+    // The label below the circle is part of the box.
+    expect(b.bottom).toBeGreaterThan(n.y + n.r + 20);
+    expect(H.chainBox(o, ['NOT-THERE'])).toBeNull();
+  });
+
+  it('a chain already in the free area is left alone', () => {
+    const box = { left: 0, right: 100, top: 0, bottom: 50 };
+    expect(H.panInto(box, { s: 1, x: 20, y: 20 }, { left: 0, top: 0, right: 800, bottom: 600 })).toBeNull();
+  });
+
+  it('a chain under the panel is moved into the free area left of it, at the same zoom when it fits', () => {
+    const box = { left: 900, right: 1200, top: 100, bottom: 200 };
+    const area = { left: 0, top: 0, right: 800, bottom: 600 };
+    const v = H.panInto(box, { s: 1, x: 0, y: 0 }, area)!;
+    expect(v.s).toBe(1);
+    const sb = screen(box, v);
+    expect(sb.left).toBeGreaterThanOrEqual(area.left);
+    expect(sb.right).toBeLessThanOrEqual(area.right);
+    expect(sb.top).toBeGreaterThanOrEqual(area.top);
+    expect(sb.bottom).toBeLessThanOrEqual(area.bottom);
+  });
+
+  it('a chain wider than the free area is zoomed out to fit, but never below the zoom where titles show', () => {
+    const area = { left: 0, top: 0, right: 800, bottom: 600 };
+    const v = H.panInto({ left: 0, right: 1200, top: 0, bottom: 100 }, { s: 1, x: 0, y: 0 }, area)!;
+    expect(v.s).toBeLessThan(1);
+    expect(screen({ left: 0, right: 1200, top: 0, bottom: 100 }, v).right).toBeLessThanOrEqual(800);
+    // Too wide even at 0.5: stays at 0.5 and centres the selected task instead.
+    const w = H.panInto({ left: 0, right: 4000, top: 0, bottom: 100 }, { s: 1, x: 0, y: 0 }, area, {
+      focus: { x: 3000, y: 50 },
+    })!;
+    expect(w.s).toBe(0.5);
+    expect(w.x + 3000 * w.s).toBeCloseTo(400, 0);
+  });
+
+  it('never zooms in to fit', () => {
+    const v = H.panInto({ left: 900, right: 950, top: 0, bottom: 20 }, { s: 0.6, x: 0, y: 0 }, { left: 0, top: 0, right: 500, bottom: 400 })!;
+    expect(v.s).toBe(0.6);
   });
 });
 

@@ -215,7 +215,8 @@
   }
 
   /**
-   * The chain status line (QA-1e Q6): "Showing the chain of <id> (<n> tasks) · Clear selection", with the chain
+   * The chain status line (QA-1e Q6, deps M5): "Showing the chain of <title> (<id>): 1 task before it, 2 after it ·
+   * Clear selection", with the chain
    * members that are hidden right now and their actions in between (from board.js, ctx.chainCauses). The element is
    * always in the graph top with a fixed height (board.css), so the text appearing never moves the graph, and it is
    * a polite live region that mark() updates in place: a screen reader hears the change, not a new element.
@@ -227,10 +228,8 @@
       return;
     }
     const el = ctx.el;
-    const n = 1 + new Set([...(chain.before ?? []), ...(chain.after ?? [])]).size;
-    const lead = window.QueueA11y?.chainLead
-      ? window.QueueA11y.chainLead(id, n)
-      : `Showing the chain of ${id} (${plural(n, 'task', 'tasks')})`;
+    // deps M5: the line names the selected task by its title (queueGraph.chainText); the card views keep chainLead.
+    const lead = window.QueueGraph.chainText(id, chain, cache?.setup);
     statusEl.replaceChildren(
       el('span', { class: 'graph-chain-text', text: lead }),
       ...(ctx.chainCauses?.() ?? []),
@@ -609,6 +608,53 @@
       else fadedItem.setAttribute('aria-hidden', 'true');
     }
     chainStatus(active ? id : null, active ? chain : null);
+    // deps M5: a new selection is brought into the part of the surface the side panel does not cover. Once per
+    // selection, so a later pan or zoom by hand is never undone by a redraw.
+    if (!active) keptFor = null;
+    else if (keptFor !== id) {
+      keptFor = id;
+      keepInView(id, chain);
+    }
+  }
+
+  /** The id whose chain keepInView last placed (reset when the selection is cleared). */
+  let keptFor = null;
+
+  /**
+   * Moves the view so the selected chain (circles and titles) lies in the free part of the surface: left of the side
+   * panel when it floats over the graph, and above the bottom of the window. Pure math in queueGraph.panInto.
+   */
+  function keepInView(id, chain) {
+    const o = cache?.setup;
+    if (!surface || !snippet || !o) return;
+    const sr = surface.getBoundingClientRect();
+    if (!sr.width || !sr.height) return; // not laid out (hidden view or a test without layout)
+    const area = {
+      left: 0,
+      top: Math.max(0, -sr.top),
+      right: sr.width,
+      bottom: Math.min(sr.height, (window.innerHeight || sr.bottom) - sr.top),
+    };
+    const panel = document.getElementById('panel');
+    if (panel && !panel.hidden) {
+      const pr = panel.getBoundingClientRect();
+      if (pr.width && pr.left < sr.right && pr.right > sr.left) area.right = Math.min(area.right, pr.left - sr.left);
+    }
+    // Too little room beside the panel to be of use (the modal sheet on a narrow window): leave the view.
+    if (area.right - area.left < 240 || area.bottom - area.top < 160) return;
+    const ids = [id, ...(chain?.before ?? []), ...(chain?.after ?? [])];
+    // The questions the chain waits on are lit with it (mark), so they belong in view too.
+    const inChain = new Set(ids);
+    for (const k of o.edges ?? []) if (k.art === 'sp' && inChain.has(k.to)) ids.push(k.from);
+    const box = window.QueueGraph.chainBox(o, ids);
+    if (!box) return;
+    const own = o.nodes.find((n) => n.id === id);
+    const fresh = window.QueueGraph.panInto(box, snippet, area, {
+      focus: own ? { x: own.x, y: own.y } : undefined,
+    });
+    if (!fresh) return;
+    snippet = fresh;
+    use();
   }
 
   /** Draws the view in `ctx.main` (board.js has emptied it). */
