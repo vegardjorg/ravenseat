@@ -133,6 +133,36 @@
   /** The words for a question type (an unknown type reads as a plain question). */
   const questionWords = (type) => QUESTION_WORDS[type] ?? QUESTION_WORDS.question;
 
+  // ---- The card fields (section 6.1 of plans/autonomi-nivaa-utredning.md) ---------------------------------------
+  // One format for every choice, read by the board, `ravenseat decide` and /ravenseat:decide: category, context, and what
+  // follows from the recommendation and from anything else. With 3-4 choices yes and no do not fit, so the card says
+  // "if you follow the recommendation" and "if you choose something else".
+
+  /** The titles of ask-catalog/categories.json (lib/askCatalog.js; a test keeps them equal, this file runs in the browser). */
+  const CATEGORY_TITLES = Object.freeze({
+    legal: 'Legal and privacy',
+    security: 'Security and access',
+    architecture: 'Big design choices',
+    database: 'Database changes',
+    dependency: 'New libraries',
+    delete: 'Removing data or features',
+    product: 'What a feature should do',
+    followups: 'Follow-up tasks',
+    ui: 'Small UI choices',
+    technical: 'Small technical choices',
+  });
+  const IF_YES_LABEL = 'If you follow the recommendation';
+  const IF_NO_LABEL = 'If you choose something else';
+  /** The mark on a track question written as free text, without `ravenseat question` (section 6.2). */
+  const NOT_FILLED = 'Not filled in by the agent';
+  /** A known category key, or "uncategorized" (an old post: shown as today, without a badge). */
+  const categoryKey = (key) => (Object.hasOwn(CATEGORY_TITLES, key ?? '') ? key : 'uncategorized');
+  /** The card fields of an item: { category, categoryTitle, ifYes, ifNo }. */
+  const cardFields = (category, ifYes, ifNo) => {
+    const key = categoryKey(category);
+    return { category: key, categoryTitle: CATEGORY_TITLES[key] ?? null, ifYes: ifYes || null, ifNo: ifNo || null };
+  };
+
   /**
    * The answer the free text option sends: the trimmed text, or the type's `empty` answer when the text is optional and
    * left empty ("Mark done" without a note sends "Done"). An empty string means "write something first".
@@ -204,6 +234,8 @@
       recommendation: s.recommendation ?? null,
       // Why it is asked (the question's optional `context` field), or null.
       background: s.context ?? null,
+      // The category and the two consequence lines (null on an old post).
+      ...cardFields(s.category, s.if_yes, s.if_no),
       // The same two facts as the context lines, kept apart so the board can draw them as links.
       source: s.source ?? null,
       waiting,
@@ -245,6 +277,9 @@
       context: row.context,
       source: row.source,
       choices: row.choices,
+      category: row.category,
+      if_yes: row.if_yes,
+      if_no: row.if_no,
       direct: row.tasks,
       count: (row.tasks ?? []).length,
       minutes: row.minutes,
@@ -275,6 +310,8 @@
       text: null,
       context: [`${p.title ? `${p.title} (${p.pid})` : p.pid} · ${f.feature}`],
       recommendation: 'QA ok',
+      // A machine card: the two lines come from code (no category: QA is not a row of the catalog yet).
+      ...cardFields(null, 'The task counts as done, and the card goes.', 'You write what is wrong, and a fix task is made from it.'),
       impact: { count: 0, minutes: 0, perStep: [], focusCount: 0, focusMinutes: 0 },
       options: [
         { label: 'QA ok', recommended: true, action: { type: 'qa-ok', id: o.id } },
@@ -335,6 +372,12 @@
           : []),
       ],
       recommendation: f.gate_without_place ? 'Decline' : 'Approve',
+      // A machine card (section 6.1): yes is the agent work, no is nothing. The lines follow the recommendation, so on a
+      // guess (Decline recommended) "if you follow it" is the nothing.
+      ...((work, nothing) => cardFields('followups', ...(f.gate_without_place ? [nothing, `${work}, on a guess.`] : [`${work}.`, nothing])))(
+        `About ${minutesText(estimate)} of agent work`,
+        'Nothing changes, and it stays declined.',
+      ),
       impact: { ...taskImpact(estimate, f), own: estimate },
       options: f.gate_without_place ? [decline, approve] : [approve, decline],
       free: null,
@@ -346,6 +389,16 @@
   function stopItem(h) {
     const stop = STOP_TEXT[h.stop.code];
     const asks = h.stop.code === 'track-question';
+    // Section 6.2: receive compared ownerQuestions=<n> with the questions the track registered. Free text left over is
+    // marked, and the registered ones are named (they are their own cards under Decide).
+    const unfilled = asks && Number(h.stop.unfilled) > 0;
+    const registered = asks && Array.isArray(h.stop.registered) ? h.stop.registered : [];
+    const asked = [
+      unfilled
+        ? `${NOT_FILLED}: the track wrote ${h.stop.unfilled === 1 ? 'this question' : `${h.stop.unfilled} questions`} as free text instead of registering ${h.stop.unfilled === 1 ? 'it' : 'them'} with ravenseat question, so there is no category, context or consequence.`
+        : null,
+      registered.length ? `Registered as questions: ${registered.join(', ')} (under Decide).` : null,
+    ];
     const options = [
       ...(asks
         ? [{ label: 'Answer, and prepare a new round', recommended: true, needsText: 'Your answer to the track', action: { type: 'track-answer', id: h.id, text: null } }]
@@ -358,10 +411,11 @@
       ...(asks ? { heading: 'ANSWER' } : {}),
       kind: 'stopped',
       kindName: stop.name,
+      notFilled: unfilled,
       id: h.id,
       title: h.title || h.id,
       text: null,
-      context: [h.stop.note, h.stop.file ? `The whole text: ${h.stop.file}` : null, stop.next(h.id)].filter(Boolean),
+      context: [h.stop.note, ...asked, h.stop.file ? `The whole text: ${h.stop.file}` : null, stop.next(h.id)].filter(Boolean),
       recommendation: options[0].label,
       impact: taskImpact(0, h),
       options,
@@ -917,6 +971,10 @@
   }
 
   return {
+    CATEGORY_TITLES,
+    IF_YES_LABEL,
+    IF_NO_LABEL,
+    NOT_FILLED,
     SIGNAL_LABELS,
     undoParts,
     undoText,

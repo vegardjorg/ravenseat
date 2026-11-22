@@ -190,3 +190,32 @@ describe('the board switches (the Cloud tab comes with the module)', () => {
     expect(() => run('board-setting', 'cloud', 'maybe')).toThrow();
   });
 });
+
+describe('ravenseat decide: the card fields (section 6.1 of plans/autonomi-nivaa-utredning.md)', () => {
+  it('a new-format question prints its category, both consequence lines and why, in the board order; an approval gets its lines from code', () => {
+    const q = queue();
+    q.question['Q-1'] = {
+      ...q.question['Q-1'],
+      category: 'product',
+      context: 'Both vendors cover the export.',
+      if_yes: 'Vendor B is set up this round.',
+      if_no: 'Vendor A needs one more round for its login.',
+    };
+    writeFileSync(join(folder, 'queue.json'), JSON.stringify(q));
+    const j = JSON.parse(run('decide', '--json'));
+    expect(j.items[0]).toMatchObject({ category: 'product', categoryTitle: 'What a feature should do', ifYes: 'Vendor B is set up this round.' });
+    const out = run('decide').split('\n');
+    const at = (s: string) => out.findIndex((l) => l.includes(s));
+    expect(at('   Category: What a feature should do')).toBeGreaterThan(-1);
+    expect(at('   If you follow the recommendation: Vendor B is set up this round.')).toBeGreaterThan(at('Recommendation: Vendor B'));
+    expect(at('   If you choose something else: Vendor A needs one more round')).toBeGreaterThan(at('If you follow the recommendation'));
+    expect(at('   Why: Both vendors cover the export.')).toBeGreaterThan(at('If you choose something else'));
+    expect(at('If you choose something else: Nothing changes, and it stays declined.')).toBeGreaterThan(at('APPROVE'));
+  });
+
+  it('an old post prints no category and no consequence lines', () => {
+    const out = run('decide');
+    expect(out).not.toContain('Category:');
+    expect(out.split('\n').filter((l) => l.includes('If you follow the recommendation')).length).toBe(2); // the two machine cards (approval, QA check) only
+  });
+});

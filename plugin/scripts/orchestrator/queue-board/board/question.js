@@ -103,7 +103,11 @@ function optionWords(item, o) {
   };
 }
 
-/** The type badge and the id: the same name on every surface (QUESTION_WORDS). */
+/**
+ * The type badge and the id: the same name on every surface (QUESTION_WORDS). An owner question with a category also
+ * shows the category's title (an old post has none and looks as before); a track question left as free text gets the
+ * mark "Not filled in by the agent" (section 6.2 of plans/autonomi-nivaa-utredning.md).
+ */
 function questionHead(item) {
   return el(
     'div',
@@ -112,13 +116,36 @@ function questionHead(item) {
       class: `badge sp-type${item.verb === 'decide' ? ` sp-${item.kind}` : ''}`,
       text: item.kindName,
     }),
+    item.verb === 'decide' && item.categoryTitle
+      ? el('span', { class: 'badge sp-category', title: 'Category', text: item.categoryTitle })
+      : null,
+    item.notFilled
+      ? el('span', { class: 'badge sp-not-filled', text: QD()?.NOT_FILLED ?? 'Not filled in by the agent' })
+      : null,
     el('span', { class: 'sp-id', text: item.id }),
   );
 }
 
 /**
+ * What follows from the answer (section 6.1): "If you follow the recommendation" and "If you choose something else",
+ * from the question's if_yes and if_no, or from code on a machine card (an approval, a QA check). Null without them.
+ */
+function consequenceBlock(item) {
+  if (!item.ifYes && !item.ifNo) return null;
+  const row = (label, text) =>
+    text ? [el('dt', { class: 'sp-if-label', text: label }), el('dd', { class: 'sp-if-text', text })] : [];
+  return el(
+    'dl',
+    { class: 'sp-if' },
+    row(QD()?.IF_YES_LABEL ?? 'If you follow the recommendation', item.ifYes),
+    row(QD()?.IF_NO_LABEL ?? 'If you choose something else', item.ifNo),
+  );
+}
+
+/**
  * The question's own blocks in the fixed order: the question (unless `title: false`, where the surface has its own
- * heading), the recommendation, why it is asked, and (with `meta`) the muted line: what it unlocks, what waits, the source.
+ * heading), the recommendation, what follows from following it or not, why it is asked, and (with `meta`) the muted
+ * line: what it unlocks, what waits, the source.
  */
 function questionBody(item, { title = true, meta = true } = {}) {
   return [
@@ -126,6 +153,7 @@ function questionBody(item, { title = true, meta = true } = {}) {
       ? el('p', { class: `decide-title sp-ask${item.text === null ? ' missing' : ''}`, text: item.title })
       : null,
     recommendationBlock(item.recommendation),
+    consequenceBlock(item),
     questionContext({
       background: item.background,
       unlocks: meta ? (QD()?.impactLine(item) ?? null) : null,
@@ -311,6 +339,7 @@ window.QueueQuestion = {
   fromPlan: (row) => QD()?.fromPlanDecision(row) ?? null,
   head: questionHead,
   body: questionBody,
+  consequences: consequenceBlock,
   answers: answerButtons,
   form: answerForm,
   compact: questionRow,

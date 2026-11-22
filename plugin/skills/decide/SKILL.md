@@ -36,7 +36,11 @@ first."), then start.
 ## 2. One item at a time
 
 For each item, in order, ask with **AskUserQuestion** (one question per call, never a batch):
-- **question:** `<verb in words> <id>: <title>`, then on new lines the `impact_line` and at most two `context` lines.
+- **question:** `<verb in words> <id>: <title>`, then on new lines, each only when the item has it:
+  `Category: <categoryTitle>` (a question), `Not filled in by the agent` (when `notFilled`), `Recommendation: <recommendation>`,
+  `If you follow the recommendation: <ifYes>`, `If you choose something else: <ifNo>`, `Why: <background>`, then the
+  `impact_line` and at most two `context` lines. Write the consequence lines as they are; never fill one in yourself
+  when it is missing (an old post has none).
   Verbs in words: decide = "Decide", check = "Check", approve = "Approve", unstick = "Unstick".
 - **options**, in this order, at most 4 in all:
   1. the option with `recommended: true`, labeled `<label> (Recommended)` (an item without one, such as the

@@ -737,6 +737,10 @@ function inbox(
         // The background (why it is asked), optional: shown under the recommendation as context.
         context: q?.context ?? null,
         source: q?.source ?? null,
+        // The card fields (section 6.1 of plans/autonomi-nivaa-utredning.md); an old post is uncategorized, without them.
+        category: require('./askCatalog.js').categoryOf(q),
+        if_yes: q?.if_yes ?? null,
+        if_no: q?.if_no ?? null,
         // The answer options (2-4, optional) as buttons; `recommended` = the one equal to the recommendation.
         choices: Array.isArray(q?.choices)
           ? q.choices.map((label) => ({ label, recommended: L.isRecommendedChoice(q, label) }))
@@ -818,7 +822,14 @@ function inbox(
   const stopInfo = (k) => {
     const b = L.openBlockOf(map.perId.get(k.id));
     return (k.status === 'review' || b?.code === 'track-question') && b && DEC.STOP_TEXT[b.code]
-      ? { code: b.code, note: b.note ?? null, file: b.file ?? null }
+      ? {
+          code: b.code,
+          note: b.note ?? null,
+          file: b.file ?? null,
+          // A track question: how many were left as free text, and the ones registered (receive, section 6.2).
+          ...(b.unfilled != null ? { unfilled: b.unfilled } : {}),
+          ...(Array.isArray(b.registered) ? { registered: b.registered } : {}),
+        }
       : null;
   };
   // Marked running with no agent (queueLogic.startedWithoutAgent, found by the caller, since it takes git).
