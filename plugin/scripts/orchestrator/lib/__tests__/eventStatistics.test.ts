@@ -171,6 +171,57 @@ describe('flow figures', () => {
   });
 });
 
+// CI-1 (roadmap 6h): measure before building. How often the base gate's skip rule reuses the track's green run after a
+// merge, how often the same gates ran again on the merge commit (and how long that took), and the wait in the gate
+// queue. Read only, from the baseGate and gate rows that already exist.
+describe('gates run twice (CI-1)', () => {
+  const rows = [
+    // After a merge: the skip rule reused the track's run.
+    { time: at(DAY), event: 'baseGate', tip: 'm1', ok: true, skipped: 'the merge commit has the tree of the track tip', duration_s: null },
+    // After a merge: ran again (the base gate commands are not the quick gates, so the row has the run time).
+    { time: at(DAY), event: 'baseGate', tip: 'm2', ok: true, skipped: null, duration_s: 40 },
+    // After a merge: ran again as the merge step's quick gates (the row has no time; the gate row on that sha has).
+    { time: at(DAY), event: 'baseGate', tip: 'm3', ok: false, skipped: null, duration_s: null, made_red_by: 'B' },
+    { time: at(DAY), event: 'gate', kind: 'quick', track: null, sha: 'm3', duration_s: 25, ok: false, wait_sec: 12 },
+    // Not after a merge: a check before one, a CI watch verdict and an undo's check.
+    { time: at(DAY), event: 'baseGate', tip: 'b1', ok: true, skipped: null, duration_s: 30, note: 'checked before merging C' },
+    { time: at(DAY), event: 'baseGate', tip: 'c1', ok: false, skipped: null, duration_s: null, note: 'ci watch: CI red at c1' },
+    { time: at(DAY), event: 'baseGate', tip: 'u1', ok: true, skipped: null, duration_s: 5, note: 'after ravenseat undo D' },
+    // Track gate runs: one waited 90 s for a slot, one under a second (not a wait), one with no wait field.
+    { time: at(DAY), event: 'gate', kind: 'quick', track: 'A', sha: 'x1', duration_s: 50, ok: true, wait_sec: 90 },
+    { time: at(DAY), event: 'gate', kind: 'quick', track: 'A', sha: 'x2', duration_s: 50, ok: true, wait_sec: 0.4 },
+    { time: at(DAY), event: 'gate', kind: 'full', track: 'B', sha: 'x3', duration_s: 50, ok: true },
+    // Outside the window.
+    { time: at(-20 * DAY), event: 'baseGate', tip: 'old', ok: true, skipped: null, duration_s: 99 },
+  ];
+
+  it('counts the merges, the skip rule hits, the reruns with their time, the checks before a merge and the gate queue wait', () => {
+    const f = ES.flowStatistics({ tasks: [] }, rows, { from: T0, to: T0 + 14 * DAY });
+    expect(f.gatesTwice).toMatchObject({
+      merges: 3,
+      skipped: 1,
+      ran_again: 2,
+      extra_s: 65,
+      skip_pct: 33.3,
+      before_merge: 1,
+      wait: { runs: 4, waited: 2, total_s: 102, max_s: 90 },
+    });
+    expect(f.gatesTwice.text).toBe(
+      '2 of 3 merges ran the gates again on the merge commit (65 s in all); the skip rule reused the track\'s green run for 1. ' +
+        'Gate queue: 2 of 4 runs waited for a slot, 2 min in all, longest 90 s.',
+    );
+    expect(f.gatesTwice.meaning).toMatch(/same tree as the track/);
+    const text = ES.flowLines(f, 'last 14 days').join('\n');
+    expect(text).toContain(`  gates run twice: ${f.gatesTwice.text}`);
+  });
+
+  it('with no merge and no gate run it says so, without a division by zero', () => {
+    const f = ES.flowStatistics({ tasks: [] }, [], { from: T0, to: T0 + DAY });
+    expect(f.gatesTwice).toMatchObject({ merges: 0, skipped: 0, ran_again: 0, extra_s: 0, skip_pct: null, wait: { runs: 0, waited: 0 } });
+    expect(f.gatesTwice.text).toBe('No merge in the window yet. Gate queue: no gate run in the window.');
+  });
+});
+
 describe('load history', () => {
   it('loadStatistics counts the limits by reason, the stops, the overrides and the latest stops first', () => {
     const load = (ms: number, x: Record<string, unknown>) => ({

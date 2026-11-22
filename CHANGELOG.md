@@ -6,6 +6,8 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 ## Unreleased
 
 ### Added
+- **`ravenseat board open --task <id>` opens the board on that card, your own edits count in Changed 24 h and History,
+  and Statistics shows how often the gates ran twice after a merge and the gate queue wait.**
 - **Receive spots a new package, a migration, deleted files and unstated choices, marks what was not asked, and
   Decisions shows them with auto-approved proposals under Decided for you, each with how to undo it.** `decisionSignals.enabled` on.
 - **`ravenseat undo <id>` takes a merged task back out with one new revert commit, after showing what else touches the

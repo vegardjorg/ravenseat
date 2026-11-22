@@ -1391,7 +1391,9 @@ function statistics() {
     guards: GL.counts(log.guards ?? [], { from: Date.now() - 7 * 86_400_000 }),
     timeLogError: log.error,
     forecast: boardForecast(queue),
-    flow: boardFlow(queue, log.events),
+    // The slim gate rows too: "Gates run twice" (CI-1) reads their wait_sec and sha. Only event "gate": the flakyGate
+    // rows in log.gates are already in log.events, and counting them twice would double the flaky figure.
+    flow: boardFlow(queue, [...(log.events ?? []), ...(log.gates ?? []).filter((r) => r?.event === 'gate')]),
   };
   const version = crypto.createHash('sha1').update(JSON.stringify(data)).digest('hex').slice(0, 16);
   statCache = { key, version, data };

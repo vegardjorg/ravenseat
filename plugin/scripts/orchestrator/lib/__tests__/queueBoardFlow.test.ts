@@ -35,7 +35,16 @@ const docs = Array.from({ length: 10 }, (_, n) => ({
   cost: { agents: [{ type: 'reviewer-docs', findings: { H: 0, M: 0, L: 1 } }, { type: 'reviewer', findings: { H: 1, M: 0, L: 0 } }] },
 }));
 const queue = { limits: {}, projects: {}, areas: {}, tasks: docs, question: {}, resolutions: {}, changelog: [] };
-const flow = ES.flowStatistics(queue, [], { from: now - 14 * 86_400_000, to: now });
+// CI-1: two merges after which the base gate checked the merge commit, one reused by the skip rule, one run again,
+// and one gate run that waited for a slot. The gate row reaches flowStatistics in the board's slim form (sha kept).
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const SX = require('../statisticsSections.js');
+const ciRows = [
+  { time: iso(4), event: 'baseGate', tip: 'm1', ok: true, skipped: 'same tree', duration_s: null },
+  { time: iso(3), event: 'baseGate', tip: 'm2', ok: true, skipped: null, duration_s: 40 },
+  SX.slimGateRow({ time: iso(3), event: 'gate', kind: 'quick', track: 'D1', sha: 'x1', duration_s: 50, ok: true, wait_sec: 30 }),
+];
+const flow = ES.flowStatistics(queue, ciRows, { from: now - 14 * 86_400_000, to: now });
 const state = { version: 'v1', data: { ...T.board(queue), gitError: null, logo: false, update: null } };
 
 const flush = async () => {
@@ -85,6 +94,15 @@ describe('Statistics: the quality figures in the Flow box', () => {
     expect(rows.some((r) => r.startsWith('Right first time90 %9 of 10 merged'))).toBe(true);
     expect(rows.some((r) => r.startsWith('Post-merge defects per 10 merged0'))).toBe(true);
     expect(rows.some((r) => /^Inflow10owner 10; added\/done last 3 weeks 0\/0, 0\/0, 10\/10$/.test(r))).toBe(true);
+    // CI-1: "Gates run twice", the merges that ran the gates again, with the sentence of what it means.
+    const twice = rows.find((r) => r.startsWith('Gates run twice'));
+    expect(twice).toBe(
+      'Gates run twice1 of 2' +
+        "1 of 2 merges ran the gates again on the merge commit (40 s in all); the skip rule reused the track's green run for 1. " +
+        'Gate queue: 1 of 1 run waited for a slot, 30 s in all, longest 30 s. ' +
+        flow.gatesTwice.meaning,
+    );
+    expect(SX.slimGateRow({ event: 'gate', sha: 'abc' }).sha).toBe('abc');
     // Since S2 the autonomy rows are their own card ("How much runs without you?"): no owner edit while the tasks
     // ran, one hour of work, D0's fix round corrected alone.
     const autonomy = document.querySelector('[aria-labelledby="autonomy-stat-title"]') as HTMLElement;

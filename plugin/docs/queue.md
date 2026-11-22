@@ -470,7 +470,10 @@ receive or merge resumes), `mergeConflict` (ravenseat merge stopped in the merge
 `baseGate` (every recorded base verdict, with the skip rule and the run time), `flakyGate` (a base gate or track gate command red, then green on a rerun on the same sha; a track's has its id as `task`), `ciWatch` (each CI watch verdict), `triage` (ravenseat triage --verdict), `push`
 and `load`. The figures: first-pass rate (the tasks done in the window, not fix tasks, with 0 fix rounds in `resumed`),
 fix rounds per merged task, merge conflicts per week, base red verdicts, flaky gate commands, pushes per week with merged tasks and commits
-per push, and the triage verdicts.
+per push, and the triage verdicts. **Gates run twice** (`gatesTwice` in `--json`) counts the merges after which the
+base gate ran the gates again on the merge commit, with their time, against the ones the skip rule reused the track's
+green run for, plus the gate queue wait (`wait_sec` on the gate rows). It reads only rows that exist, so a decision on
+batching or rebasing before delivery can rest on numbers (the merge lock never waits: a second merge is refused).
 
 **Quality** (in the same Flow view, `lib/eventStatistics.js`) measures how often work was right, from data the queue
 already keeps; a task without a field counts as "nothing recorded", never as an error:

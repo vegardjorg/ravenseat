@@ -563,6 +563,11 @@ function flowTable(f, part = 'quality') {
     ['Fix rounds per task', v(f.fixRounds.per_task), `${f.fixRounds.started} fix round(s) started, ${f.fixRounds.continuations} continuation(s)`],
     ['Merge conflicts per week', v(f.mergeConflicts.per_week), `${f.mergeConflicts.count} conflict(s), ${f.mergeConflicts.files} file(s)`],
     ['Base red', v(f.baseGate.red), `of ${f.baseGate.verdicts} verdict(s), ${f.baseGate.red_tips} red tip(s)`],
+    // CI-1: the skip rule's hits against the gates that ran again after a merge, and the gate queue wait (the sentence
+    // comes from the server, the same as in ravenseat cost). An older server without the field leaves the row out.
+    ...(f.gatesTwice
+      ? [['Gates run twice', f.gatesTwice.merges ? `${f.gatesTwice.ran_again} of ${f.gatesTwice.merges}` : '-', `${f.gatesTwice.text} ${f.gatesTwice.meaning}`]]
+      : []),
     ['Triage', triage || '-', 'verdicts from ravenseat triage'],
   ];
   const own = [];

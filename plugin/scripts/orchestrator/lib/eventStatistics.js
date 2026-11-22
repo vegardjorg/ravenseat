@@ -507,6 +507,73 @@ function inflowStatistics(queue, { from, to }) {
   };
 }
 
+// ---- Gates run twice (CI-1, roadmap 6h: measure before building anything) ---------------------------------------
+//
+// After `ravenseat merge` the base gate checks the merge commit. When that commit has exactly the track tip's tree and
+// ravenseat's own gate run was green on it, the skip rule (lib/baseHealth.js skipEvidence) records green without running;
+// otherwise the same kind of gates run again on the base. Read only, from rows that already exist:
+//   - the baseGate rows (cli/baseHealth.mjs logBaseGate, one per recorded verdict). After a merge = no note, or the flaky
+//     check's note; the check before a merge ("checked before merging"), the CI watch ("ci watch:") and an undo's check
+//     ("after ... undo") are not merges. skipped = the skip rule hit. The run time: duration_s, or, when the base gate
+//     IS the quick gates (the row has no time), the gate rows on that sha (the merge step's quick gates).
+//   - the gate rows' wait_sec (lib/gateQueue.js: seconds waiting for a gate slot; only a run that needed one has it).
+//     A wait under a second is a free slot, not a wait. The merge lock never waits (a second merge is refused at once),
+//     so there is no merge queue wait to count.
+// No new storage: a decision about CI-3 / CI-4 reads these numbers first.
+
+/** A baseGate row's note that marks a verdict that was not the check after a merge. */
+const NOT_AFTER_MERGE = /^(checked before merging|ci watch:|after .*undo)/;
+/** A gate queue wait of at least this many seconds counts as a wait. */
+const WAIT_MIN_S = 1;
+/** Seconds in words: "65 s" under 100 s, then minutes, then hours with one decimal. */
+const secondsText = (s) => (s < 100 ? `${Math.round(s)} s` : s < 3600 ? `${Math.round(s / 60)} min` : `${round1(s / 3600)} h`);
+
+/**
+ * The "Gates run twice" figures in [from, to) (see above).
+ * @returns {{ merges: number, skipped: number, ran_again: number, extra_s: number, skip_pct: number|null,
+ *   before_merge: number, wait: { runs: number, waited: number, total_s: number, max_s: number|null }, text: string,
+ *   meaning: string }}
+ */
+function gatesTwice(rows, { from, to }) {
+  const verdicts = rowsOf(rows, 'baseGate', from, to);
+  const gateRuns = rowsOf(rows, 'gate', from, to);
+  const merges = verdicts.filter((r) => !NOT_AFTER_MERGE.test(String(r.note ?? '')));
+  const before = verdicts.filter((r) => /^checked before merging/.test(String(r.note ?? ''))).length;
+  const skipped = merges.filter((r) => r.skipped).length;
+  const again = merges.filter((r) => !r.skipped);
+  // The merge step's quick gates on a sha, for a verdict row without its own run time.
+  const onSha = (sha) => gateRuns.filter((g) => sha && g.sha === sha).reduce((s, g) => s + (num(g.duration_s) ?? 0), 0);
+  const extra = round1(again.reduce((s, r) => s + (num(r.duration_s) ?? onSha(r.tip)), 0));
+  const waits = gateRuns.map((g) => num(g.wait_sec)).filter((w) => w != null && w >= WAIT_MIN_S);
+  const wait = {
+    runs: gateRuns.length,
+    waited: waits.length,
+    total_s: round1(waits.reduce((a, b) => a + b, 0)),
+    max_s: waits.length ? Math.max(...waits) : null,
+  };
+  const head = merges.length
+    ? `${again.length} of ${merges.length} merge${merges.length === 1 ? '' : 's'} ran the gates again on the merge commit` +
+      `${again.length && extra ? ` (${secondsText(extra)} in all)` : ''}; the skip rule reused the track's green run for ${skipped}.`
+    : 'No merge in the window yet.';
+  const queue = wait.runs
+    ? `Gate queue: ${wait.waited} of ${wait.runs} run${wait.runs === 1 ? '' : 's'} waited for a slot` +
+      (wait.waited ? `, ${secondsText(wait.total_s)} in all, longest ${secondsText(wait.max_s)}.` : '.')
+    : 'Gate queue: no gate run in the window.';
+  return {
+    merges: merges.length,
+    skipped,
+    ran_again: again.length,
+    extra_s: extra,
+    skip_pct: merges.length ? round1((skipped / merges.length) * 100) : null,
+    before_merge: before,
+    wait,
+    text: `${head} ${queue}`,
+    meaning:
+      'A merge whose commit has the same tree as the track, with a green run of ravenseat\'s own on it, reuses that run; ' +
+      'every other merge runs the gates a second time on the base.',
+  };
+}
+
 /**
  * The flow figures in [from, to).
  *   firstPass: the tasks that reached done in the window (not fix tasks of another task: `fixes` or `qa_original`),
@@ -595,6 +662,8 @@ function flowStatistics(queue, rows, { from, to, plans = null, reviewerTypes = n
     },
     // The flaky check (cli/baseHealth.mjs): base gate commands that were red, then green on a rerun on the same sha.
     flakyGates: { count: Object.values(flakyCommands).reduce((x, y) => x + y, 0), commands: flakyCommands },
+    // CI-1: the skip rule's hits against the gates that ran again after a merge, and the gate queue wait.
+    gatesTwice: gatesTwice(rows, { from, to }),
     triage,
     // The quality figures (see the header).
     rightFirstTime: rft,
@@ -619,6 +688,7 @@ function flowLines(f, label) {
       (f.mergeConflicts.guard_stops ? `; merge guard stops ${f.mergeConflicts.guard_stops}` : ''),
     `  base gate: ${f.baseGate.verdicts} verdict(s), ${f.baseGate.skipped} by the skip rule, red ${f.baseGate.red} ` +
       `(${f.baseGate.red_tips} tip(s))` + (f.baseGate.median_s != null ? `, median run ${f.baseGate.median_s} s` : ''),
+    ...(f.gatesTwice ? [`  gates run twice: ${f.gatesTwice.text}`, `    (${f.gatesTwice.meaning})`] : []),
     `  pushes: ${f.pushes.count} (${f.pushes.per_week} per week)` +
       (f.pushes.count
         ? `, ${v(f.pushes.tasks_per_push)} merged task(s) per push (max ${v(f.pushes.max_tasks)}), ` +

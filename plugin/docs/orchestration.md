@@ -629,7 +629,8 @@ The base gate (`baseGate` in `queue.config.json`, `lib/baseHealth.js`) records t
   frozen. Red twice: frozen as before. `baseGate.flakyRerun: false` turns the rerun off.
 - **The skip rule.** When the merge commit has exactly the tree of the track tip (the branch already contained the
   base, or a fast-forward) and the track's own gate ran green on exactly that tip in a clean worktree with every base
-  gate command (the gate row's `sha` and `clean`), green is recorded without running the gates again.
+  gate command (the gate row's `sha` and `clean`), green is recorded without running the gates again. How often it
+  hits, and what the misses cost, is the **Gates run twice** row in Statistics and `ravenseat cost`.
 - **Where it shows.** One `BASE <branch>: GREEN|RED|unknown ...` line in `ravenseat show` and the orchestrator pulse, and the
   board's status line under the title.
 - **On and off.** `baseGate.enabled`: `"auto"` (default) is on when there are commands, `false` turns it off. Lite
