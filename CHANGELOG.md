@@ -80,6 +80,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   Decisions lists them by kind as Project catalog.** Design entries reach missions and reviewer-design, and accepted
   stack entries reach the Checks tab and the dependency notes (`catalog.stackFacts`, on).
 - **A green gate where no tests ran ("No test files found", "0 passing", "collected 0 items") gets a NOTE at receive, a line in the review package and a "no tests ran" badge on the card; never a stop.**
+- **Door and blast radius has a setting, so a project can turn it off everywhere.** `mergeDanger.show`, on by default.
 ### Changed
 - **A new question from `ravenseat question` or `add` needs a category, context, a recommendation among its choices and
   what each answer leads to, and Decisions shows them on the card.** A question written as free text is marked "Not filled in by the agent".

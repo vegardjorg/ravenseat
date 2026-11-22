@@ -116,6 +116,11 @@ function makeQueueCommon(template, scratch, k = {}, missionAddendum = defaultAdd
   s = swap(s, '<base>', base);
   s = swap(s, '<scratchpad-root>', scratch);
   s = swap(s, '<scratchpad>', scratch);
+  // mergeDanger.show off (lib/doorShow.js): the door and blast radius sentence is left out, and one header line says so,
+  // since the track agent files ask for the two lines by default. On (the default): the text is unchanged.
+  const DS = require('./lib/doorShow.js');
+  const doorOn = DS.on(k);
+  if (!doorOn) s = DS.trimTemplate(s);
   const header = [
     '## SHARED PROTOCOL FOR TRACKS FROM THE WORK QUEUE (binding)',
     '',
@@ -125,6 +130,7 @@ function makeQueueCommon(template, scratch, k = {}, missionAddendum = defaultAdd
       'below are selected for it.',
     `Base branch: ${CODE}${base}${CODE}. Quick gate: ${gateText(k.gates?.quick)}. ` +
       `Full gate: ${gateText(k.gates?.full)}.`,
+    ...(doorOn ? [] : [DS.OFF_TRACK]),
     '',
     '',
   ].join('\n');

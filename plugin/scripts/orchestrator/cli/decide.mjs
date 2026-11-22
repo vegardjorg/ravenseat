@@ -14,7 +14,7 @@
 // =============================================================
 
 import { baseRedLine } from './baseHealth.mjs';
-import { a, branchFor, branchInfo, CLI, cut, FOLDER, L, PREFIX, read, require, S, uncommittedPaths, val, WIDTH } from './context.mjs';
+import { a, branchFor, branchInfo, CLI, CONFIG, cut, FOLDER, L, PREFIX, read, require, S, uncommittedPaths, val, WIDTH } from './context.mjs';
 import { findSilent, findSpinning, findWithoutAgent } from './tracks.mjs';
 
 const T = require('./lib/queueBoard.js');
@@ -173,7 +173,8 @@ export function decidedForYouLines(list, { width = WIDTH } = {}) {
 
 /** `ravenseat decide [--json] [--max N] [--today]` (the usage is at the top of queue.mjs). */
 export function cmdDecide() {
-  const queue = read();
+  // mergeDanger.show off (lib/doorShow.js): a door and blast radius stored before is not shown.
+  const queue = require('./lib/doorShow.js').hideStored(read(), CONFIG);
   const inbox = currentInbox(queue);
   let listening = false;
   try {

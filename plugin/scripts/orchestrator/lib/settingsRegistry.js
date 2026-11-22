@@ -1092,6 +1092,14 @@ const SETTINGS = Object.freeze([
     'The environments a migration push may go to. Merge pushes migrations only when the linked environment file names ' +
     'one of them, so a wrong link cannot reach the wrong database.',
     { protects: 'A migration pushed to the wrong database because the wrong environment is linked.' }),
+  // MS-1 (lib/mergeDanger.js; the switch lib/doorShow.js; friction review 22.11 Top 4). Friction: a few tokens per track
+  // report and per review (two lines each) and one DOOR line per receive; display only, it never stops, blocks or
+  // approves anything. On by default in both modes because it is what makes a one-way door visible before a merge.
+  // Here, not under Review and agents (at its cap of 25 rows): it is about how hard a merge is to undo.
+  row('mergeDanger.show', 'push', 'onoff', 'Door and blast radius',
+    'Tracks and reviewers write two lines: a one-way or two-way door (one-way: hard to undo once merged) and a one-word ' +
+    'blast radius. Receive prints them, and Decisions, decide and the PR body show them; a one-way door is marked. ' +
+    'Never a stop. Off: the agents are told to leave the lines out, and nothing is shown.'),
 
   // ---- 10. Review and agents ----
   row('helpers', 'review', 'object', 'Helper agents',

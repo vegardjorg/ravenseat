@@ -621,7 +621,7 @@ function promptClasses(classes) {
  * task's acceptance criteria and done command (doneCheck.gapCriteriaBlock), when it has any. `classes`: the failure
  * classes to list (lib/failureClasses.js); by default the project's own (docs/queue/failure-classes.json), else the core.
  */
-function reviewerPrompt({ o, type, folder, delta = null, classes = null }) {
+function reviewerPrompt({ o, type, folder, delta = null, classes = null, door = true }) {
   const sep = String(folder).includes('\\') ? '\\' : '/';
   return [
     `You are ${type} for track ${o.id} (class ${o.class}, branch ${o.branch ?? queueBranch(o.id)}) in the work queue.`,
@@ -636,9 +636,14 @@ function reviewerPrompt({ o, type, folder, delta = null, classes = null }) {
     // reviewer-gap also gets the fixed criteria and the done command (lib/doneCheck.js), one verdict line per criterion.
     ...(type === 'reviewer-gap' ? [require('../doneCheck.js').gapCriteriaBlock(o)].filter(Boolean) : []),
     // The main reviewer checks the track's door and blast radius (MS-1) and writes its own call; a difference is shown
-    // to the owner, never resolved by code, and it is no finding by itself.
+    // to the owner, never resolved by code, and it is no finding by itself. door false (mergeDanger.show off,
+    // lib/doorShow.js): the sentence is left out and one line says so, since the reviewer agent files ask by default.
     ...(type === 'reviewer' || type === 'reviewer-light'
-      ? ['After the FINDING lines, your own call on two lines: `Door: one-way|two-way` and `Blast radius: <one word>` (00-package.md has the track\'s).']
+      ? [
+          door
+            ? 'After the FINDING lines, your own call on two lines: `Door: one-way|two-way` and `Blast radius: <one word>` (00-package.md has the track\'s).'
+            : require('../doorShow.js').OFF_REVIEWER,
+        ]
       : []),
   ].join('\n');
 }

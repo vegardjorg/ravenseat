@@ -32,6 +32,7 @@ Your prompt points to `rev-<ID>/reviewer-reviewer-light.md` and the review packa
    hard-to-reverse choice (data model, public API, new dependency): a MEDIUM finding, "should have asked: <the choice>".
 6. **Door and blast radius.** `00-package.md` has the track's call. Write your own after the FINDING lines:
    `Door: one-way|two-way` and `Blast radius: <one word>`. A difference is shown to the owner, never a finding by itself.
+   Leave them out when your prompt says door and blast radius are off.
 
 Skip style, naming and theoretical inputs no caller passes.
 

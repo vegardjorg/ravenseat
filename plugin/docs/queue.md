@@ -343,7 +343,9 @@ line is **not stated**, never a refusal. The main reviewer writes its own two li
 review card in Decisions, `ravenseat decide`, Decided for you and the `ravenseat pr` body show them; a one-way door gets
 the badge **One-way door: hard to undo** and comes first within its group, and a reviewer who disagrees is shown next to
 the track's call, not resolved. The agents write these lines, so they are **never a guard**: nothing is blocked,
-approved or merged because of them. Always on, no setting (two lines per report).
+approved or merged because of them. On by default in both modes (two lines per report); `mergeDanger.show` false
+turns it off everywhere: the agents are told to leave the lines out, and receive, the cards, `decide` and the PR body
+show nothing.
 
 ## Everyday commands
 
@@ -1289,6 +1291,7 @@ opt-in checks. The main switch is `agentGuard.enabled`.
 | `push.ciWatch`, `push.ciWatchIntervalSec`, `push.ciWatchTimeoutMin` | `"off"`, `60`, `90` | The optional CI watch after a batch push: `"github"` (needs `gh`) makes push-check print `ravenseat push-check --watch-ci <sha>` for the orchestrator to start in the background. A failed check gives one fix task `CI-<sha7>` and a red base (exit 9), an infrastructure failure an owner question `ci-<sha7>-infra` and no freeze, a timeout exit 10. Local gates stay the rule (see orchestration.md, Batch push) | Advanced |
 | `migrations.folder`, `migrations.filePattern`, `migrations.blockSize` | `null`, `^(\d+)_.*\.sql$`, `10` | Optional numbered migrations: the folder (`null` turns block numbering and migration push off), the pattern whose first group is the number, and how many numbers a task reserves | Advanced |
 | `migrations.pushCommand`, `migrations.environmentFile`, `migrations.allowedEnvironment` | `null`, `null`, `[]` | `merge` runs the push command after merging (skip with `--without-migr-push`), but only when the environment file names an allowed environment | Advanced |
+| `mergeDanger.show` | `true` | [Door and blast radius](#door-and-blast-radius): two lines per track report and review, one `DOOR:` line at receive, and the values on Decisions, `decide` and the PR body. Display only, never a stop; on in both modes because it makes a one-way door visible. Off: the mission and reviewer prompt tell the agents to leave the lines out, receive stores nothing, and a record from before is not shown | Advanced |
 
 ### Private and sharing
 

@@ -331,7 +331,8 @@ export async function cmdPr() {
       return;
     }
   }
-  const tasks = allTasks();
+  // mergeDanger.show off (lib/doorShow.js): the tasks without a stored door and blast radius, so the body has none.
+  const tasks = require('./lib/doorShow.js').hideStored({ tasks: allTasks() }, CONFIG).tasks;
   const byId = new Map(tasks.map((t) => [t.id, t]));
   // Door and blast radius per task when receive stored them (lib/mergeDanger.js, MS-1), with a differing reviewer door.
   const list = ids.map((id) => ({ id, title: byId.get(id)?.title ?? '(not in the queue)', ...MDG.prFields(byId.get(id)) }));

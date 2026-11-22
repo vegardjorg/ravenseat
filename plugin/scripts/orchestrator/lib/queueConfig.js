@@ -419,6 +419,9 @@ const STANDARD = Object.freeze({
   // The mission's optional blocks (DR-2): riskFirst = a task's `risk_first` (the riskiest assumption) is checked first,
   // and a zone task without one is told to prove the choice can be reversed. The block appears only when it applies.
   mission: { riskFirst: true },
+  // Door and blast radius (MS-1, lib/mergeDanger.js; the switch is lib/doorShow.js): show = the mission and reviewer
+  // sentences, the DOOR line at receive and the values on cards, decide and the PR body. Display only, never a stop.
+  mergeDanger: { show: true },
   // The checks before a task starts (PS-1..4, lib/startChecks.js), each a WARNING or NOTE only, never a stop (so all on):
   // missionPaths = paths the mission names outside owned_files / shared_patch / reads (add and start), emptyOwnership = a
   // K, D or D+ with no owned_files (add and start), sizeNotSet = a D or D+ without content_min is stored as null and
