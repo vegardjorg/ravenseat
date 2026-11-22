@@ -50,6 +50,10 @@
 //   node scripts/orchestrator/queue.mjs forecast [--project <pid>] [--days 28] [--json]   (Monte Carlo: when the
 //                                                                  remaining tasks (the focus stages, otherwise all open)
 //                                                                  are done at 50/85/95 %, from the daily throughput)
+//   node scripts/orchestrator/queue.mjs schedule [--json] [--next <n>]   (read-only: plays the queue forward with the
+//                                                                  same ranking and limits as next/fill; per focus step
+//                                                                  the expected end, the next tasks, rough per task;
+//                                                                  lib/queueSchedule.js. Exit 2 on a usage error)
 //   node scripts/orchestrator/queue.mjs show                           (short: active ones, startable now and counts)
 //   node scripts/orchestrator/queue.mjs show <id>                      (one task, the same as info <id>)
 //   node scripts/orchestrator/queue.mjs show --full [--all]           (table: status, class, estimate, priority, blocker;
@@ -946,6 +950,8 @@ if (command === 'init') {
   (await import('./cli/owner.mjs')).cmdApprove();
 } else if (command === 'forecast') {
   (await import('./cli/cost.mjs')).cmdForecast();
+} else if (command === 'schedule') {
+  (await import('./cli/schedule.mjs')).cmdSchedule();
 } else if (command === 'proposals') {
   (await import('./cli/owner.mjs')).cmdProposals();
 } else if (command === 'limit') {
@@ -1131,7 +1137,7 @@ if (command === 'init') {
     'Use: ravenseat <init|add|approve|ask|show|next|start|set|edit|resolve|resolutions|question|limit|state|trackFile|' +
       'projects|project|edit-many|pickable|pick|deliver|release|qa|external|orchestrator|cloud|cloud-package|batch|' +
       'area|areas|focus|park|continue|rank|undo|classify|plan|fill|receive|merge|info|explain|activeOnes|next-migr|migr|' +
-      'capacity|compact|diagnose|doctor|instructions|machine|finding|cost|handover|deliveries|resume|attempt|follow|triage|wait|decide|unlock|surface|catalog|owner-log|settings|wiring|review-item|issues|pr|release-notes|pulse-check|since> ...  (see the top of the file)',
+      'capacity|schedule|compact|diagnose|doctor|instructions|machine|finding|cost|handover|deliveries|resume|attempt|follow|triage|wait|decide|unlock|surface|catalog|owner-log|settings|wiring|review-item|issues|pr|release-notes|pulse-check|since> ...  (see the top of the file)',
     command ? 1 : 0,
   );
 }
