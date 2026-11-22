@@ -616,6 +616,12 @@ const STANDARD = Object.freeze({
   // test-weakening, class test-weakening), so a weakened test counts when the same failure comes back. On by default: it
   // prints nothing and stops nothing; false = no row.
   testWeakening: { enabled: true, focusStop: true, findingLog: true, testPaths: [], markers: [] },
+  // Decision signals at receive (lib/decisionSignals.js, phase 1 of the question level study): a new package, a migration
+  // or schema file, at least deleteMin deleted non-test files, and unstated choices (a change of at least bigDiffLines
+  // lines without Assumptions, or owner question text with ownerQuestions=0). One SIGNALS line, a record on the task,
+  // one time log row per delivery and rows in "Decided for you". On by default: read from the diff receive already has,
+  // no tokens, never a stop. false = none of it.
+  decisionSignals: { enabled: true, deleteMin: 3, bigDiffLines: 300 },
   // The local test run log (scripts/test-runs.mjs, TC-1): one row per `npm run test:changed` and plain `npm test` run in
   // <dataFolder>/test-runs.jsonl (time, mode, picked and total files, run time, exit, test and failed counts), read with
   // `node scripts/test-changed.mjs --stats`. It never leaves the machine and is capped in size; a failure to log never

@@ -53,7 +53,7 @@ function silentAndSpinning(queue) {
 }
 
 /** The JSON shape for the skill: each item with its impact line and the command per option. */
-export function decisionJson(inbox, { listening = false, ravenseat = CLI, baseRed = null, heldBack = [], onCancelled = [] } = {}) {
+export function decisionJson(inbox, { listening = false, ravenseat = CLI, baseRed = null, heldBack = [], onCancelled = [], decidedForYou = null } = {}) {
   const items = DEC.decisions(inbox).map((x, i) => ({
     nr: i + 1,
     ...x,
@@ -76,6 +76,9 @@ export function decisionJson(inbox, { listening = false, ravenseat = CLI, baseRe
     ...(onCancelled.length ? { waiting_on_cancelled: onCancelled } : {}),
     items,
     decided: inbox?.decided ?? [],
+    // What was decided without the owner (queueDecisions.decidedForYou), with this CLI's name in the undo commands. Not
+    // in count: it is there to be seen and undone.
+    decided_for_you: decidedForYou ?? inbox?.decided_for_you ?? [],
     // Answers given but not entered in the decision log yet (the orchestrator does that).
     unlogged: (inbox?.unlogged ?? []).map((x) => x.sp),
   };
@@ -122,6 +125,10 @@ export function decisionLines(j, { width = WIDTH, max = Infinity, ravenseat = CL
     if (j.items.length > max) out.push('', `... and ${j.items.length - max} more (${ravenseat} decide --json for all).`);
   }
   if (j.decided.length) out.push('', `Decided today: ${j.decided.length} (${ravenseat} decide --today).`);
+  if (j.decided_for_you?.length) {
+    if (!j.decided.length) out.push('');
+    out.push(`Decided for you: ${j.decided_for_you.length} (${ravenseat} decide --today).`);
+  }
   if (j.unlogged.length)
     out.push(`Not in the decision log yet: ${j.unlogged.join(', ')} (${ravenseat} resolutions --unlogged).`);
   return out;
@@ -137,6 +144,21 @@ export function decidedLines(decided, { width = WIDTH } = {}) {
   ];
 }
 
+/**
+ * "Decided for you" as text lines: what was decided without the owner (the owner's rules, an agent's choice receive
+ * spotted), with who, why and the honest next step to undo it. Nothing when there is none.
+ */
+export function decidedForYouLines(list, { width = WIDTH } = {}) {
+  if (!list?.length) return [];
+  const time = (iso) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  const out = ['', `Decided for you: ${list.length} (not counted as waiting on you)`];
+  for (const d of list) {
+    out.push(cut(`  ${time(d.at)}  ${d.id}: ${d.category}: ${d.what} (${d.who}, ${d.why})`, width));
+    out.push(cut(`         undo: ${d.undo}`, width));
+  }
+  return out;
+}
+
 /** `ravenseat decide [--json] [--max N] [--today]` (the usage is at the top of queue.mjs). */
 export function cmdDecide() {
   const queue = read();
@@ -147,13 +169,13 @@ export function cmdDecide() {
   } catch {
     listening = false;
   }
-  const j = decisionJson(inbox, { listening, baseRed: baseRedLine(), heldBack: L.uncommittedSkipped(queue, uncommittedPaths()), onCancelled: L.waitingOnCancelled(queue) });
+  const j = decisionJson(inbox, { listening, baseRed: baseRedLine(), heldBack: L.uncommittedSkipped(queue, uncommittedPaths()), onCancelled: L.waitingOnCancelled(queue), decidedForYou: DEC.decidedForYou(queue, { ravenseat: CLI }) });
   if (a.includes('--json')) {
     console.log(JSON.stringify(j, null, 2));
     return;
   }
   if (a.includes('--today')) {
-    console.log(decidedLines(j.decided).join('\n'));
+    console.log([...decidedLines(j.decided), ...decidedForYouLines(j.decided_for_you)].join('\n'));
     return;
   }
   const max = Number(val('--max'));

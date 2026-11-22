@@ -6,6 +6,8 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 ## Unreleased
 
 ### Added
+- **Receive spots a new package, a migration, deleted files and unstated choices, marks what was not asked, and
+  Decisions shows them with auto-approved proposals under Decided for you, each with how to undo it.** `decisionSignals.enabled` on.
 - **`ravenseat undo <id>` takes a merged task back out with one new revert commit, after showing what else touches the
   same files and a y/N.**
 - **Since you left: what merged, recovered, got stuck, waits on you and cost while you were away, in Decisions and

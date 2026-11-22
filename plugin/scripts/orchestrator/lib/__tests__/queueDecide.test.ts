@@ -117,6 +117,35 @@ describe('ravenseat decide', () => {
     expect(run('decide')).toContain('Nothing waiting on you.');
     expect(run('decide', '--today')).toContain('Decided today: 3');
   });
+
+  it('"Decided for you": an auto-accepted proposal and a delivery signal under --today and in --json, never in count', () => {
+    const q = queue();
+    const now = new Date().toISOString();
+    q.tasks.push(
+      { id: 'T-7', title: 'Follow-up retry', status: 'waiting', class: 'K', value: 2, approved: now },
+      {
+        id: 'T-8',
+        title: 'Export rework',
+        status: 'review',
+        class: 'K',
+        value: 2,
+        decision_signals: { at: now, tip: 'abc', signals: [{ category: 'dependency', what: '1 new package: date-fns', items: ['date-fns'], asked: false, told: false }], not_asked: ['dependency'] },
+      },
+    );
+    q.auto_accepted = [{ id: 'T-7', at: now, reason: 'class K' }];
+    writeFileSync(join(folder, 'queue.json'), JSON.stringify(q));
+    const j = JSON.parse(run('decide', '--json'));
+    expect(j.count).toBe(3);
+    expect(j.decided_for_you.map((d: any) => [d.id, d.category])).toEqual([
+      ['T-7', 'Follow-up tasks'],
+      ['T-8', 'New package'],
+    ]);
+    const today = run('decide', '--today');
+    expect(today).toContain('Decided for you: 2');
+    expect(today).toContain('T-8: New package: 1 new package: date-fns (The agent decided, not asked)');
+    expect(today).toMatch(/undo: \S+ proposals undo T-7/);
+    expect(run('decide')).toContain('Decided for you: 2 (');
+  });
 });
 
 describe('the board switches (the Cloud tab comes with the module)', () => {

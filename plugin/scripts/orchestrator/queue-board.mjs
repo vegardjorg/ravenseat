@@ -1384,6 +1384,7 @@ function sinceData({ choice = null, from = null } = {}) {
     window: { ...w, text: AWAY.windowText(w) },
     summary: AWAY.awaySummary({ queue, rows: [...(log.events ?? []), ...(log.redGates ?? [])], from: w.from, to: w.to, waiting }),
     decided: DEC.decidedToday(queue, { now, from: w.from }),
+    decided_for_you: DEC.decidedForYou(queue, { now, from: w.from }),
   };
 }
 

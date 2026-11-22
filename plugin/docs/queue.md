@@ -321,13 +321,26 @@ still counts 30 minutes for planning, and `show`, `info`, `start`, `fill` and th
 heading gives one NOTE. None of these ever stops a task; each has its own `planChecks.*` setting (all on). Lite mode
 skips the two ownership checks.
 
+### Decided for you
+
+Agents are told to ask before a choice that is hard to undo. At `receive`, Ravenseat reads the delivery's diff for the
+ones it can see (no tokens, never a stop): a new package, a migration or schema file, several deleted files, and a big
+change with no Assumptions. Each is marked **not asked** when no owner question in the report names it, and one
+`SIGNALS:` line says so. The existing stops (the merge guard on dependency files and migrations) stay as they are.
+
+**Decided for you**, next to **Decided today** in Decisions and under `ravenseat decide --today`, lists these and the
+proposals your rules approved (`ravenseat proposals`), each with what, the category, who decided ("Approved by your
+rules" or "The agent decided"), when, and the cheapest way to undo it from where the task is now: `ravenseat proposals
+undo <id>` before the start, a cancel after it, a fix round before the merge, a revert after it. It is never counted as
+waiting on you. Settings: `decisionSignals.*`.
+
 ## Everyday commands
 
 | Command | What it does |
 |---|---|
 | `init` | Creates an empty queue (run once per project) |
 | `add --file task.json` / `add --json '{…}'` [`--description "…"`] [`--answer-json`] | Adds one task or a list. One `WARNING: task links` line names a dead link, an anchor without a heading or a gitignored source (the task is added anyway; see [Task links](#task-links)). `--description` sets the [description](#the-description) of the one task added, `--risk-first "…"` its [riskiest assumption](#riskiest-assumption-first). `--answer-json`: one JSON line instead of the text, with `linkProblems` (and `descriptionWarning` when a description is over the soft limit) |
-| `decide [--json] [--max N]` / `decide --today` | Everything waiting on the owner (questions, QA, proposals, stuck work) as one list, most impact first, each answer with its exact `ravenseat` command; read only. `/ravenseat:decide` walks it one decision at a time / what was decided today |
+| `decide [--json] [--max N]` / `decide --today` | Everything waiting on the owner (questions, QA, proposals, stuck work) as one list, most impact first, each answer with its exact `ravenseat` command; read only. `/ravenseat:decide` walks it one decision at a time / what was decided today, and [Decided for you](#decided-for-you) |
 | `approve <id> [--by owner]` | Approves a proposal (`--by` records who) |
 | `proposals [auto [on\|off] …]` / `proposals log` / `proposals undo <id>` | Lists the proposals waiting, and auto-accept of proposals by the owner's rules (default off) / what was auto-accepted / back to proposed (see below) |
 | `forecast [--project <pid>] [--days 28] [--json]` | When the remaining tasks are done at 50, 85 and 95 % (Monte Carlo, see below) |
@@ -1271,6 +1284,7 @@ opt-in checks. The main switch is `agentGuard.enabled`.
 | `mission.riskFirst` | `true` | A task's `risk_first` is checked first in the track, which stops with PARTIAL and one owner question if it fails; a zone task without one is told to prove the choice can be reversed. The block appears only when it applies ([riskiest assumption](#riskiest-assumption-first)) | Advanced |
 | `planChecks.missionPaths`, `planChecks.emptyOwnership`, `planChecks.sizeNotSet` | `true`, `true`, `true` | The checks before a task starts, each one line at add and start and never a stop: paths the mission names outside the task's files, a K/D/D+ with no `owned_files`, a D/D+ without `content_min` ("size not set") ([checks before a task starts](#checks-before-a-task-starts)) | Advanced, Full mode only |
 | `planChecks.ownerQuestionCount` | `true` | At receive, an `ownerQuestions` count on the RESULT line that does not match the report's owner question section gives one NOTE ([checks before a task starts](#checks-before-a-task-starts)) | Advanced |
+| `decisionSignals.enabled`, `decisionSignals.deleteMin`, `decisionSignals.bigDiffLines` | `true`, `3`, `300` | Decision signals at receive, read from the diff (no tokens, never a stop): a new package (npm by name, other manifests "changed"), a migration or schema file, at least `deleteMin` deleted non-test files, and unstated choices (`bigDiffLines` changed lines without Assumptions, or owner question text with `ownerQuestions=0`). A signal no owner question names is "not asked". One `SIGNALS:` line, `decision_signals` on the task, one `signal` time log row per delivery and an entry in [Decided for you](#decided-for-you) | Advanced |
 | `proposals.autoAccept.enabled`, `proposals.autoAccept.classes`, `proposals.autoAccept.maxEstimateMin`, `proposals.autoAccept.maxValue` | `false`, `["K"]`, `60`, `null` | Auto-accept of agent proposals by the owner's rules (`ravenseat proposals`); the queue's own rules win; never D/D+, `waiting_on`, legal/owner labels, open legal points or protected paths. Switching it on weakens a guard: `ravenseat proposals auto on --i-understand --by owner` | Advanced, queue.json |
 | `architectureRules` | `[]` | Short rules copied into every mission | Advanced |
 | `attempts.reservationTtlMin` | `30` | A start reservation with no start for this long counts as expired | Advanced |

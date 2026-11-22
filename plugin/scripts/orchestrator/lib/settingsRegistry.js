@@ -182,6 +182,9 @@ const REQUIRES = Object.freeze({
   'testWeakening.focusStop': ['testWeakening.enabled'],
   'testWeakening.findingLog': ['testWeakening.enabled'],
   'testWeakening.markers': ['testWeakening.enabled'],
+  // cli/merge.mjs: no decision signal is read when off, so the thresholds have nothing to count.
+  'decisionSignals.deleteMin': ['decisionSignals.enabled'],
+  'decisionSignals.bigDiffLines': ['decisionSignals.enabled'],
   // lib/fixTests.js receiveLine: red on base off gives no verdict, so the default mode prints no fix line.
   'gates.fixWithoutTestWarning': ['gates.redOnBase'],
   // board/checks.js drawChecksTab: the dot sits on the tab, which is hidden with the tab off.
@@ -1164,6 +1167,20 @@ const SETTINGS = Object.freeze([
   row('planChecks.ownerQuestionCount', 'review', 'onoff', 'Check the owner question count',
     'At receive, the ownerQuestions number on the track\'s RESULT line is compared with the items under its owner ' +
     'question heading; a mismatch is one note, so a question the count left out is still read.'),
+  // Friction: none. Read from the diff receive already has (no tokens, at most two git show calls per manifest), one
+  // SIGNALS line and rows in Decided for you, which are not counted in the Decisions tab; it never stops a merge. On by
+  // default: a new package or a migration nobody asked about is what the owner most needs to see. A display and a log
+  // row only, so off weakens no guard (the merge guard on dependency files and migrations has its own rows).
+  row('decisionSignals.enabled', 'review', 'onoff', 'Spot choices at receive',
+    'Receive reads the diff for a new package, a migration or schema file, deleted files and choices with no ' +
+    'Assumptions, and marks each one not asked when no owner question names it. One line, a time log row and an entry ' +
+    'in Decided for you. Never a stop. Off: none of it.'),
+  // Friction: none, a threshold for a hint. 3: one or two deleted files are a normal cleanup, three is a choice worth a look.
+  row('decisionSignals.deleteMin', 'review', 'integer', 'Deleted files before a signal',
+    'Deleted files outside the tests that make a deletion signal at receive. A hint only.'),
+  // Friction: none, a threshold for a hint. 300 lines: below it a missing Assumptions section is usual for small work.
+  row('decisionSignals.bigDiffLines', 'review', 'integer', 'Big change without Assumptions',
+    'Changed lines outside tests and lockfiles at which a delivery with no Assumptions section gets an unstated choices signal.'),
   row('proposals.autoAccept.enabled', 'review', 'onoff', 'Auto-accept proposals',
     'A proposal from an agent that fits the rules is approved by the queue itself, logged and can be undone.', {
       ...QUEUE,

@@ -820,7 +820,106 @@
     return out.sort((a, b) => String(b.at).localeCompare(String(a.at)) || a.id.localeCompare(b.id)).slice(0, max);
   }
 
+  // ---- "Decided for you" -----------------------------------------------------------------------------------------
+  // What was decided without the owner (section 5.2 of plans/autonomi-nivaa-utredning.md): proposals the owner's rules
+  // approved (auto_accepted, which decidedToday skips on purpose) and the choices receive spotted in a delivery
+  // (decision_signals, lib/decisionSignals.js). Shown next to "Decided today", never counted in the Decisions tab: it is
+  // there to be seen and undone, not to make work.
+
+  /** The category names of lib/decisionSignals.js LABELS (a test keeps them equal; this file also runs in the browser). */
+  const SIGNAL_LABELS = Object.freeze({
+    dependency: 'New package',
+    migration: 'Migration or schema',
+    deletion: 'Deletion',
+    unstated: 'Unstated choices',
+  });
+
+  /**
+   * The honest next step to undo what was decided, from where the task is now (the table in section 5.2): free before
+   * the start, a cancel after it, a fix round before the merge, a revert after it.
+   */
+  function undoParts(o, { rules = false, undone = false, ravenseat = 'ravenseat' } = {}) {
+    // when: where the task is (plain words); cli: the command, or null; note: what it costs (plain words), or null.
+    const p = (when, cli = null, note = null) => ({ when, cli, note });
+    if (undone) return p('undone already, back to proposed');
+    if (!o) return p('the task is gone');
+    const s = o.status;
+    if (s === 'cancelled') return p('cancelled, nothing to undo');
+    if (s === 'proposed') return p('back to proposed');
+    if (s === 'waiting' && !o.started && !o.picked_by)
+      return p(null, rules ? `${ravenseat} proposals undo ${o.id}` : `${ravenseat} set ${o.id} cancelled`);
+    if (s === 'running' || s === 'picked' || (s === 'waiting' && (o.started || o.picked_by)))
+      return p('started', `${ravenseat} set ${o.id} cancelled`, 'the tokens it used are spent');
+    if (s === 'review') return p('not merged', `${ravenseat} resume ${o.id} --reason fix --answer "<what to change>"`);
+    if (s === 'done')
+      return o.merge_commit ? p('merged', `git revert -m 1 ${String(o.merge_commit).slice(0, 12)}`) : p('merged: revert its merge commit');
+    return p(`status ${s}`, `${ravenseat} show ${o.id}`);
+  }
+
+  /** undoParts as one line: "not merged: ravenseat resume ...", "started: ... (the tokens it used are spent)". */
+  function undoText(o, opts = {}) {
+    const { when, cli, note } = undoParts(o, opts);
+    return `${[when, cli].filter(Boolean).join(': ')}${note ? ` (${note})` : ''}`;
+  }
+
+  /**
+   * "Decided for you" since the start of today (or `from`, the "Since you left" window), newest first.
+   * @returns {{ source: 'rules'|'agent', id: string, title: string|null, what: string, category: string, who: string,
+   *   why: string, at: string, undo: string, undo_parts: { when: string|null, cli: string|null, note: string|null } }[]}
+   */
+  function decidedForYou(queue, { now = Date.now(), max = 50, from: start = null, ravenseat = 'ravenseat' } = {}) {
+    const from = typeof start === 'number' && Number.isFinite(start) ? start : dayStart(now);
+    const inWindow = (iso) => {
+      const ms = Date.parse(iso ?? '');
+      return Number.isFinite(ms) && ms >= from && ms <= now + 60_000;
+    };
+    const tasks = new Map((queue?.tasks ?? []).map((o) => [o.id, o]));
+    const out = [];
+    for (const e of queue?.auto_accepted ?? []) {
+      if (!e?.id || !inWindow(e.at)) continue;
+      const o = tasks.get(e.id);
+      out.push({
+        source: 'rules',
+        id: e.id,
+        title: o?.title ?? null,
+        what: o?.title ?? e.id,
+        category: 'Follow-up tasks',
+        who: 'Approved by your rules',
+        why: e.reason ?? 'fits your rules',
+        at: e.at,
+        undo: undoText(o, { rules: true, undone: !!e.undone, ravenseat }),
+        undo_parts: undoParts(o, { rules: true, undone: !!e.undone, ravenseat }),
+      });
+    }
+    for (const o of queue?.tasks ?? []) {
+      const rec = o?.decision_signals;
+      if (!rec || !inWindow(rec.at)) continue;
+      for (const s of rec.signals ?? []) {
+        const why =
+          s.asked === true ? 'asked you' : s.asked === false ? (s.told ? 'not asked, but said under Assumptions' : 'not asked') : 'not stated';
+        out.push({
+          source: 'agent',
+          id: o.id,
+          title: o.title ?? null,
+          what: String(s.what ?? ''),
+          category: SIGNAL_LABELS[s.category] ?? String(s.category ?? 'Other'),
+          who: 'The agent decided',
+          why,
+          at: rec.at,
+          undo: undoText(o, { ravenseat }),
+          undo_parts: undoParts(o, { ravenseat }),
+        });
+      }
+    }
+    // A stable sort: the signals of one delivery keep their order.
+    return out.sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, max);
+  }
+
   return {
+    SIGNAL_LABELS,
+    undoParts,
+    undoText,
+    decidedForYou,
     VERBS,
     UNDO_MS,
     AS_RECOMMENDED,

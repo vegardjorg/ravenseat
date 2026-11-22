@@ -354,7 +354,9 @@ other answers next to it. On an owner question the recommendation also stands in
 and the filled button reads **As recommended** ("As recommended: Vendor B" when it is one of the choices). A click does not write at once: the card leaves and an **Undo** toast stands for 5 seconds;
 a new answer, leaving the page or the timer writes it. Keys: `j` / `k` move, `Enter` takes the recommendation, `1`-`4`
 picks an answer (on a question's choices the number is its `--choice` number), `u` undoes. With nothing waiting it
-shows the listening status; **Decided today** (closed) is at the bottom. The board opens on Decisions only when a
+shows the listening status; **Decided today** (closed) is at the bottom, with **Decided for you** (closed) under it:
+proposals your rules approved and choices an agent made that receive spotted, each with how to undo it, never in the
+count ([queue.md](queue.md#decided-for-you)). The board opens on Decisions only when a
 decision is new since your last visit in this browser (it remembers what the room showed, `queue-board-decisions-seen`
 in the browser's storage; without that storage every visit counts as the first); otherwise it opens the queue view you
 used last.
