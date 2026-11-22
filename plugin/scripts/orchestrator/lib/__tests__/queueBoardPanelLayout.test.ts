@@ -212,8 +212,10 @@ describe('B14: the panel reads top down', () => {
     const order = ['.panel-header', '.panel-summary', '.actions', 'section.mission', 'details.panel-details'].map(at);
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
-    // Details is the last block, and the facts (Status, Branch, Owner files ...) live inside it, not above the actions.
-    expect(kids[kids.length - 1]).toBe(details());
+    // Details comes last but for History (J5), and the facts (Status, Branch, Owner files ...) live inside it, not above
+    // the actions.
+    expect(kids[kids.length - 2]).toBe(details());
+    expect(kids[kids.length - 1].matches('details.panel-history')).toBe(true);
     const dl = details().querySelector('dl.facts') as HTMLElement;
     const labels = [...dl.querySelectorAll(':scope > dt')].map((d) => d.textContent);
     expect(labels).toEqual(expect.arrayContaining(['Status', 'Project', 'Class', 'Owner files', 'Branch']));
