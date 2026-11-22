@@ -494,6 +494,11 @@
 //                                                                  design choices and the prefer lines, at most 10 lines;
 //                                                                  index: build the code index of exports and @shared
 //                                                                  blocks, cached by blob sha. lib/catalogIndex.js)
+//   node scripts/orchestrator/queue.mjs catalog deps --audit [--dry] [--yes] [--anyway] [--json]   (the dependency audit:
+//                                                                  asks api.osv.dev about the public packages in the
+//                                                                  lockfiles, only on this command; --dry sends nothing, the
+//                                                                  first real run needs --yes. Refused from a track worktree.
+//                                                                  cli/depsAudit.mjs, lib/osv.js)
 //   node scripts/orchestrator/queue.mjs owner-log <id> | owner-log accept <id> --by owner   (the owner rows a task relies on
 //                                                                  that no ravenseat write recorded in the owner log; accept
 //                                                                  confirms them as the owner's. Refused from a track worktree;
@@ -978,7 +983,7 @@ if (command === 'init') {
 } else if (command === 'surface') {
   (await import('./cli/surface.mjs')).cmdSurface();
 } else if (command === 'catalog') {
-  (await import('./cli/catalog.mjs')).cmdCatalog();
+  await (await import('./cli/catalog.mjs')).cmdCatalog();
 } else if (command === 'owner-log') {
   (await import('./cli/ownerLog.mjs')).cmdOwnerLog();
 } else if (command === 'settings') {

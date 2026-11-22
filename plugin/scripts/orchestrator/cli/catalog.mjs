@@ -18,7 +18,9 @@
 //                                                 decisions/ and runs check on it (roadmap 0z Z-B); refused from a track.
 //                                                 --kind design|stack|dependency and --except (roadmap 0å KD-0);
 //                                                 with --kind stack: --uses job:tool, --alternatives, --stack (KD-2);
-//                                                 --applies class:D,label:visual: the task categories it reaches (KD-6)
+//                                                 --applies class:D,label:visual: the task categories it reaches (KD-6);
+//                                                 with --kind dependency: --accepts <ids> --review-by YYYY-MM-DD, a
+//                                                 risk acceptance for the dependency audit (KD-4), --paths optional
 //   ravenseat catalog propose --not-building --title [--why] [--keywords] [--revisit] [--source]
 //                                                 the same for a "Not building" entry (roadmap 0f, lib/notBuilding.js):
 //                                                 kind not-building, no invariant or paths; its accept writes status
@@ -29,6 +31,8 @@
 //                                                 printed only; --write writes each as a proposed zone in the main
 //                                                 tree's decisions/ (refused from a track). Nothing counts until the
 //                                                 owner accepts one
+//   ravenseat catalog deps --audit [--dry] [--yes] [--anyway] [--json]   the dependency audit against OSV.dev (KD-4,
+//                                                 cli/depsAudit.mjs): --dry shows what would be sent and sends nothing
 //   ravenseat catalog index [--json]              builds or refreshes the code index (lib/catalogIndex.js, bolk B5) in
 //                                                 <dataFolder>/catalog-index.json and names a @shared tag that is not on
 //                                                 an export
@@ -63,7 +67,7 @@ const CD = require('./lib/catalogDeps.js');
 const NB = require('./lib/notBuilding.js');
 const RP = require('./lib/reviewPacks.js');
 
-const USAGE = `${CLI} catalog init | show [<D-id>] [--json] | check [--json] | accept <D-id> --by owner | propose (--title "..." --invariant "..." --paths "<glob>" | --from-answer <question>) [--kind design|stack|dependency] [--except "<glob>"] [--applies class:D,label:visual] [--uses <job>:<tool>] [--alternatives a,b] [--stack a,b] [--supersedes <D-id>] [--plan <PL-id>] [--why "..."] [--json] | propose --not-building --title "..." [--why "..."] [--keywords a,b] [--revisit "..."] [--source "..."] | find <word...> [--json] | index [--json] | zones [--write] [--json]`;
+const USAGE = `${CLI} catalog init | show [<D-id>] [--json] | check [--json] | accept <D-id> --by owner | propose (--title "..." --invariant "..." --paths "<glob>" | --from-answer <question>) [--kind design|stack|dependency] [--except "<glob>"] [--applies class:D,label:visual] [--uses <job>:<tool>] [--alternatives a,b] [--stack a,b] [--supersedes <D-id>] [--plan <PL-id>] [--why "..."] [--json] | propose --not-building --title "..." [--why "..."] [--keywords a,b] [--revisit "..."] [--source "..."] | find <word...> [--json] | index [--json] | zones [--write] [--json] | deps --audit [--dry] [--yes] [--anyway] [--json]`;
 const json = a.includes('--json');
 
 /** The catalog folder in a tree (the main tree for a write, the current one for a read). */
@@ -87,7 +91,7 @@ function writeLedger(ledger) {
 }
 
 /** The tracked paths of a tree, or null when git cannot list them (the path checks are then skipped). */
-function trackedFiles(root) {
+export function trackedFiles(root) {
   try {
     const out = execFileSync('git', ['-C', root, '-c', 'core.quotepath=off', 'ls-files', '-z'], {
       encoding: 'utf8',
@@ -465,7 +469,7 @@ function accept() {
  * @returns {{ id: string, file: string, errors: string[], warnings: string[] }} file relative to the tree; errors and
  *   warnings are check's lines about this choice
  */
-export function writeProposal({ title, invariant, paths, supersedes = null, plan = null, why = null, kind = null, keywords = null, revisit = null, source = null, except = null, check = null, uses = null, alternatives = null, stack = null, applies = null, reason = null }) {
+export function writeProposal({ title, invariant, paths, supersedes = null, plan = null, why = null, kind = null, keywords = null, revisit = null, source = null, except = null, check = null, uses = null, alternatives = null, stack = null, applies = null, reason = null, accepts = null, review_by = null }) {
   const dir = catalogDir(MAIN_TREE);
   const decisionsDir = path.join(dir, 'decisions');
   let names = [];
@@ -476,7 +480,7 @@ export function writeProposal({ title, invariant, paths, supersedes = null, plan
   }
   const id = C.nextDecisionId(names, readLedger());
   // kind not-building (roadmap 0f, lib/notBuilding.js draft): a rejection with its keywords, revisit and source.
-  const r = C.proposalFile({ id, title, invariant, paths, supersedes, plan, why, kind, keywords, revisit, source, except, check, uses, alternatives, stack, applies, reason });
+  const r = C.proposalFile({ id, title, invariant, paths, supersedes, plan, why, kind, keywords, revisit, source, except, check, uses, alternatives, stack, applies, reason, accepts, review_by });
   if (r.errors.length) throw new Error(r.errors.join('; '));
   fs.mkdirSync(decisionsDir, { recursive: true });
   const readme = path.join(decisionsDir, 'README.md');
@@ -574,7 +578,11 @@ function propose() {
       if (!applies[dim].includes(value)) applies[dim].push(value);
     }
   }
-  if (!title || invariant == null || (!paths.length && !supersedes && !applies))
+  // A risk acceptance (roadmap 0å KD-4): --kind dependency --accepts GHSA-...,CVE-... --review-by YYYY-MM-DD. It binds no
+  // code, so --paths may be left out.
+  const accepts = listFlag('--accepts');
+  const reviewBy = flag('--review-by');
+  if (!title || invariant == null || (!paths.length && !supersedes && !applies && !accepts.length))
     die(`${CLI} catalog propose --title "..." --invariant "<one sentence that can be checked>" --paths "<glob>[,<glob>]" [--applies class:D,label:visual] [--supersedes D-0001] [--plan PL-...] [--why "..."]`);
   if (supersedes) {
     // Idea C: a choice that replaces another starts from its paths and plan; the owner narrows them before the accept.
@@ -601,9 +609,11 @@ function propose() {
   const stackWords = listFlag('--stack');
   if ((uses || alternatives.length || stackWords.length) && kind !== 'stack')
     die(`${CLI} catalog propose: --uses, --alternatives and --stack need --kind stack. Nothing was written.`);
+  if ((accepts.length || reviewBy != null) && kind !== 'dependency')
+    die(`${CLI} catalog propose: --accepts and --review-by need --kind dependency. Nothing was written.`);
   let r;
   try {
-    r = writeProposal({ title, invariant, paths, supersedes, plan, why, kind, except, uses, alternatives, stack: stackWords, applies });
+    r = writeProposal({ title, invariant, paths, supersedes, plan, why, kind, except, uses, alternatives, stack: stackWords, applies, accepts, review_by: reviewBy });
   } catch (e) {
     die(`${CLI} catalog propose: ${e.message}. Nothing was written.`);
   }
@@ -729,7 +739,7 @@ function find() {
   for (const l of CI.findLines(r, { query, index: idx })) console.log(l);
 }
 
-export function cmdCatalog() {
+export async function cmdCatalog() {
   const sub = a[1];
   if (sub === 'init') return init();
   if (sub === 'show') return show();
@@ -739,6 +749,8 @@ export function cmdCatalog() {
   if (sub === 'find') return find();
   if (sub === 'index') return index();
   if (sub === 'zones') return zones();
+  // The dependency audit (roadmap 0å KD-4): its own module, loaded only when asked for (it is the one that uses the network).
+  if (sub === 'deps') return import('./depsAudit.mjs').then((m) => m.cmdDepsAudit());
   die(USAGE);
 }
 

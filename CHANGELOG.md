@@ -6,6 +6,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 ## Unreleased
 
 ### Added
+- **`ravenseat catalog deps --audit` checks your lockfiles against OSV.dev, only when you run it.** `deps.audit` `manual`.
 - **The board counts what waits on you in the tab title, links to a view and card in the address, has keyboard
   shortcuts with a `?` overview and quick filter buttons, and the time log marks when the queue starts and goes idle.**
   `board.titleCount` on, `board.shortcuts` on, `board.quickFilters` on in full, off in lite.

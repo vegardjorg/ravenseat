@@ -1630,6 +1630,25 @@ const SETTINGS = Object.freeze([
   row('privatePaths', 'private', 'list', 'Private paths',
     'Folders (trailing /) and files of your own that stay out of git: the .gitignore, the push and merge guard and the cloud\'s hidden paths all read this list. { "path": ..., "read": false } also keeps the queue\'s agents from reading it. ravenseat private add|remove|list.',
     { protects: 'Your own private files reaching git, a push or the cloud.' }),
+  // The dependency audit (roadmap 0å KD-4, lib/osv.js). Friction: a network call to api.osv.dev, only when the owner runs
+  // `ravenseat catalog deps --audit` and confirms it (--yes the first time); nothing automatic, no polling. Default
+  // manual: nothing leaves without the owner's command. off refuses the command and hides the card and the doctor line;
+  // no guard reads it, so it is no weakening.
+  row('deps.audit', 'private', 'choice', 'Dependency audit against OSV.dev',
+    'manual: `ravenseat catalog deps --audit` asks OSV.dev about the public packages in your lockfiles (ecosystem, name ' +
+    'and version only), when you run it, and the Checks tab shows a card for what it found. off: the command refuses ' +
+    'and there is no card. Nothing is ever checked automatically.', { choices: ['manual', 'off'] }),
+  // Friction: none; a list of names that are never sent. Empty: the lockfile already shows what is private (workspace,
+  // file:, link:, git, a path, another registry), and only the owner knows their own scopes. No guard reads it.
+  row('deps.privateScopes', 'private', 'list', 'Private package names the audit never sends',
+    'Names or prefixes that never leave this machine, besides what the lockfile shows is private (workspace, file:, ' +
+    'link:, git, a local path, another registry): "@acme" holds back @acme/ui, "github.com/acme" a Go module path, ' +
+    '"acme-*" a prefix. Use it for internal packages published under a public registry name.'),
+  // Friction: it would stop a merge, so it is off. KD-5: registered now so the name is known, wired to nothing yet. On
+  // is stronger, so off is no weakening.
+  row('deps.auditStop', 'private', 'onoff', 'Stop a merge on a vulnerable package (later)',
+    'Reserved for a later step: a merge that adds or changes a package with a known high hole would stop. Not wired ' +
+    'yet, so it does nothing today. Off, since it can stop work.'),
   row('history.rotateTimeLog', 'history', 'choice', 'Time log rotation',
     'Monthly moves the time log to one archive per month next to it (times-2026-10.jsonl) on the first write of a new ' +
     'month; every reader that needs older rows reads the archives too. Off keeps one file that only grows.', {

@@ -74,6 +74,8 @@ export const PHRASES = {
   'not-lite': 'the project is not in lite mode',
   'client-format-changed': 'the newest Claude Code transcript has rows Ravenseat reads differently than expected (the format canary, `client.canary`)',
   'guard-not-in-quick': 'a gate guard in the registry has a command that is not in `gates.quick` (`learning.quickGateCard`)',
+  'audit-findings': 'the last [dependency audit](catalog.md#the-dependency-audit) (`catalog deps --audit`, read from its cache) found holes that no accepted catalog entry covers',
+  'audit-high-prod': 'one of those holes is critical or high in a package that is not only for development',
 };
 
 /**
@@ -107,6 +109,7 @@ const BUTTONS = {
   setting: (key) => `Turn on (\`checks turn-on ${key}\`)`,
   ask: () => 'Copy the text for Claude (no agent)',
   'quick-gate': () => 'Add to gates.quick, one per guard (`checks quick-add <G-n>`; nothing runs)',
+  'dep-fix': (key) => `Propose update task (\`checks plan ${key}\`; always a proposal)`,
 };
 const PRIORITY = { high: 'High', medium: 'Medium', low: 'Low' };
 
