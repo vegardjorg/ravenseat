@@ -72,6 +72,8 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   stack entries reach the Checks tab and the dependency notes (`catalog.stackFacts`, on).
 - **A green gate where no tests ran ("No test files found", "0 passing", "collected 0 items") gets a NOTE at receive, a line in the review package and a "no tests ran" badge on the card; never a stop.**
 ### Changed
+- **A new question from `ravenseat question` or `add` needs a category, context, a recommendation among its choices and
+  what each answer leads to, and Decisions shows them on the card.** A question written as free text is marked "Not filled in by the agent".
 - **The README is rewritten around the board as a control center:** a before and after infographic (light and dark), a sharper with/without table, and a section on improving your checks.
 - **The explainer GIF is redrawn** around the new README, with a light and a dark version that follow your theme.
 - **Faster commands on Windows: one `ravenseat merge` starts about a quarter fewer git processes (66 to 48).**

@@ -401,7 +401,10 @@ Decisions lists those entries, drafts first, with a search that filters as you t
 lists the other catalog entries grouped by kind (Design language, Stack, Design choices), each with its status, its
 invariant and where it applies; display only (see [the catalog](catalog.md)). A question's
 optional `context` (`ravenseat question <id> --context "…"`, why it is asked) shows under the recommendation, and its
-`source` is a link when it names a task or a plan entry. A line under the title says
+`source` is a link when it names a task or a plan entry. A new-format question also shows its category next to the
+type and, under the recommendation, "If you follow the recommendation" and "If you choose something else" (`--if-yes`,
+`--if-no`); an Approve or Check card gets those two lines from code. A track question written as free text in the
+report, not registered with `ravenseat question`, is marked "Not filled in by the agent". A line under the title says
 "Orchestrator listening" while `ravenseat wait` runs in the orchestrator session (its heartbeat is under 90 s old), so an
 answer starts the next round at once; otherwise "Answers are picked up the next time the orchestrator runs".
 
