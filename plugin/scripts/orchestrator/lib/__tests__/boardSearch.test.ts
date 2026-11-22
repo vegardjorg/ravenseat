@@ -103,8 +103,15 @@ describe('fields', () => {
     const open = card('EX-8', { open_block: 'quota' });
     expect(S.matches(blocked, p, { now: NOW })).toBe(true);
     expect(S.matches(open, p, { now: NOW })).toBe(true);
-    expect(S.matches(open, S.parse('status:blocked'), { now: NOW })).toBe(false);
+    expect(S.matches(open, S.parse('status:blocked'), { now: NOW })).toBe(true);
     expect(S.matches(blocked, S.parse('status:blocked'), { now: NOW })).toBe(true);
+  });
+
+  it('status:blocked is what the board calls Blocked: also a waiting card that is not ready (it waits on something)', () => {
+    const p = S.parse('status:blocked');
+    expect(S.matches(card('EX-7', { status: 'waiting', ready: false }), p, { now: NOW })).toBe(true);
+    expect(S.matches(card('EX-6', { status: 'waiting', ready: true }), p, { now: NOW })).toBe(false);
+    expect(S.matches(card('EX-5', { status: 'running', ready: false }), p, { now: NOW })).toBe(false);
   });
 
   it('age is the time since the card last changed, with m, h, d and w', () => {

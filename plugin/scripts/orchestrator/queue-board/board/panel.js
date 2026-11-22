@@ -643,7 +643,9 @@ function drawPanel(fresh) {
   });
   const history = historySection(d);
 
-  panel.replaceChildren(
+  // replaceChildren writes a null part as the text "null" (seen while the task is fetched, with no description or
+  // summary yet), so the parts are put through a list without the empty ones.
+  const parts = [
     el(
       'div',
       { class: 'panel-header' },
@@ -678,7 +680,8 @@ function drawPanel(fresh) {
     ),
     details,
     history,
-  );
+  ];
+  panel.replaceChildren(...parts.filter((p) => p != null && p !== false));
   if (focusAgain && !panel.contains(document.activeElement)) panel.querySelector(focusAgain)?.focus({ preventScroll: true });
   panel.scrollTop = scroll;
 }

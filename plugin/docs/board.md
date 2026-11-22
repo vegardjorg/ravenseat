@@ -621,7 +621,7 @@ as before.
 ## Structured search
 
 The search box takes fields next to plain words: `class:D status:blocked age>2d`. Fields: `class` (exact, so `D` is not
-`D+`), `status` (`blocked` means the card is in Blocked), `project`, `block` (an open block's code), `label`, `plan`,
+`D+`), `status` (`blocked` is what the board calls Blocked: a block, or waiting on something), `project`, `block` (an open block's code), `label`, `plan`,
 `age` (time since the card last changed: `age>2d`, `age<3h`, with m, h, d, w) and `cost` (measured USD: `cost>1`). A
 comma or a repeated field is "or" (`class:d,u`), different fields are "and", and a leading minus leaves out
 (`-class:K`). Plain words search id, title, feature and project as before. Typing a field name or `field:` opens

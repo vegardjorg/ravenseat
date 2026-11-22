@@ -5,7 +5,7 @@
 // A search is words and fields, split on spaces:
 //   plain words        searched in the card's id, title, feature and project as one phrase, exactly as before
 //   class:D            the risk class, exact (D is not D+); a comma list is "or": class:d,u
-//   status:running     the task status; status:blocked means the card has an open block
+//   status:running     the task status; status:blocked is what the board calls Blocked (a block, or waiting on something)
 //   project:auth       the project          block:gate-red   the open block's code
 //   label:visual       one of the labels    plan:PL-AUTH     the plan (the rule the plan page already uses)
 //   age>2d  age<3h     time since the card last changed (m, h, d, w; a bare number is days)
@@ -136,12 +136,24 @@
 
   /**
    * The card's block: `block` is the Blocked column's stuck block (an object with code on the board, a plain code in
-   * the tests); `open_block` is any open block's code. status:blocked follows the Blocked column.
+   * the tests); `open_block` is any open block's code.
    */
   function blockCode(k) {
     const b = k?.block;
     if (typeof b === 'string') return b;
     return b?.code ?? k?.open_block ?? null;
+  }
+
+  /**
+   * status:blocked is what the board calls Blocked: a stuck or open block, or a waiting card that is not ready (it
+   * waits on a dependency, an answer, a file owner or a parking; the "Blocked" group under In queue).
+   */
+  function isBlocked(k) {
+    return Boolean(blockCode(k)) || (low0(k?.status) === 'waiting' && k?.ready === false);
+  }
+
+  function low0(v) {
+    return String(v ?? '').toLowerCase();
   }
 
   /** Does one term hold for a card? */
@@ -151,7 +163,7 @@
       case 'class':
         return t.values.includes(low(k?.class));
       case 'status':
-        return t.values.some((v) => (v === 'blocked' ? Boolean(k?.block) : low(k?.status) === v));
+        return t.values.some((v) => (v === 'blocked' ? isBlocked(k) : low(k?.status) === v));
       case 'project':
         return t.values.includes(low(k?.project));
       case 'block':
