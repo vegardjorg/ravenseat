@@ -1451,7 +1451,16 @@ function scheduleData() {
   const key = QT.cacheKey({ queueStamp: stamp, settings, now });
   if (scheduleCache.key === key) return scheduleCache.data;
   const queue = JSON.parse(fs.readFileSync(FILE, 'utf8'));
-  // The same caps as cli/schedule.mjs; a forecast or a measurement that fails never stops the tab (no cap then).
+  const data = { enabled: true, settings, version: key, ...QT.timelineData(queue, { now, ...scheduleCaps(queue) }) };
+  scheduleCache = { key, data };
+  return data;
+}
+
+/**
+ * The caps the plan is played with: the same as cli/schedule.mjs. A forecast or a measurement that fails never stops
+ * the tab or a preview (no cap then). Used by the Timeline (scheduleData) and by a drop's preview (T-B, planEffect).
+ */
+function scheduleCaps(queue) {
   let quotaSlots = null;
   try {
     const running = (queue.tasks ?? []).filter((o) => o.status === 'running').length;
@@ -1466,9 +1475,20 @@ function scheduleData() {
   } catch {
     loadSlots = null;
   }
-  const data = { enabled: true, settings, version: key, ...QT.timelineData(queue, { now, quotaSlots, loadSlots }) };
-  scheduleCache = { key, data };
-  return data;
+  return { quotaSlots, loadSlots };
+}
+
+/**
+ * T-B: what a Timeline drop does to the plan, in words ({ sentence, parts }), for a dry run that asked for it
+ * (plan_effect: true). `copy` is the queue as the drop would leave it. A failure gives null: the preview then shows the
+ * dry run without the sentence, it never stops the drop.
+ */
+function planEffectOf(queue, copy, moved = []) {
+  try {
+    return QT.planEffect(queue, copy, { now: Date.now(), ...scheduleCaps(queue), moved });
+  } catch {
+    return null;
+  }
 }
 
 // ---- "Since you left" (roadmap 3e AW-2, AW-3, AW-8; lib/awaySummary.js) ---------------------------------------------
@@ -1930,11 +1950,17 @@ async function bulk(b, queueNow) {
       } else error = [errorText(r, 'ravenseat failed')];
     }
     const list = T.assess(queue, assessment, { now: Date.now() });
+    // T-B: a Timeline drop asks for the plan in words; only a rank (order) is played, and only when the dry run worked.
+    const effect =
+      b.plan_effect === true && plan.command === 'rank' && !error.length
+        ? { plan: planEffectOf(queue, QT.applyChanges(queue, changes), ids) }
+        : {};
     return {
       status: 200,
       answer: {
         ok: true,
         dry: true,
+        ...effect,
         changed,
         recap: T.bulkSummary(queue, action, ids, val, changes),
         lines: L.diffLines(changes, { max: 300 }),
@@ -2163,9 +2189,22 @@ async function focus(b, queueNow) {
       now: Date.now(),
       uncommitted: uncommitted().uncommitted,
     });
+    // T-B: a Timeline step drop asks for the plan in words: the same save on a copy, then both played forward.
+    let effect = {};
+    if (b.plan_effect === true && !f.error.length) {
+      let planText = null;
+      try {
+        const copy = L.cloneJson(queue);
+        L.saveFocusPlan(copy, input, new Date().toISOString());
+        planText = planEffectOf(queue, copy);
+      } catch {
+        planText = null;
+      }
+      effect = { plan: planText };
+    }
     return {
       status: 200,
-      answer: { ok: true, dry: true, changed: queue.changed ?? null, ...f, can: !f.error.length },
+      answer: { ok: true, dry: true, changed: queue.changed ?? null, ...f, ...effect, can: !f.error.length },
     };
   }
   const tmp = path.join(tmpDir(), `queue-board-${process.pid}-${crypto.randomUUID()}.json`);
@@ -2208,6 +2247,8 @@ async function focus(b, queueNow) {
       ok: true,
       message: order.length ? 'Focus saved' : 'Focus removed',
       info: r.data.warnings ?? [],
+      // T-B: the changelog entry of the save (Undo sends it back as --nr); null when nothing was logged.
+      log: r.data.log ?? null,
     },
   };
 }
@@ -3457,6 +3498,8 @@ const STATIC = {
   '/boardSearch.js': [path.join('..', 'lib', 'boardSearch.js'), 'text/javascript; charset=utf-8'],
   // The Timeline tab's layout (lib/timelineLayout.js, T-A, the same file the tests use); board/timeline.js draws.
   '/timelineLayout.js': [path.join('..', 'lib', 'timelineLayout.js'), 'text/javascript; charset=utf-8'],
+  // The Timeline's drop math for the drag (lib/timelineDrag.js, T-B, the same file the tests use).
+  '/timelineDrag.js': [path.join('..', 'lib', 'timelineDrag.js'), 'text/javascript; charset=utf-8'],
   // The plan view (Now, Next, Later, Waiting) with a draft and "Save focus", and the help.
   '/plan.js': ['plan.js', 'text/javascript; charset=utf-8'],
   // Shared focus trap, toast queue, tabs and legend (the same file the tests use).

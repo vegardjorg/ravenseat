@@ -234,6 +234,8 @@ export function cmdFocus() {
             paused: r.paused,
             still: r.still,
             warnings: r.warnings,
+            // T-B: the changelog entry of a save (null for a dry run, or when nothing was logged).
+            log: r.log ?? null,
           }),
         );
       else {
@@ -254,14 +256,33 @@ export function cmdFocus() {
       answer(queue, r, true);
     } else {
       let after = null;
+      let entry = null;
       const r = edit((queue) => {
         checkExpect(queue);
+        // T-B: the save is one changelog entry (the focus fields as `focus: true` changes, the same form focus add and
+        // focus clean write, plus the tasks and the project register), so queue.mjs undo --nr takes it back. Only when a
+        // focus is there before and after: setting up or removing the whole focus is not logged (undo cannot rebuild it).
+        const was = L.cloneJson({ focus: queue.focus ?? null, tasks: queue.tasks ?? [], projects: queue.projects ?? {} });
         const s = L.saveFocusPlan(queue, plan, now);
         if (s.error.length) errorOut(s.error);
+        if (was.focus && queue.focus) {
+          const fields = new Set([...Object.keys(was.focus), ...Object.keys(queue.focus)]);
+          const changes = [];
+          for (const field of fields)
+            if (!L.equalValue(was.focus[field] ?? null, queue.focus[field] ?? null))
+              changes.push({
+                focus: true,
+                field,
+                before: L.cloneJson(was.focus[field] ?? null),
+                after: L.cloneJson(queue.focus[field] ?? null),
+              });
+          changes.push(...L.bulkDiff({ tasks: was.tasks, projects: was.projects }, queue));
+          entry = L.logChange(queue, { by: val('--by') ?? null, action: 'focus save', changes, now });
+        }
         after = queue;
         return s;
       });
-      answer(after, r, false);
+      answer(after, { ...r, log: entry?.nr ?? null }, false);
     }
   } else if (under === 'evaluate') {
     // The evaluation of each stage (queueLogic.evaluateFocusStep), with the rests and suggestions.
