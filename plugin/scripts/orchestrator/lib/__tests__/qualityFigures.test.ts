@@ -113,8 +113,9 @@ describe('right first time', () => {
     expect(empty.rightFirstTime).toMatchObject({ merged: 0, rate_pct: null, defects_per_10: null, interventions_per_10: null });
     expect(empty.reviewers).toEqual({ tasks: 0, rows: [], fix_rounds: 0, attributed: 0, hints: [] });
     // A result from before the quality figures (no such keys) still prints the old lines only.
-    const { rightFirstTime, autonomy, reviewers, inflow, ...old } = ES.flowStatistics({ tasks: [] }, [], window);
-    expect([rightFirstTime, autonomy, reviewers, inflow].every(Boolean)).toBe(true);
+    // gatesTwice (CI-1) is newer still, so an old result lacks it as well.
+    const { rightFirstTime, autonomy, reviewers, inflow, gatesTwice, ...old } = ES.flowStatistics({ tasks: [] }, [], window);
+    expect([rightFirstTime, autonomy, reviewers, inflow, gatesTwice].every(Boolean)).toBe(true);
     expect(ES.flowLines(old, 'x')).toHaveLength(6);
   });
 });
