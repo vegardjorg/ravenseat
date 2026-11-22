@@ -7566,3 +7566,9 @@ body.stale .summary.stuck::before {
     border-bottom-color: CanvasText;
   }
 }
+
+/* An empty board (the first-run card, and the demo offer above it) has no columns: one column, so on a phone the
+   cards fit the screen instead of spanning the four 220 px column tracks and being cut at the right edge. */
+.board.flat:has(> .onboarding) {
+  grid-template-columns: minmax(0, 1fr);
+}
