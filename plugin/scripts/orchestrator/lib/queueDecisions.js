@@ -214,13 +214,19 @@
     const door = md.door === 'one-way' || md.door === 'two-way' ? md.door : null;
     const blast = typeof md.blast === 'string' && md.blast ? md.blast : null;
     const words = { door: 'door', blast: 'blast radius' };
+    // The line is one sentence that starts with who says it ("Reviewer says door one-way ..."), so the board and
+    // `ravenseat decide` show it as it is, with no "Reviewer:" before it (ms1 wording nit, owner 22.11).
+    const who = (type) => {
+      const t = typeof type === 'string' ? type.trim() : '';
+      return t ? t[0].toUpperCase() + t.slice(1) : 'A reviewer';
+    };
     const disagree = [];
     for (const r of Array.isArray(md.reviewers) ? md.reviewers : [])
       for (const field of ['door', 'blast']) {
         const said = r?.[field] ?? null;
         const own = field === 'door' ? door : blast;
         if (said && said !== own)
-          disagree.push(`${r.type ?? 'a reviewer'} says ${words[field]} ${said} (the track says ${own ?? DANGER_NOT_STATED})`);
+          disagree.push(`${who(r.type)} says ${words[field]} ${said} (the track says ${own ?? DANGER_NOT_STATED})`);
       }
     return {
       door,

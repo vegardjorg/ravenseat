@@ -107,7 +107,7 @@ export function decisionLines(j, { width = WIDTH, max = Infinity, ravenseat = CL
       // A delivery's door and blast radius (MS-1): the track's call, a reviewer who disagrees beside it. Never a guard.
       if (x.danger) {
         out.push(cut(`   ${x.danger.badge ? `${x.danger.badge}. ` : ''}${x.danger.text}`, width));
-        for (const d of x.danger.disagree) out.push(cut(`   Reviewer: ${d}`, width));
+        for (const d of x.danger.disagree) out.push(cut(`   ${d}`, width));
       }
       if (x.verb === 'decide' && x.recommendation) out.push(cut(`   Recommendation: ${x.recommendation}`, width));
       if (x.ifYes) out.push(cut(`   ${DEC.IF_YES_LABEL}: ${x.ifYes}`, width));
