@@ -67,6 +67,12 @@ A scheduled or looped pulse (for example a prompt that runs every 30 minutes ove
 never hides work from the next `orchestrator pulse`. The status lines that only inform (ownership, base health, follow
 up, findings, the usage-limit reset) stay in `orchestrator pulse`, which the loop still runs at the start of a round.
 
+In the morning, `ravenseat since` answers "what happened while I was away?" in one read: Done, Stuck, Waiting on you
+and Spend (one line each, `not read: <what> -> <why>` when a part could not be read) and the latest events with failures
+marked. The window is since the seen mark (`<dataFolder>/seen.json`), the last 24 hours without one; `--window 24h|7d`
+picks a fixed one, `--json` gives the same as data and `--mark` moves the mark to now after printing. The numbers are
+the board's "Since you left" band (`lib/awaySummary.js`), so Claude, the terminal and the board say the same.
+
 Push happens in **batches**: `ravenseat push-check` first, then `git push`. Every push can trigger CI in your own setup,
 so many small pushes cost money quietly. By default (`push.mode` `"owner"`) only the owner's word starts a push; see
 [Batch push](#batch-push-the-push-threshold) for the threshold mode and the push guard's reminder.
