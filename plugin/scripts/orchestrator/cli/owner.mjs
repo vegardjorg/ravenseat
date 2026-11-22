@@ -20,6 +20,10 @@ import {
 } from './context.mjs';
 import { guardWeakening, logWeakened } from './settings.mjs';
 import { captureOn, draftFromAnswer, notFromTrack, writeProposal } from './catalog.mjs';
+import { logEvent } from './events.mjs';
+
+// The decision rows in the time log (section 7.1 of plans/autonomi-nivaa-utredning.md): one per answer, fail open.
+const DROWS = require('./lib/decisionRows.js');
 
 // catalog.captureAnswers (roadmap 0z Z-A): an answer can become a proposed design choice (resolve --keep).
 const CAT = require('./lib/catalog.js');
@@ -62,8 +66,12 @@ export function cmdResolve() {
     // An answer to a checkpoint (lib/checkpoint.js): Continue lets the rest start, Adjust and Stop park it.
     const checkpoint =
       s.answer == null ? [] : sp.map((q) => CP.ownerChoice(queue, q, s.answer, { by: val('--by') ?? null, now })).filter(Boolean);
-    return { stored: s.answer, added, triage, checkpoint };
+    // One decision row per answered question, and `category` and `followed` on its resolution (section 7.1). A resolve
+    // without an answer (a condition marked met) is no decision. The rows are written after the save, below.
+    const rows = s.answer == null ? [] : decisionRowsFor(queue, sp, { answer, choice, now });
+    return { stored: s.answer, added, triage, checkpoint, rows };
   });
+  logEvent(r.rows);
   const added = r.added;
   console.log(
     `Resolved: ${sp.join(', ')}${choice != null ? ` (choice: ${r.stored})` : answer != null ? ' (with answer)' : ''}`,
@@ -93,6 +101,57 @@ export function cmdResolve() {
     else console.log(`Checkpoint ${c.sp}: the answer is not Continue, Adjust or Stop, so ${list} can start; park or cancel them by hand if that was not meant.`);
   }
   keepAnswers(sp, { keep, answered: r.stored != null });
+}
+
+/**
+ * The decision rows for a machine card (approve, QA): one per id, bulk when there are several. Never throws.
+ */
+function machineRows(queue, ids, { verb, chosen, note = false, by = null }) {
+  try {
+    const now = new Date().toISOString();
+    const surface = DROWS.surfaceOf(process.env);
+    const bulk = ids.length > 1;
+    return ids.map((id) =>
+      DROWS.taskRow({ verb, task: queue.tasks.find((o) => o.id === id) ?? { id }, chosen, note, by, surface, bulk, now }),
+    );
+  } catch {
+    return []; // error-ignored: measurement only
+  }
+}
+
+/**
+ * The decision rows for a resolve (lib/decisionRows.js), and `category` and `followed` on each resolution. Never throws:
+ * a failure here costs the measurement, never the answer.
+ */
+function decisionRowsFor(queue, sp, { answer, choice, now }) {
+  try {
+    const by = val('--by') ?? null;
+    const surface = DROWS.surfaceOf(process.env);
+    const bulk = sp.length > 1;
+    return sp.map((id) => {
+      const q = queue.question?.[id] ?? null;
+      const picked = choice != null ? L.pickChoice(q, choice).choice : null;
+      const row = DROWS.resolveRow({
+        sp: id,
+        q,
+        chosen: picked ?? answer,
+        free: picked == null,
+        note: picked != null && !!String(answer ?? '').trim(),
+        by,
+        surface,
+        bulk,
+        now,
+      });
+      const res = queue.resolutions?.[id];
+      if (res) {
+        res.category = row.category;
+        res.followed = row.followed;
+      }
+      return row;
+    });
+  } catch {
+    return []; // error-ignored: measurement only
+  }
 }
 
 /**
@@ -244,10 +303,12 @@ export function cmdApprove() {
     if (by) for (const o of queue.tasks) if (answer.approved.includes(o.id)) o.approved_by = by;
     return {
       ...answer,
+      rows: machineRows(queue, answer.approved, { verb: 'approve', chosen: 'Approve', by }),
       batched: queue.tasks.filter((o) => answer.approved.includes(o.id) && L.isBatched(o)).map((o) => o.id),
       unsized: queue.tasks.filter((o) => answer.approved.includes(o.id) && PR.sizeNotSet(o)).map((o) => o.id),
     };
   });
+  logEvent(r.rows);
   console.log(`Approved (waiting now): ${r.approved.join(', ')}`);
   // An imported issue has no size (lib/githubIssues.js taskFor): say so, with the command that sets one.
   for (const line of PR.sizeHint(r.unsized ?? [], CLI)) console.log(line);
@@ -448,8 +509,9 @@ export function cmdQa() {
       // write (queueLogic.cleanFocus, as receive, set and fill do): a step with nothing left leaves the focus, and a
       // focus with nothing left gets its owner question now, not at the next fill. An error here never stops qa ok.
       autoCleanFocus(queue, `qa ok ${s.ok.join(' ')}`);
-      return s;
+      return { ...s, rows: machineRows(queue, s.ok, { verb: 'check', chosen: 'QA ok', by }) };
     });
+    logEvent(r.rows);
     console.log(`QA ok: ${r.ok.join(', ')}`);
     focusCleanOut();
   } else if (under === 'deviation') {
@@ -458,8 +520,10 @@ export function cmdQa() {
     const r = edit((queue) => {
       const s = L.qaDeviation(queue, id, text);
       if (s.error) die(s.error);
-      return s;
+      // The deviation's text stays out of the row (it can name people); `note` says there was one.
+      return { ...s, rows: machineRows(queue, [id], { verb: 'check', chosen: 'Deviation', note: true, by: val('--by') ?? null }) };
     });
+    logEvent(r.rows);
     // The ids only: the owner's text can name people or customers, and the fix task's mission already holds it.
     FSRC.record(() => FSRC.qaDeviation({ id, fixId: r.fix.id }));
     console.log(
