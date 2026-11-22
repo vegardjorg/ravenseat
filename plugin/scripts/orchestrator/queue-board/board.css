@@ -3308,7 +3308,8 @@ body.with-option-line .toaster {
 
 .graph-draw {
   display: flex;
-  gap: var(--distance-md);
+  flex-wrap: wrap;
+  gap: var(--distance-xs) var(--distance-md);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -3316,13 +3317,16 @@ body.with-option-line .toaster {
   color: var(--color-on-surface-variant);
 }
 
+/* Each entry stays on one line (the legend wraps between entries, never inside one), and its sample keeps its size. */
 .graph-draw li {
   display: flex;
   align-items: center;
   gap: var(--distance-sm);
+  white-space: nowrap;
 }
 
 .graph-draw .draw {
+  flex: none;
   width: 14px;
   height: 14px;
   border-radius: 9999px;
@@ -3363,6 +3367,43 @@ body.with-option-line .toaster {
 
 .graph-draw .t-done {
   opacity: 0.45;
+}
+
+/* deps M3: the fill is the project (two project colours side by side, so it reads as "a colour per project"). */
+.graph-draw .t-project {
+  border-color: var(--color-outline);
+  background: linear-gradient(90deg, var(--color-category-teal) 50%, var(--color-category-plum) 50%);
+}
+
+/* The line samples (arrow direction, a line from a question, the longest chain): a short line instead of a dot. */
+.graph-draw .t-arrow,
+.graph-draw .t-sp-line,
+.graph-draw .t-critical {
+  position: relative;
+  width: 24px;
+  height: 0;
+  border: none;
+  border-radius: 0;
+  border-top: 1.5px solid var(--color-outline);
+  background: none;
+}
+
+.graph-draw .t-arrow::after {
+  content: '';
+  position: absolute;
+  right: -2px;
+  top: -5.5px;
+  border-left: 8px solid var(--color-outline);
+  border-top: 4.5px solid transparent;
+  border-bottom: 4.5px solid transparent;
+}
+
+.graph-draw .t-sp-line {
+  border-top-color: var(--color-secondary);
+}
+
+.graph-draw .t-critical {
+  border-top: 3px solid var(--color-on-surface-variant);
 }
 
 /* "faded" applies only while a chain is selected. Off, it keeps its slot (visibility, not display), so selecting a
@@ -3457,9 +3498,10 @@ body.with-option-line .toaster {
   marker-end: url(#graph-arrow);
 }
 
+/* A wait on a question: solid in the question colour, starting at its "?" square (deps M3: only a blocked ring is
+   dashed, so a dash never means two things). */
 .edge.sp {
   stroke: var(--color-secondary);
-  stroke-dasharray: 5 4;
 }
 
 .edge.muted {
@@ -3657,13 +3699,12 @@ body.with-option-line .toaster {
   stroke-width: 4;
 }
 
-.node.before .ring {
-  stroke: var(--color-secondary);
-  stroke-width: 3;
-}
-
+/* Before and after the selected task: one ring (deps M3). The two colours were hard to tell apart and the legend
+   never named them; the position (left or right of the selected task) and the status line ("waits on ..., unlocks
+   ...") say it in words. */
+.node.before .ring,
 .node.after .ring {
-  stroke: var(--color-tertiary);
+  stroke: var(--color-on-surface);
   stroke-width: 3;
 }
 

@@ -191,6 +191,19 @@
       // The batch queue has its own badge (dotted ring and "S").
       chunk('t-batch', 'in the batch queue (packed into a track)'),
       chunk('t-sp', 'owner question'),
+      // deps M3: the signs the legend never named. The fill is the project, the arrows point from what must finish
+      // first to what waits, a line from a "?" square is a wait on that question (solid: only a blocked ring is
+      // dashed), and the longest chain from the lead is the thick line. Each sample repeats what its text says.
+      chunk('t-project', 'fill colour: the project', { 'data-legend': 'project' }),
+      chunk('t-arrow', 'arrows point from what must finish first to what waits', { 'data-legend': 'arrow' }),
+      o.edges.some((k) => k.art === 'sp')
+        ? chunk('t-sp-line', 'line from a ? square: waits on that question', {
+            'data-legend': 'question-line',
+          })
+        : null,
+      cache.lead?.critical?.edges?.length
+        ? chunk('t-critical', 'thick line: the longest chain', { 'data-legend': 'critical' })
+        : null,
       has('neighbor')
         ? chunk('t-neighbor', 'small gray: hidden by your filter or search', { 'data-legend': 'neighbor' })
         : null,
@@ -450,8 +463,9 @@
             viewBox: '0 0 10 10',
             refX: 1,
             refY: 5,
-            markerWidth: 7,
-            markerHeight: 7,
+            // deps M3: large enough to read the direction without knowing the left-to-right convention.
+            markerWidth: 9,
+            markerHeight: 9,
             orient: 'auto-start-reverse',
           },
           s('path', { class: 'arrow', d: 'M0 0L10 5L0 10z' }),

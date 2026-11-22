@@ -320,6 +320,38 @@ describe('the view answers in words (deps H3 step 1, M2)', () => {
   });
 });
 
+describe('the legend explains every sign, and a dash means one thing (deps M3)', () => {
+  const item = (k: string) => main.querySelector(`.graph-draw li[data-legend="${k}"]`) as HTMLElement | null;
+
+  it('says the fill colour is the project', () => {
+    expect(item('project')?.textContent).toBe('fill colour: the project');
+  });
+
+  it('says which way the arrows point', () => {
+    expect(item('arrow')?.textContent).toBe('arrows point from what must finish first to what waits');
+  });
+
+  it('names the line from a question and the longest chain in words', () => {
+    expect(item('question-line')?.textContent).toBe('line from a ? square: waits on that question');
+    expect(item('critical')?.textContent).toBe('thick line: the longest chain');
+  });
+
+  it('dashed means blocked only: the question lines are solid', () => {
+    expect(rule('.task.t-blocked .ring')['stroke-dasharray']).toBeTruthy();
+    expect(rule('.edge.sp')['stroke-dasharray']).toBeUndefined();
+  });
+
+  it('the before and after rings of a selected chain look the same (the status line says it in words)', () => {
+    expect(rule('.node.before .ring').stroke).toBeTruthy();
+    expect(rule('.node.before .ring').stroke).toBe(rule('.node.after .ring').stroke);
+  });
+
+  it('the legend samples for lines are hidden from screen readers; the text carries the meaning', () => {
+    for (const k of ['project', 'arrow', 'question-line', 'critical'])
+      expect(item(k)?.querySelector('.draw')?.getAttribute('aria-hidden'), k).toBe('true');
+  });
+});
+
 describe('the empty state is one plain sentence (deps M2)', () => {
   it('no lead, no legend and no Fit; only the switch that could change the result', () => {
     const w = window as unknown as { QueueGraphView: { draw: (c: unknown) => void } };
