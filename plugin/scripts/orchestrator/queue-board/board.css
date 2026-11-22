@@ -6416,9 +6416,15 @@ body.stale .summary.stuck::before {
   .decide-card {
     padding: var(--distance-sm);
   }
+  /* Full-width answers: a long label ("Answer, and prepare a new round (recommended)") wraps inside the button
+     instead of running past the card's edge. */
   .decide-options .button {
     flex: 1 1 100%;
     justify-content: flex-start;
+    min-width: 0;
+    white-space: normal;
+    text-align: left;
+    padding-block: var(--distance-xs);
   }
   .decide-keys {
     display: none;
