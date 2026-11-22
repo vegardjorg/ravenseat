@@ -70,17 +70,25 @@ u work from the keyboard.
 
 <p align="center"><img src="../../assets/screenshots/light-03-dependencies.jpg" alt="Dependency chains as a graph" width="800"></p>
 
-**Dependencies.** The chains as a graph: circles are tasks (solid ring = in progress, dashed = blocked), squares are
-open questions. It shows at a glance which single answer unlocks the most work. Each id sits below its ring, never
-inside it, and stays between 12 and 14 px on screen at any zoom; every legend sample has an edge in the color of the
-ring it explains. The legend also explains why a node looks dimmed, with only the entries that apply right now:
+**Dependencies.** The chains as a graph: circles are tasks, squares are open questions, and arrows point from what
+must finish first to what waits. A sentence on top answers first: which question unlocks the most, by its text, and
+the longest chain, by title (drawn as the thick line); the counts follow it, muted. Each task shows its title below
+the ring (up to two lines), with the id and its state in words on a muted line under it; a question shows its text
+and how many tasks it unlocks. The layout keeps room for every label, so they never overlap. The ring shows the state:
+solid = ready, dashed = blocked (the only dashed sign), thick = in progress, a thick ring of its own colour = in review.
+The fill is the project. The legend names each sign, and the words under each node say the same, so colour is never
+the only signal. Zoomed far out (below half size) a big queue hides the titles until you hover or focus a node. The
+legend also explains why a node looks dimmed, with only the entries that apply right now:
 "faded: outside the selected chain" (while a chain is selected), "small gray: hidden by your filter or search" (a
 predecessor or successor the filter or search hides, drawn because **Show neighbors** is on) and "pale: done" (a done
-predecessor, with **Show finished**). A neighbor's tooltip and screen reader name say "<id> <title>: hidden by the
-filter or search", and a click still opens it; a done node says "done". Selecting a task fills the status line at the
-bottom of the top area, "Showing the chain of <id> (<n> tasks) · Clear selection", with any chain members the view
-hides and their actions in between. The line always keeps its height, so the graph never moves; it is a polite live
-region, and **Clear selection** or Esc (after Esc has closed the panel) clears the chain.
+predecessor, with **Show finished**). The tooltip and screen reader name of a task give its title, id and state, what
+it waits on and what it unlocks; a question's give its text, id, kind and what answering it unlocks. A neighbor's
+first line adds ": hidden by the filter or search", and a click still opens it. Selecting a task fills the status
+line at the bottom of the top area, "Showing the chain of <title> (<id>): 1 task before it, 2 after it · Clear
+selection", with any chain members the view hides and their actions in between, and moves the chain into view left of
+the side panel. The line always keeps its height, so the graph never moves; it is a polite live region, and **Clear
+selection** or Esc (after Esc has closed the panel) clears the chain. With no chains the view says so in one sentence,
+with only **Show standalone** above it.
 
 <p align="center"><img src="../../assets/screenshots/light-15-focus.jpg" alt="The Focus tab: the focus steps and the forecast" width="800"></p>
 
