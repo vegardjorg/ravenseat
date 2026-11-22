@@ -291,7 +291,8 @@ const QUEUE = { store: 'queue' };
 const WHY_ONE_TYPE = 'lite has one task type (class K)';
 const WHY_ONE_DOMAIN = 'lite has one domain (general)';
 const WHY_PLANS = 'lite uses the plan register as a plain list; areas, documents and rules are full mode structure';
-const WHY_PLAN_REVIEW = 'the plan review runs on the intake triage, and the intake triage is off in lite (lite has no D+)';
+// The same words as the triage rows, so the lite fold line names the reason once (board/settings.js joins unique ones).
+const WHY_PLAN_REVIEW = 'the intake triage is off in lite';
 
 const SETTINGS = Object.freeze([
   // ---- 1. Project and git ----
