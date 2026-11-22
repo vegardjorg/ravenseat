@@ -777,7 +777,7 @@
 
   /**
    * The `ravenseat` arguments for an action, or null for one that writes nothing (keep). The owner's actions carry
-   * --by owner where the command records who it was (resolve, approve, qa ok, cancel).
+   * --by owner where the command records who it was (resolve, approve, qa ok, qa deviation, cancel).
    */
   function cliArgs(action) {
     const a = action ?? {};
@@ -791,7 +791,7 @@
       case 'qa-ok':
         return ['qa', 'ok', a.id, '--by', 'owner'];
       case 'qa-deviation':
-        return ['qa', 'deviation', a.id, String(a.text ?? '')];
+        return ['qa', 'deviation', a.id, String(a.text ?? ''), '--by', 'owner'];
       case 'approve':
         return ['approve', a.id, '--by', 'owner'];
       case 'decline':

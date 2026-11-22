@@ -146,7 +146,7 @@ describe('the writes', () => {
     expect(D.cliArgs({ type: 'resolve', sp: 'Q-1', choice: 2 })).toEqual(['resolve', 'Q-1', '--choice', '2', '--by', 'owner']);
     expect(D.cliArgs({ type: 'resolve', sp: 'Q-1', answer: 'Do X' })).toEqual(['resolve', 'Q-1', '--answer', 'Do X', '--by', 'owner']);
     expect(D.cliArgs({ type: 'qa-ok', id: 'T-9' })).toEqual(['qa', 'ok', 'T-9', '--by', 'owner']);
-    expect(D.cliArgs({ type: 'qa-deviation', id: 'T-9', text: 'Broken' })).toEqual(['qa', 'deviation', 'T-9', 'Broken']);
+    expect(D.cliArgs({ type: 'qa-deviation', id: 'T-9', text: 'Broken' })).toEqual(['qa', 'deviation', 'T-9', 'Broken', '--by', 'owner']);
     expect(D.cliArgs({ type: 'approve', id: 'T-5' })).toEqual(['approve', 'T-5', '--by', 'owner']);
     expect(D.cliArgs({ type: 'decline', id: 'T-5', reason: ' not  now ' })).toEqual([
       'cancel',

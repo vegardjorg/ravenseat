@@ -515,7 +515,7 @@ export function cmdQa() {
     console.log(`QA ok: ${r.ok.join(', ')}`);
     focusCleanOut();
   } else if (under === 'deviation') {
-    const [id, text] = positional(2);
+    const [id, text] = positional(2, ['--by']);
     if (!id || !text) die('qa deviation <id> "<what is wrong, and where>"');
     const r = edit((queue) => {
       const s = L.qaDeviation(queue, id, text);

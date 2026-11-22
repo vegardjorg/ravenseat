@@ -118,7 +118,7 @@ beforeEach(() => {
         { id: 'T-1', title: 'Needs vendor', status: 'waiting', class: 'K', value: 3, waiting_on: ['Q-1'] },
         { id: 'T-5', title: 'Add export', status: 'proposed', class: 'K', value: 3, added_at: ASKED },
         { id: 'T-6', title: 'Add import', status: 'proposed', class: 'K', value: 3 },
-        { id: 'T-9', title: 'Login form', status: 'done', class: 'K', value: 2, qa_status: 'waiting' },
+        { id: 'T-9', title: 'Login form', status: 'done', class: 'K', value: 2, domain: 'general', qa_status: 'waiting' },
       ],
       question: {
         'Q-1': { type: 'question', text: 'Which vendor?', category: 'product', recommendation: 'Vendor B', choices: ['Vendor A', 'Vendor B'], added_at: ASKED },
@@ -150,6 +150,14 @@ describe('the commands write one row per answer', () => {
     ]);
     run(['qa', 'ok', 'T-9', '--by', 'owner']);
     expect(rows()[2]).toMatchObject({ key: 'check:T-9', verb: 'check', chosen: 'QA ok', bulk: false });
+  });
+
+  it('qa deviation --by owner (the board passes it): the row records the owner, and "owner" never becomes the text', () => {
+    run(['qa', 'deviation', 'T-9', 'The button is gone', '--by', 'owner'], { RAVENSEAT_SURFACE: 'board' });
+    expect(rows()).toEqual([expect.objectContaining({ key: 'check:T-9', chosen: 'Deviation', by: 'owner', surface: 'board' })]);
+    const fix = queue().tasks.find((o: any) => o.id === 'T-9-QA1');
+    expect(fix.mission).toContain('The button is gone');
+    expect(fix.mission).not.toMatch(/owner\n/);
   });
 
   it('cancel --remark declined of a proposal writes a Decline row; a plain cancel writes none', () => {

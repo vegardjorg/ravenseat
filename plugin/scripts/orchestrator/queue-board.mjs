@@ -3143,7 +3143,7 @@ async function write(filePath, b) {
     if (type === 'qa-deviation') {
       const text = cleanText(b.text, 2000);
       if (!text) return no('write what is wrong, and where');
-      return run(['qa', 'deviation', id, text], `qa deviation ${id}`);
+      return run(['qa', 'deviation', id, text, '--by', 'owner'], `qa deviation ${id}`);
     }
     return no(`unknown action ${type}`);
   }
