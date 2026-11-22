@@ -3285,12 +3285,25 @@ body.with-option-line .toaster {
   border-bottom: 1px solid var(--color-outline-variant);
 }
 
-.graph-tall {
+/* deps H3 step 1, M2: the lead sentence names the question that unlocks the most and the longest chain; the counts
+   follow, muted. A full row of its own, so it never squeezes the legend or the options. */
+.graph-lead {
+  flex-basis: 100%;
   margin: 0;
-  font-weight: 600;
   display: flex;
-  align-items: center;
-  gap: var(--distance-sm);
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--distance-xs) var(--distance-md);
+  color: var(--color-on-surface);
+}
+
+.graph-lead-text {
+  font-weight: 600;
+}
+
+.graph-lead-counts {
+  font-size: var(--text-sm);
+  color: var(--color-on-surface-variant);
 }
 
 .graph-draw {
@@ -3451,6 +3464,12 @@ body.with-option-line .toaster {
 
 .edge.muted {
   opacity: 0.35;
+}
+
+/* The longest chain named in the lead (deps H3 step 1): a little stronger than the other lines. */
+.edge.critical {
+  stroke: var(--color-on-surface-variant);
+  stroke-width: 2.4;
 }
 
 .edge.cycle {

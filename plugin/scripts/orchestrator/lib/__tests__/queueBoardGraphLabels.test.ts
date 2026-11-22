@@ -290,3 +290,58 @@ describe('keyboard and screen reader behaviour stay', () => {
     expect(opened).toContain('A-1');
   });
 });
+
+describe('the view answers in words (deps H3 step 1, M2)', () => {
+  it('the lead names the question and the longest chain; the counts follow, muted', () => {
+    const lead = main.querySelector('.graph-top .graph-lead') as HTMLElement;
+    expect(lead.querySelector('.graph-lead-text')?.textContent).toBe(
+      'Answering "Is Q-W wanted?" unlocks 1 task. Longest chain: Title L-1 and Title L-2.',
+    );
+    expect(lead.querySelector('.graph-lead-counts')?.textContent).toMatch(/tasks in chains/);
+    expect(token(rule('.graph-lead-counts').color)).toBe('on-surface-variant');
+    // The old count line is gone: the top no longer leads with a number.
+    expect(main.querySelector('.graph-tall')).toBeNull();
+    expect(lead.textContent).not.toMatch(/^\d/);
+  });
+
+  it('the longest chain is drawn a little stronger', () => {
+    const edge = main.querySelector('.edge[data-from="L-1"][data-to="L-2"]') as SVGPathElement;
+    expect(edge.classList.contains('critical')).toBe(true);
+    expect(main.querySelector('.edge[data-from="S-1"]')?.classList.contains('critical')).toBe(false);
+    expect(Number(rule('.edge.critical')['stroke-width'])).toBeGreaterThan(Number(rule('.edge')['stroke-width']));
+  });
+
+  it('each node says what it waits on and what it unlocks', () => {
+    const s2 = nodes().find((g) => g.dataset.id === 'S-2') as SVGGElement;
+    expect(s2.getAttribute('aria-label')).toBe('Title S-2, S-2, blocked, waits on Title S-1');
+    const s1 = nodes().find((g) => g.dataset.id === 'S-1') as SVGGElement;
+    expect(s1.getAttribute('aria-label')).toBe('Title S-1, S-1, ready now, unlocks Title S-2');
+    expect(s1.querySelector('title')?.textContent).toBe('Title S-1\nS-1\nready now\nUnlocks Title S-2');
+  });
+});
+
+describe('the empty state is one plain sentence (deps M2)', () => {
+  it('no lead, no legend and no Fit; only the switch that could change the result', () => {
+    const w = window as unknown as { QueueGraphView: { draw: (c: unknown) => void } };
+    const empty = document.createElement('main');
+    document.body.append(empty);
+    w.QueueGraphView.draw({
+      el,
+      main: empty,
+      version: 1,
+      filterKey: 'nothing',
+      data: data(),
+      visible: () => false,
+      drawOnNew: () => {},
+      openPanel: () => {},
+      openDecisions: () => {},
+    });
+    expect(empty.querySelector('.graph-lead')).toBeNull();
+    expect(empty.querySelector('.graph-draw')).toBeNull();
+    expect([...empty.querySelectorAll('button')].some((b) => b.textContent === 'Fit')).toBe(false);
+    expect(empty.querySelector('.empty')?.textContent).toBe('No task here waits on another task or on a question.');
+    const switches = [...empty.querySelectorAll('.graph-switch')].map((l) => l.textContent);
+    expect(switches).toEqual(['Show standalone']);
+    empty.remove();
+  });
+});

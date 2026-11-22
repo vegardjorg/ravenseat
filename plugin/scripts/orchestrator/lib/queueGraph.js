@@ -758,13 +758,151 @@
     };
   }
 
+  // ---- Words (deps track, H3 step 1 and M2): the view answers in words, title first, counts last ---------------------
+
+  /** A task's state in words: STATE_TEXT for names and tooltips, STATE_SHORT for the muted line under a title. */
+  const STATE_TEXT = {
+    ready: 'ready now',
+    blocked: 'blocked',
+    active: 'in progress',
+    qa: 'done, waiting for QA',
+    done: 'done',
+    batch: 'in the batch queue: not started alone, packed into a track',
+  };
+  const STATE_SHORT = {
+    ready: 'ready',
+    blocked: 'blocked',
+    active: 'in progress',
+    qa: 'waiting for QA',
+    done: 'done',
+    batch: 'batch queue',
+  };
+
+  const plural = (n, one, more) => `${n} ${n === 1 ? one : more}`;
+
+  /** "A", "A and B", "A, B and C"; over `max` names: the first max - 1 and "and N more". */
+  function listText(names, max = 4) {
+    const list = [...(names ?? [])];
+    if (list.length > max) {
+      const shown = list.slice(0, max - 1);
+      return `${shown.join(', ')} and ${list.length - shown.length} more`;
+    }
+    if (list.length <= 1) return list.join('');
+    return `${list.slice(0, -1).join(', ')} and ${list[list.length - 1]}`;
+  }
+
+  /** A text cut at a word boundary to at most `max` characters, with "…" when cut (no trailing punctuation). */
+  function cutText(text, max) {
+    const t = String(text ?? '').replace(/\s+/g, ' ').trim();
+    if (t.length <= max) return t;
+    const space = t.lastIndexOf(' ', max - 1);
+    return `${t.slice(0, space > max / 2 ? space : max - 1).replace(/[\s.,;:!?]+$/, '')}…`;
+  }
+
+  /** How a node is named in a list of others: a task by its title, a question as the question "<text>". */
+  function refText(n) {
+    if (!n) return '';
+    if (n.art === 'question') return `the question "${cutText(n.text ?? n.sp, 80)}"`;
+    return n.title || n.id;
+  }
+
+  /**
+   * The words for one task node: `lines` for the tooltip and `name` for the accessible name, with the same facts in
+   * the same order: the title (a neighbor says why it is gray), the id, the state, what it waits on and what it
+   * unlocks, by title (a question by its text). "Unlocks" lists the direct successors drawn here and, when the task
+   * unlocks more in all (queueBoard's unlocks.count), the total.
+   * @param {object} n a task node from layer()
+   * @param {{ nodes: object[], edges: object[] }} o the layout (or the graph) it belongs to
+   */
+  function nodeWords(n, o) {
+    const perId = new Map((o?.nodes ?? []).map((x) => [x.id, x]));
+    const before = [];
+    const after = [];
+    for (const k of o?.edges ?? []) {
+      if (k.to === n.id && perId.has(k.from)) before.push(perId.get(k.from));
+      if (k.from === n.id && perId.has(k.to)) after.push(perId.get(k.to));
+    }
+    // Tasks first (by id), questions after them.
+    before.sort((a, b) => (a.art === b.art ? compare(a.id, b.id) : a.art === 'question' ? 1 : -1));
+    after.sort((a, b) => compare(a.id, b.id));
+    const name = n.title || n.id;
+    const waits = before.length ? `Waits on ${listText(before.map(refText))}` : null;
+    const more = (n.locks ?? 0) > after.length ? ` (${plural(n.locks, 'task', 'tasks')} in all)` : '';
+    const unlocks = after.length ? `Unlocks ${listText(after.map(refText))}${more}` : null;
+    const lines = [
+      n.role === 'neighbor' ? `${name}: hidden by the filter or search` : name,
+      n.title ? n.id : null,
+      STATE_TEXT[n.state] ?? n.status ?? null,
+      waits,
+      unlocks,
+    ].filter(Boolean);
+    const lower = (x) => (x === waits || x === unlocks ? x.charAt(0).toLowerCase() + x.slice(1) : x);
+    return { lines, name: lines.map(lower).join(', ') };
+  }
+
+  /**
+   * The lead sentence above the graph (replaces the count line): which answer unlocks the most, named by the
+   * question's text, and the longest chain, named by its titles (queueGraph.criticalPath over the open tasks with the
+   * estimate as weight, as Plans' Dependencies does). The counts follow as a separate part, drawn muted.
+   * @returns {{ lead: string|null, counts: string, critical: { path: string[], sum: number, edges: string[] } }}
+   */
+  function graphLead(o, counts) {
+    const nodes = o?.nodes ?? [];
+    const parts = [];
+    const questions = nodes
+      .filter((n) => n.art === 'question')
+      .sort((a, b) => (b.locks ?? 0) - (a.locks ?? 0) || compare(a.id, b.id));
+    if (questions.length) {
+      const q = questions[0];
+      const text = cutText(q.text ?? q.sp, 90);
+      const many = plural(q.locks ?? 0, 'task', 'tasks');
+      parts.push(
+        questions.length > 1
+          ? `Answering "${text}" unlocks the most: ${many}.`
+          : `Answering "${text}" unlocks ${many}.`,
+      );
+    }
+    const critical = criticalPath(
+      nodes,
+      (o?.edges ?? []).filter((k) => k.art !== 'sp'),
+      {
+        with: (n) => n.art === 'task' && (n.role === 'core' || n.role === 'neighbor'),
+        weight: (n) => (Number(n.estimate) > 0 ? Number(n.estimate) : 1),
+      },
+    );
+    if (critical.path.length >= 2) {
+      const perId = new Map(nodes.map((n) => [n.id, n]));
+      parts.push(`Longest chain: ${listText(critical.path.map((id) => refText(perId.get(id))), 6)}.`);
+    }
+    const countText = nodes.length
+      ? [
+          plural(counts?.tasks ?? 0, 'task in chains', 'tasks in chains'),
+          counts?.question
+            ? `${plural(counts.question, 'owner question', 'owner questions')} hold${counts.question === 1 ? 's' : ''} back ${plural(counts.blockedByQuestion ?? 0, 'task', 'tasks')}`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : '';
+    return {
+      lead: parts.length ? parts.join(' ') : null,
+      counts: countText,
+      critical: critical.path.length >= 2 ? critical : { path: [], sum: 0, edges: [] },
+    };
+  }
+
   return {
     COLUMNS,
     SP,
     MEASURE,
+    STATE_TEXT,
+    STATE_SHORT,
     radius,
     clampLabel,
     labelBox,
+    listText,
+    nodeWords,
+    graphLead,
     buildGraph,
     layer,
     graphNumber,

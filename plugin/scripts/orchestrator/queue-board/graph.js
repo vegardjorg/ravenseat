@@ -24,23 +24,9 @@
     lawyer: 'Waiting on lawyer',
     'owner-task': 'Owner-task',
   };
-  const STATE = {
-    ready: 'ready now',
-    blocked: 'blocked',
-    active: 'in progress',
-    qa: 'done, waiting for QA',
-    done: 'done',
-    batch: 'in the batch queue: not started alone, packed into a track',
-  };
-  // The state in a word or two, for the muted line under a title (the ring is never the only signal).
-  const STATE_SHORT = {
-    ready: 'ready',
-    blocked: 'blocked',
-    active: 'in progress',
-    qa: 'waiting for QA',
-    done: 'done',
-    batch: 'batch queue',
-  };
+  // The state in words lives in queueGraph.js (STATE_TEXT for names, STATE_SHORT for the muted line under a title),
+  // so the names, the tooltips and the labels say the same thing.
+  const stateShort = (n) => window.QueueGraph?.STATE_SHORT?.[n.state] ?? n.status;
 
   // Where the ids sit (B33). A task's ring has radius r + RING_GAP, and its thickest stroke in board.css is
   // RING_STROKE_MAX (a selected node); half of that stroke lies outside the ring. The label hangs below that outer
@@ -56,7 +42,7 @@
   // The view's options (saved in the browser). Neighbors is on by default, the rest off.
   const option = readOption();
   // The layout for the last key (version + filter + option), and how many times it has been computed (for the check).
-  let cache = { key: null, setup: null, counts: null };
+  let cache = { key: null, setup: null, counts: null, lead: null };
   let calculations = 0;
   // The viewport: offset and scale. null = fit on the next render. Reset when the filter or an option changes.
   let snippet = null;
@@ -138,11 +124,10 @@
         showStandalone: option.freeOnes,
         neighbors: option.neighbors,
       });
-      cache = {
-        key,
-        setup: KG.layer(graph, { mode: option.mode, surface: measure }),
-        counts: KG.graphNumber(graph),
-      };
+      const o = KG.layer(graph, { mode: option.mode, surface: measure });
+      const counts = KG.graphNumber(graph);
+      // The lead sentence and the longest chain (deps H3 step 1) are computed with the layout, once per change.
+      cache = { key, setup: o, counts, lead: KG.graphLead(o, counts) };
       calculations++;
     }
     // New filter or new options: show everything again. A new version of the queue (same filter) keeps the viewport.
@@ -154,18 +139,19 @@
     return cache;
   }
 
-  // ---- The top of the view: recap, legend and options ----
-  function recap(counts, o) {
+  // ---- The top of the view: lead, legend and options ----
+  /**
+   * The lead (deps H3 step 1, M2): one sentence that names things, from queueGraph.graphLead ("Answering "<question>"
+   * unlocks the most: 4 tasks. Longest chain: A, B, C and D."), then the counts, muted. It replaces the count line,
+   * which led with numbers. A full row of its own.
+   */
+  function recap(lead, o) {
     const el = ctx.el;
-    const parts = [
-      plural(counts.tasks, 'task in chains', 'tasks in chains'),
-      `${plural(counts.question, 'owner question', 'owner questions')} block ${plural(counts.blockedByQuestion, 'task', 'tasks')}`,
-      `longest chain ${plural(counts.longestChain, 'link', 'links')}`,
-    ];
     return el(
       'p',
-      { class: 'graph-tall' },
-      parts.join(' · '),
+      { class: 'graph-lead' },
+      lead.lead ? el('span', { class: 'graph-lead-text', text: lead.lead }) : null,
+      lead.counts ? el('span', { class: 'graph-lead-counts', text: lead.counts }) : null,
       o.cycles.length
         ? el('span', {
             class: 'badge old',
@@ -244,7 +230,8 @@
     );
   }
 
-  function optionRow() {
+  /** The option row. Empty graph (`empty`): only "Show standalone", the one switch that can make it non-empty. */
+  function optionRow(empty = false) {
     const el = ctx.el;
     const toggle = (key, text) =>
       el(
@@ -274,6 +261,7 @@
           ctx.drawOnNew();
         },
       });
+    if (empty) return el('div', { class: 'graph-option' }, toggle('freeOnes', 'Show standalone'));
     return el(
       'div',
       { class: 'graph-option' },
@@ -315,25 +303,16 @@
       ]
         .filter(Boolean)
         .join('\n');
-    // A neighbor is drawn small and gray because the filter or search hides it (QA-1e Q6): its name says so first,
-    // so a hover or a screen reader explains the gray before the state. A done predecessor's state line is "done".
-    // The title comes first (deps H1), the id after it, like the cards.
-    return [
-      n.role === 'neighbor'
-        ? `${n.title || n.id}: hidden by the filter or search`
-        : n.title || n.id,
-      n.title ? n.id : null,
-      STATE[n.state] ?? n.status,
-      n.locks ? `Unlocks ${plural(n.locks, 'task', 'tasks')}` : null,
-    ]
-      .filter(Boolean)
-      .join('\n');
+    // A task (queueGraph.nodeWords): the title first (deps H1), then the id, the state, what it waits on and what it
+    // unlocks, by title (H3). A neighbor is drawn small and gray because the filter or search hides it (QA-1e Q6): its
+    // first line says so, so a hover or a screen reader explains the gray before the state.
+    return window.QueueGraph.nodeWords(n, cache.setup).lines.join('\n');
   }
 
-  /** The accessible name: the tooltip's lines joined, title first ("Streak calendar, UI-2, blocked"). */
+  /** The accessible name, with the same facts as the tooltip ("Streak calendar, UI-2, blocked, waits on ..."). */
   function nodeName(n) {
     if (n.art === 'question') return nodeTitle(n).replace(/\n/g, '. ');
-    return nodeTitle(n).split('\n').join(', ');
+    return window.QueueGraph.nodeWords(n, cache.setup).name;
   }
 
   /**
@@ -401,7 +380,7 @@
           )
         : null,
       n.label
-        ? titleLabel(n, [`${n.id} · ${STATE_SHORT[n.state] ?? n.status}`])
+        ? titleLabel(n, [`${n.id} · ${stateShort(n)}`])
         : s('text', { class: 'label', y: labelY(n.r), text: n.id }),
     );
   }
@@ -441,12 +420,14 @@
         }),
       );
     const edges = s('g', { class: 'edges' });
+    // The longest chain named in the lead is drawn a little stronger (deps H3 step 1).
+    const critical = new Set(cache.lead?.critical?.edges ?? []);
     for (const k of o.edges) {
       const a = perId.get(k.from);
       const b = perId.get(k.to);
       edges.append(
         s('path', {
-          class: `edge ${k.art}${k.muted ? ' muted' : ''}${k.cycle ? ' cycle' : ''}`,
+          class: `edge ${k.art}${k.muted ? ' muted' : ''}${k.cycle ? ' cycle' : ''}${critical.has(`${k.from}>${k.to}`) ? ' critical' : ''}`,
           d: filePath(a, b),
           'data-from': k.from,
           'data-to': k.to,
@@ -618,31 +599,33 @@
   function draw(c) {
     ctx = c;
     const el = c.el;
-    const { setup: o, counts } = setup();
+    const { setup: o, lead } = setup();
     const focus = document.activeElement?.closest?.('.graph-svg .node')?.dataset.id ?? null;
+    if (!o.nodes.length) {
+      // Empty (deps M2): one plain sentence and its action (the shared emptyState from board.js says when the search
+      // or a filter hides everything), with only the switch that could change the result. No lead, legend or Fit.
+      svg = null;
+      make = null;
+      surface = null;
+      statusEl = null;
+      fadedItem = null;
+      const text = 'No task here waits on another task or on a question.';
+      c.main.append(
+        el('div', { class: 'graph-top' }, optionRow(true)),
+        window.QueueEmpty ? window.QueueEmpty(text) : el('p', { class: 'empty', text }),
+      );
+      return;
+    }
     // Empty until mark() fills it; always in the layout with its fixed height (a full row of its own).
     statusEl = el('p', { class: 'graph-chain-status', role: 'status', 'aria-live': 'polite' });
     const top = el(
       'div',
       { class: 'graph-top' },
-      recap(counts, o),
+      recap(lead, o),
       legend(o),
       optionRow(),
       statusEl,
     );
-    if (!o.nodes.length) {
-      svg = null;
-      make = null;
-      surface = null;
-      c.main.append(
-        top,
-        // The shared emptyState from board.js (the reason and the action).
-        window.QueueEmpty
-          ? window.QueueEmpty('No dependencies here.')
-          : el('p', { class: 'empty', text: 'No dependencies with these filters.' }),
-      );
-      return;
-    }
     c.main.append(top, drawSvg(o));
     if (snippet) use();
     else customize();
