@@ -54,10 +54,15 @@ names the file, so the owner can add it to the task.
   that are hard to reverse: the data model or schema, a public API or file format, a new dependency, deleting data
   or a feature; (3) architecture: a new module boundary, a pattern other modules will follow, or moving
   responsibility between layers; (4) security or legal tradeoffs.
-- Ask through the owner questions: the "Owner questions" section in `track-result.md` (the question, 2 to 4 choices and
-  your recommendation), counted in `ownerQuestions=<n>` on the RESULT line; SendMessage to the orchestrator only when
-  the question blocks the whole track. Do the parts that do not depend on the answer, and never build a hard-to-reverse
-  choice on a guess.
+- Ask by registering the question: `ravenseat question <id> --text "<question>" --category <key> --context "<why,
+  at most 600 characters>" --if-yes "<what follows your recommendation>" --if-no "<what follows another choice>"
+  --recommendation "<your pick>" --choice "<first>" --choice "<second>"` (2 to 4 choices, the recommendation among
+  them; if-yes and if-no differ, at most 300 characters each). A missing field or unknown category is refused with
+  what to fix. Then list its id in the "Owner questions" section of `track-result.md` and count it in
+  `ownerQuestions=<n>` on the RESULT line; SendMessage to the orchestrator only when
+  the question blocks the whole track. A question only in free text reaches the owner
+  marked "Not filled in by the agent". Do the parts that do not depend on the answer, and never build a
+  hard-to-reverse choice on a guess.
 - Everything else you decide yourself. Record each non-trivial assumption in the "Assumptions" section of
   `track-result.md`: one line with what you assumed, why, and how to change it if it is wrong.
 

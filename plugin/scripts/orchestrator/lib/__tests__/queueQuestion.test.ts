@@ -312,11 +312,15 @@ describe('queue.mjs: question, resolve --answer, resolutions and add with { task
     writeFileSync(join(folder, 'queue.json'), JSON.stringify(queue));
   });
   afterEach(() => rmSync(folder, { recursive: true, force: true }));
+  // A new plain question carries the card fields (queueQuestionCard.test.ts tests the rule itself).
+  const CARD = { category: 'product', context: 'The pilot customer keeps its books in one system.', if_yes: 'We build the export for it.', if_no: 'We wait.' };
+  const CARD_ARGS = ['--category', CARD.category, '--context', CARD.context, '--if-yes', CARD.if_yes, '--if-no', CARD.if_no];
 
   it('question <id> --text ... sets one, and question lists (including those missing text)', () => {
     const r = run([
       'question',
       'Q8',
+      ...CARD_ARGS,
       '--text',
       'Which accounting system does the pilot customer use?',
       '--type',
@@ -355,7 +359,7 @@ describe('queue.mjs: question, resolve --answer, resolutions and add with { task
       'question',
       '--file',
       writeFile('ok.json', {
-        Q8: { type: 'question', text: 'Legacy system?', source: 'k' },
+        Q8: { type: 'question', text: 'Legacy system?', source: 'k', recommendation: 'Keep it', ...CARD },
         J2: { type: 'lawyer', text: 'Offline-stamp?', recommendation: 'Send the letter.' },
       }),
     ]);
@@ -432,7 +436,7 @@ describe('queue.mjs: question, resolve --answer, resolutions and add with { task
   });
 
   it('trackFile includes the owner answer the task was waiting on', () => {
-    run(['question', 'Q8', '--text', 'Which accounting system?']);
+    run(['question', 'Q8', '--text', 'Which accounting system?', '--recommendation', 'Ledgerly', ...CARD_ARGS]);
     run(['resolve', 'Q8', '--answer', 'Ledgerly', '--by', 'owner']);
     expect(run(['start', 'A'])).toMatchObject({ code: 0 });
     const out = join(folder, 'track.md');

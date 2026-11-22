@@ -24,6 +24,7 @@ import { linkProblems, linkProblemsJson, printLinkWarning } from './taskLinksChe
 import { keepAsNotBuilding, keepRefused, remarkReason } from './notBuilding.mjs';
 import { issueArg } from './issues.mjs';
 import { readDoc } from './planShared.mjs';
+import { logEvent } from './events.mjs';
 
 // The lock on the finish line and the ownership (done_when, acceptance, owned_files, shared_patch, owner_db, migr_block;
 // lib/doneCheck.js LOCKED_FIELDS and doneLockError): edit and undo refuse a change after the start unless --by is owner
@@ -227,8 +228,11 @@ export function cmdCancel() {
   const keep = a.includes('--keep');
   if (keep) keepRefused('cancel');
   let title = null;
+  // A proposal before the cancel: a decline is the owner's answer to an Approve card, so it gets a decision row.
+  let proposal = null;
   editLogged('cancel', (queue) => {
     const o = queue.tasks.find((x) => x.id === id);
+    if (o?.status === 'proposed') proposal = { id: o.id, added_at: o.added_at ?? null };
     const r = TE.cancelTask(o, { remark, now: new Date().toISOString() });
     if (r.error) {
       if (!json) die(`Not cancelled: ${o ? r.error : `unknown task ${id}`}`);
@@ -240,6 +244,17 @@ export function cmdCancel() {
     autoCleanFocus(queue, `cancel ${id}`);
   });
   const declined = /^\s*declined\b/i.test(String(remark ?? ''));
+  // The decision row (section 7.1 of plans/autonomi-nivaa-utredning.md): a declined proposal. The reason stays out
+  // (`note` says there was one). Fails open, as every time log row does.
+  if (declined && proposal) {
+    try {
+      const DROWS = require('./lib/decisionRows.js');
+      const note = !!remarkReason(remark);
+      logEvent([DROWS.taskRow({ verb: 'approve', task: proposal, chosen: 'Decline', note, by: val('--by') ?? null, surface: DROWS.surfaceOf(process.env) })]);
+    } catch {
+      /* error-ignored: measurement only */
+    }
+  }
   const kept = keep
     ? keepAsNotBuilding({ title, why: remarkReason(remark), source: `${declined ? 'declined proposal' : 'cancelled task'} ${id}` })
     : null;

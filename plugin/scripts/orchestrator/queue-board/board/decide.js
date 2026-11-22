@@ -450,6 +450,8 @@ function decisionCard(item, focusKey, { check = false } = {}) {
           el('p', { class: 'decide-title', text: item.title }),
           el('p', { class: 'decide-impact', text: D.impactLine(item) }),
           ...item.context.slice(0, 2).map((c) => el('p', { class: 'decide-context', text: c })),
+          // A machine card (approval, QA): what follows from each answer, from code (question.js consequenceBlock).
+          consequenceBlock(item),
         ]),
     open ? decisionForm(item) : decisionButtons(item),
     keepRow(item),

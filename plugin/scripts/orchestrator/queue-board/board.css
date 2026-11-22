@@ -2980,6 +2980,43 @@ body.with-option-line .toaster {
   overflow-wrap: anywhere;
 }
 
+/* The card fields (board/question.js, section 6.1 of plans/autonomi-nivaa-utredning.md): the category as a quiet
+   outlined badge next to the type, the two consequence lines as a list of label and text, and the mark on a track
+   question left as free text on the warn pair. Tokens only, in both modes. */
+.badge.sp-category {
+  /* The neutral tone pair as the type badge; the outline tells the category apart from the type. */
+  background: var(--color-tone-neutral);
+  border-color: var(--color-outline-variant);
+  color: var(--color-on-tone-neutral);
+}
+
+.badge.sp-not-filled {
+  background: var(--color-tone-warn);
+  color: var(--color-on-tone-warn);
+  font-weight: 600;
+}
+
+.sp-if {
+  display: grid;
+  gap: var(--distance-xs);
+  margin: var(--distance-sm) 0 0;
+  padding: var(--distance-xs) var(--distance-md);
+  border-left: 3px solid var(--color-outline-variant);
+}
+
+.sp-if-label {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-on-surface-variant);
+}
+
+.sp-if-text {
+  margin: 0 0 var(--distance-xs);
+  color: var(--color-on-surface);
+  overflow-wrap: anywhere;
+}
+
 /* Inline links in the muted line: the line's own size, a small inset, still a 32 px target. */
 .sp-context .sp-meta .link-button {
   margin: 0;

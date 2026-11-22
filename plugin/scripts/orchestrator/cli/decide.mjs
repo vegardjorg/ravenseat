@@ -100,8 +100,13 @@ export function decisionLines(j, { width = WIDTH, max = Infinity, ravenseat = CL
     for (const x of j.items.slice(0, max)) {
       out.push('');
       out.push(cut(`${x.nr}. ${x.heading ?? x.verb.toUpperCase()}  ${x.id}  ${x.title}`, width));
-      // A question: the recommendation right under the title, then why it is asked (as on the board).
+      // The card fields (section 6.1 of plans/autonomi-nivaa-utredning.md), in the board's order: the category, the
+      // recommendation, what each answer leads to, then why it is asked. An old post has none of the new lines.
+      if (x.verb === 'decide' && x.categoryTitle) out.push(`   Category: ${x.categoryTitle}`);
+      if (x.notFilled) out.push(`   ${DEC.NOT_FILLED}`);
       if (x.verb === 'decide' && x.recommendation) out.push(cut(`   Recommendation: ${x.recommendation}`, width));
+      if (x.ifYes) out.push(cut(`   ${DEC.IF_YES_LABEL}: ${x.ifYes}`, width));
+      if (x.ifNo) out.push(cut(`   ${DEC.IF_NO_LABEL}: ${x.ifNo}`, width));
       if (x.background) out.push(cut(`   Why: ${x.background}`, width));
       out.push(`   ${x.impact_line}`);
       for (const c of x.context) out.push(`   ${c}`);

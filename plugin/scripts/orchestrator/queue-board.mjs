@@ -1679,7 +1679,8 @@ function queueMjs(args) {
     execFile(
       process.execPath,
       [QUEUE_MJS, ...args],
-      { cwd: ROOT, env: process.env, timeout: 30_000, windowsHide: true, maxBuffer: 4 << 20 },
+      // RAVENSEAT_SURFACE: the decision rows in the time log (lib/decisionRows.js) say the answer came from the board.
+      { cwd: ROOT, env: { ...process.env, RAVENSEAT_SURFACE: 'board' }, timeout: 30_000, windowsHide: true, maxBuffer: 4 << 20 },
       (err, out, error) => {
         resolve({
           ok: !err,

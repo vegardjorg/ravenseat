@@ -95,7 +95,7 @@ describe('Claude mission addendum (lib/clients/claude/mission.js)', () => {
     // An empty line piece drops its line: no empty bullet and no blank line inside the reading list.
     expect(core).toContain('heading, then excerpts).\n- The project architecture rules');
     expect(core).toContain('imports the database.\n- Read large files in excerpts.\n- **When the context runs low**:');
-    expect(core).toContain('on the RESULT line. Do the parts');
+    expect(core).toContain('on the RESULT line. A question only in free text');
     expect(core).toContain('write the JSON to a file in `<folder>`');
   });
 

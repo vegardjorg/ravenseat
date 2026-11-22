@@ -817,9 +817,19 @@ export function cmdReceive() {
     if (note) console.log(note);
   };
   /** The card in ravenseat decide. The report's path goes with it, since the note holds only the start of the question. */
-  const openQuestion = (o, asked, file) => {
+  // Section 6.3 of plans/autonomi-nivaa-utredning.md: ownerQuestions=<n> against the questions the track registered with
+  // `ravenseat question`. What is beyond them was free text, so the card is marked "Not filled in by the agent" and one
+  // NOTE line is printed. Never a refusal: the question still reaches the owner, only without its card fields.
+  const openQuestion = (queue, o, asked, file) => {
+    const reg = L.registeredQuestions(queue, o.id, asked.count);
+    const note = L.registeredQuestionNote(o.id, reg, CLI);
+    if (note) console.log(note);
     const opened = L.openBlock(o, 'track-question', { note: asked.note });
     if (opened.block && file) opened.block.file = file;
+    if (opened.block) {
+      opened.block.unfilled = reg.unfilled;
+      opened.block.registered = reg.registered;
+    }
   };
   if (gi.commits === 0 && !a.includes('--force')) {
     // No commits is no delivery, but the track may have said why: a mission it could not do without the owner's answer.
@@ -839,7 +849,7 @@ export function cmdReceive() {
       edit((queue) => {
         const o = queue.tasks.find((x) => x.id === id);
         o.result = said;
-        openQuestion(o, asked, file);
+        openQuestion(queue, o, asked, file);
       });
     }
     die(
@@ -1348,7 +1358,7 @@ export function cmdReceive() {
       if (L.openBlockOf(o)?.code === 'secret-found') L.closeBlock(o);
     }
     // A stop that is already open says more about what blocks the task than the question does.
-    if (asked && (!L.openBlockOf(o) || L.openBlockOf(o).code === 'track-question')) openQuestion(o, asked, trackFound.report?.path ?? null);
+    if (asked && (!L.openBlockOf(o) || L.openBlockOf(o).code === 'track-question')) openQuestion(queue, o, asked, trackFound.report?.path ?? null);
     recordAttempt(o);
     autoCleanFocus(queue, `receive ${id}`);
     return o;

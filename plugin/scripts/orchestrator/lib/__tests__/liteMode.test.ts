@@ -254,7 +254,7 @@ describe('ravenseat init, add, help and mode', () => {
     const q = await ravenseat(
       'add',
       '--json',
-      '{"tasks":[{"title":"Needs you","waiting_on":["Q-1"]}],"question":{"Q-1":{"type":"question","text":"Which colour?"}}}',
+      '{"tasks":[{"title":"Needs you","waiting_on":["Q-1"]}],"question":{"Q-1":{"type":"question","text":"Which colour?","category":"ui","context":"The theme needs one accent.","if_yes":"Blue ships this round.","if_no":"Another colour needs a new contrast check.","recommendation":"Blue"}}}',
     );
     expect(q.status, q.stderr).toBe(0);
     const t = queue().tasks;
