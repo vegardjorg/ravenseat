@@ -503,6 +503,13 @@ export function cmdEditMany() {
       if (pf.length) errorOut(pf);
       const s = L.editMany(queue, input, { by: byName(), now });
       if (s.error.length) errorOut(s.error);
+      // Owner 22.11: edit-many by the owner (--by owner, or the board's --by theBoard) stamps edited_at on each task it
+      // really changed (s.changes holds only fields that differ), the same rule as one owner edit in cmdEdit: never
+      // from a track worktree and never for any other --by.
+      if (OWNER_BY.has(String(byName()).trim()) && !trackBranchHere()) {
+        const touched = new Set(s.changes.filter((c) => c.id != null).map((c) => c.id));
+        for (const o of queue.tasks) if (touched.has(o.id)) o.edited_at = now;
+      }
       // New or changed prefixes: the same warnings as queue.mjs project (one char, overlap).
       const pre = s.projects
         .filter((p) => input?.projects?.[p]?.prefixes)
