@@ -67,7 +67,7 @@ describe('ravenseat decide', () => {
       'ravenseat approve T-5 --by owner',
       'ravenseat cancel T-5 --remark declined --by owner',
     ]);
-    expect(j.items[2].options.map((o: any) => o.cli)).toEqual(['ravenseat qa ok T-9 --by owner', 'ravenseat qa deviation T-9 "<text>"']);
+    expect(j.items[2].options.map((o: any) => o.cli)).toEqual(['ravenseat qa ok T-9 --by owner', 'ravenseat qa deviation T-9 "<text>" --by owner']);
     expect(j.decided).toEqual([]);
   });
 
