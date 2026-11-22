@@ -1343,6 +1343,14 @@ const SETTINGS = Object.freeze([
     'both.', { ...BASIC, choices: ['float', 'beside'] }),
   // Roadmap 0ø J1. Friction: none; the board often sits in a background tab, and the count is a quiet signal instead of
   // desktop notifications (which stay off). It counts only what waits on the owner. Off: the plain title.
+  // Demo mode (owner decision 22.11). Friction: none for the work. It costs zero tokens and cannot stop or start
+  // anything; it is one dismissible card on an empty board that never had a task ("Not now", "Don't show again"), and
+  // the demo itself lives in its own folder, locked down on the server. On in lite and full because a first-time (lite)
+  // user gets the most from seeing a board with work on it. Off: no card; Settings > Show demo board still opens it.
+  row('board.demoOffer', 'board', 'onoff', 'Demo board offer',
+    'An empty board that has never had a task offers a made-up demo board with work in every column. It lives in its ' +
+    'own folder and nothing done there reaches your queue. Off: no offer; the Show demo board row at the bottom of ' +
+    'Settings still opens it.', BASIC),
   row('board.titleCount', 'board', 'onoff', 'Count in the tab title',
     'The browser tab title starts with the number of decisions that wait on you, "(3) Queue board". Running tracks ' +
     'are not counted. Off: the plain title.'),

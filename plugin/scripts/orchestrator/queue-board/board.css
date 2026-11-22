@@ -7477,3 +7477,92 @@ body.stale .summary.stuck::before {
     fill: CanvasText;
   }
 }
+
+/* ---- Demo mode (board/demo.js, docs/board.md "Demo mode") ---- */
+/* The banner: first in the body and sticky at the top, so it shows on every view and in both rooms while the board
+   shows the demo. The tertiary container sets it apart from the update banner (primary). */
+.demo-banner {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--distance-sm) var(--distance-md);
+  padding: var(--distance-sm) var(--distance-md);
+  background: var(--color-tertiary-container);
+  color: var(--color-on-tertiary-container);
+  border-bottom: 2px solid var(--color-outline);
+}
+
+.demo-banner[hidden] {
+  display: none;
+}
+
+.demo-banner-content {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+.demo-banner-title {
+  margin: 0;
+  font-weight: 700;
+}
+
+.demo-banner-info {
+  margin: 2px 0 0;
+  font-size: var(--text-xs);
+}
+
+.demo-banner-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--distance-sm);
+}
+
+.demo-banner .button-outline {
+  color: inherit;
+  border-color: currentColor;
+}
+
+/* The offer card: above the first-run card, the same box with the tertiary edge. */
+.demo-offer {
+  grid-column: 1 / -1;
+  max-width: 640px;
+  width: 100%;
+  margin: var(--distance-lg) auto 0;
+  padding: var(--distance-lg);
+  border: 1px solid var(--color-outline-variant);
+  border-left: 4px solid var(--color-tertiary);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-container-lowest);
+  color: var(--color-on-surface);
+}
+
+.demo-offer p {
+  margin: 0 0 var(--distance-md);
+}
+
+.demo-offer-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--distance-sm);
+}
+
+.demo-offer-buttons .link-button {
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .demo-banner-buttons,
+  .demo-banner-buttons .button {
+    flex: 1 1 auto;
+  }
+}
+
+@media (forced-colors: active) {
+  .demo-banner {
+    border-bottom-color: CanvasText;
+  }
+}

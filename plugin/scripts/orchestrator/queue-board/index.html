@@ -28,6 +28,8 @@
     <script src="/mascot.js" defer></script>
     <!-- The update banner's rules (lib/queueUpdate.js), before the board (board/start.js), which draws the banner. -->
     <script src="/queueUpdate.js" defer></script>
+    <!-- Demo mode's texts and offer rule (lib/demoOffer.js); board/demo.js draws them. -->
+    <script src="/demoOffer.js" defer></script>
     <!-- The Decisions view's rules (lib/queueDecisions.js, the same file `ravenseat decide` uses), before board/decide.js. -->
     <script src="/queueDecisions.js" defer></script>
     <!-- The structured search's rules (lib/boardSearch.js, J6), before board/cards.js and board/search.js. -->
@@ -59,6 +61,7 @@
     <script src="/board/keys.js" defer></script>
     <script src="/board/palette.js" defer></script>
     <script src="/board/search.js" defer></script>
+    <script src="/board/demo.js" defer></script>
     <script src="/board/start.js" defer></script>
     <!-- The Plans room. The rules (queuePlanView.js) are the same file the tests use; plans.js draws. After
          the board (board/), so the key from the link is saved before Plans fetches the register. -->
@@ -85,6 +88,8 @@
     <script src="/plans/plans.js" defer></script>
   </head>
   <body>
+    <!-- Demo mode (board/demo.js): fixed at the top of every view while the board shows the demo board. -->
+    <div id="demo-banner" class="demo-banner" role="region" aria-label="Demo mode" hidden></div>
     <!--
       The top is a two-row grid with the figure in the left corner: the Ravenseat logo (the default) in row 1 only, as
       tall as the row, or the mascot (a switch in the gear) spanning both rows. Both rows have a fixed height in every

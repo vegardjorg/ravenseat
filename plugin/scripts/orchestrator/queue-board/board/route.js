@@ -28,7 +28,11 @@ const TITLE_COUNT = /^\(\d+\) /;
  * never fight over the title. Called with every new state (drawWaitingButton) and after Plans sets its title.
  */
 function drawTabTitle() {
-  const base = document.title.replace(TITLE_COUNT, '');
+  // Demo mode (board/demo.js): "Demo · " before the title, so the demo tab never passes for the real board.
+  const prefix = window.QueueDemo?.TEXTS.titlePrefix ?? 'Demo · ';
+  const plain = document.title.replace(TITLE_COUNT, '');
+  const bare = plain.startsWith(prefix) ? plain.slice(prefix.length) : plain;
+  const base = typeof demoOn === 'function' && demoOn() ? prefix + bare : bare;
   const n = t.data && displayOn('titleCount') ? (DV() ? decisionItems().length : (t.data.inbox?.count ?? 0)) : 0;
   const want = n > 0 ? `(${n}) ${base}` : base;
   if (document.title !== want) document.title = want;

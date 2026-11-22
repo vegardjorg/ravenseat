@@ -3419,6 +3419,7 @@ const BOARD_SCRIPTS = [
   'keys.js',
   'palette.js',
   'search.js',
+  'demo.js',
   'start.js',
 ];
 const STATIC = {

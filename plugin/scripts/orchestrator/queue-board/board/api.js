@@ -401,6 +401,7 @@ async function update(force) {
       indexes();
       drawLogo();
       drawUpdateBanner();
+      drawDemoBanner();
       // The mascot sees the change (events between two polls) and may say something.
       window.QueueMascotView?.newState(t.data);
       // The first state picks where the board lands: Decisions when anything waits on the owner (board/decide.js).

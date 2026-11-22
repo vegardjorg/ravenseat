@@ -528,6 +528,9 @@ function draw() {
   drawFilter();
   // A queue with nothing open (only done and cancelled tasks, or none): the onboarding card instead of empty columns.
   if ((t.view === 'flat' || t.view === 'lanes') && t.data.openTasks === 0) {
+    // Demo mode (board/demo.js): a queue that has never had a task offers the demo board above the steps.
+    const offer = demoOfferCard();
+    if (offer) main.append(offer);
     main.append(onboardingCard());
     drawStripe();
     return;
