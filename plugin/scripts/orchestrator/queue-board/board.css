@@ -7506,11 +7506,11 @@ body.stale .summary.stuck::before {
 
 .demo-banner-title {
   margin: 0;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .demo-banner-info {
-  margin: 2px 0 0;
+  margin: var(--distance-xs) 0 0;
   font-size: var(--text-xs);
 }
 
