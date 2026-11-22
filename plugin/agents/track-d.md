@@ -34,7 +34,9 @@ branch, merging and pushing; you only do your track.
 - The done command and the acceptance criteria in the mission are fixed: never change them (`ravenseat edit` refuses from
   your worktree). One that is wrong or impossible goes in the report (or SendMessage), so the owner decides.
 - **Decide or ask:** fix technical failures yourself without asking (red tests, lint, type errors, a red gate, bugs
-  in your own changes). Ask the owner (the "Owner questions" section in `track-result.md`, counted in `ownerQuestions=<n>`)
+  in your own changes). Ask the owner by registering the question with `ravenseat question` and every card field
+  (`--category`, `--context`, `--if-yes`, `--if-no`, `--recommendation`, `--choice`; see the mission), not as free text,
+  then list its id in the "Owner questions" section of `track-result.md` and count it in `ownerQuestions=<n>`. Ask
   only on unclear product requirements, hard-to-reverse choices (data model, public API, new dependencies, deleting
   data or features), architecture (a new module boundary, a pattern other modules will follow, moving responsibility
   between layers) and security or legal tradeoffs. Everything else you decide, and each non-trivial assumption
