@@ -186,12 +186,50 @@
     if (!inbox) return [];
     const out = [];
     for (const s of inbox.question ?? []) out.push(questionItem(s));
+    // A delivery (a QA check, a task in review) carries the track's door and blast radius (MS-1), null before MS-1.
     for (const p of inbox.qa ?? [])
       for (const f of p.features ?? [])
-        for (const o of f.tasks ?? []) out.push(qaItem(o, p, f));
+        for (const o of f.tasks ?? []) out.push({ ...qaItem(o, p, f), danger: dangerView(o.merge_danger) });
     for (const f of inbox.proposed ?? []) out.push(proposedItem(f));
-    for (const h of inbox.stuck ?? []) out.push(stuckItem(h));
+    for (const h of inbox.stuck ?? []) out.push({ ...stuckItem(h), danger: dangerView(h.merge_danger) });
     return out;
+  }
+
+  // ---- Door and blast radius (MS-1) --------------------------------------------------------------------------------
+  // The track's two lines (lib/mergeDanger.js reads them at receive and stores merge_danger on the task) as the board,
+  // `ravenseat decide` and "Decided for you" show them. Written by agents, so never a guard: a one-way door only raises
+  // the card's visibility (a badge in words, first within its group). A reviewer who disagrees is shown, never resolved.
+
+  /** The badge on a card with a one-way door. */
+  const ONE_WAY_BADGE = 'One-way door: hard to undo';
+  /** What a missing or malformed line reads as (lib/mergeDanger.js NOT_STATED). */
+  const DANGER_NOT_STATED = 'not stated';
+
+  /**
+   * @returns {null | { door: string|null, blast: string|null, oneWay: boolean, badge: string|null, text: string,
+   *   disagree: string[] }} null for a task without a record (received before MS-1, or a PARTIAL delivery).
+   */
+  function dangerView(md) {
+    if (!md || typeof md !== 'object') return null;
+    const door = md.door === 'one-way' || md.door === 'two-way' ? md.door : null;
+    const blast = typeof md.blast === 'string' && md.blast ? md.blast : null;
+    const words = { door: 'door', blast: 'blast radius' };
+    const disagree = [];
+    for (const r of Array.isArray(md.reviewers) ? md.reviewers : [])
+      for (const field of ['door', 'blast']) {
+        const said = r?.[field] ?? null;
+        const own = field === 'door' ? door : blast;
+        if (said && said !== own)
+          disagree.push(`${r.type ?? 'a reviewer'} says ${words[field]} ${said} (the track says ${own ?? DANGER_NOT_STATED})`);
+      }
+    return {
+      door,
+      blast,
+      oneWay: door === 'one-way',
+      badge: door === 'one-way' ? ONE_WAY_BADGE : null,
+      text: `Door: ${door ?? DANGER_NOT_STATED} · Blast radius: ${blast ?? DANGER_NOT_STATED}`,
+      disagree,
+    };
   }
 
   function questionItem(s) {
@@ -681,12 +719,17 @@
     return [...(items ?? [])].sort(compareImpact);
   }
 
-  /** The groups in VERBS order, each sorted by impact; empty groups are left out. */
+  /**
+   * The groups in VERBS order, each sorted by impact; empty groups are left out. Within a group a delivery with a
+   * one-way door comes first (MS-1), in impact order among themselves: it raises visibility, never moves a group.
+   */
   function groupItems(items) {
     const sorted = sortItems(items);
-    return VERBS.map((v) => ({ ...v, items: sorted.filter((x) => x.verb === v.verb) })).filter(
-      (g) => g.items.length,
-    );
+    const oneWay = (x) => x.danger?.oneWay === true;
+    return VERBS.map((v) => {
+      const own = sorted.filter((x) => x.verb === v.verb);
+      return { ...v, items: [...own.filter(oneWay), ...own.filter((x) => !oneWay(x))] };
+    }).filter((g) => g.items.length);
   }
 
   /** The order the board's keyboard walks (j/k): group by group, as drawn. */
@@ -963,6 +1006,8 @@
           at: rec.at,
           undo: undoText(o, { ravenseat }),
           undo_parts: undoParts(o, { ravenseat }),
+          // The delivery's door and blast radius (MS-1), null before MS-1.
+          danger: dangerView(o.merge_danger),
         });
       }
     }
@@ -976,6 +1021,9 @@
     IF_NO_LABEL,
     NOT_FILLED,
     SIGNAL_LABELS,
+    ONE_WAY_BADGE,
+    DANGER_NOT_STATED,
+    dangerView,
     undoParts,
     undoText,
     decidedForYou,

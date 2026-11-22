@@ -30,6 +30,8 @@ Your prompt points to `rev-<ID>/reviewer-reviewer-light.md` and the review packa
 5. **Choices made without asking.** An item under "Assumptions" in `trackReport.md` that is really an architecture
    choice (a new module boundary, a pattern other modules will follow, responsibility moved between layers) or another
    hard-to-reverse choice (data model, public API, new dependency): a MEDIUM finding, "should have asked: <the choice>".
+6. **Door and blast radius.** `00-package.md` has the track's call. Write your own after the FINDING lines:
+   `Door: one-way|two-way` and `Blast radius: <one word>`. A difference is shown to the owner, never a finding by itself.
 
 Skip style, naming and theoretical inputs no caller passes.
 

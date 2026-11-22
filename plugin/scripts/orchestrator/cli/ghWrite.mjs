@@ -43,6 +43,7 @@ import { a, BASE, CLI, CONFIG, die, FOLDER, GIT_ROOT, gitRead, MAIN_TREE, PREFIX
 import { ghRunner } from './ghRun.mjs';
 
 const GO = require('./lib/ghOutbound.js');
+const MDG = require('./lib/mergeDanger.js');
 const RN = require('./lib/releaseNotes.js');
 const PB = require('./lib/pushBatch.js');
 const GE = require('./lib/gateEvidence.js');
@@ -332,7 +333,8 @@ export async function cmdPr() {
   }
   const tasks = allTasks();
   const byId = new Map(tasks.map((t) => [t.id, t]));
-  const list = ids.map((id) => ({ id, title: byId.get(id)?.title ?? '(not in the queue)', door: byId.get(id)?.door, blast: byId.get(id)?.blast }));
+  // Door and blast radius per task when receive stored them (lib/mergeDanger.js, MS-1), with a differing reviewer door.
+  const list = ids.map((id) => ({ id, title: byId.get(id)?.title ?? '(not in the queue)', ...MDG.prFields(byId.get(id)) }));
   const fullGate = GE.fullGateVerdict({ folder: FOLDER, sha: tip, cfg: CONFIG });
   const health = BH.verdict(BH.readState(path.join(FOLDER, 'base-health.json')), tip);
   const body = GO.prBody({ tasks: list, tip, base: BASE, fullGate, health, caveats: caveatsOf({ fullGate, health, count: list.length }) });

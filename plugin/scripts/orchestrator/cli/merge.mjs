@@ -36,7 +36,7 @@ import {
 import { logEvent } from './events.mjs';
 import { cleanupDetachedOf, cleanupWorktree } from '../cleanup-worktree.mjs';
 import { proposeGate } from './gate.mjs';
-import { registerQuietly, registerReviewItems, reviewReports } from './reviewItem.mjs';
+import { registerQuietly, registerReviewerDanger, registerReviewItems, reviewReports } from './reviewItem.mjs';
 import { catalogRules, proposeRuleGates, stackChoicesNow } from './catalog.mjs';
 import { notBuildingLines } from './notBuilding.mjs';
 import { tidyOptions } from './tidy.mjs';
@@ -1194,6 +1194,13 @@ export function cmdReceive() {
   if (signalLine) console.log(signalLine);
   // One time log row per delivery (a second receive of the same tip adds none), read before the edit below replaces it.
   const signalNew = signalRecord && DSIG.isNewDelivery(o0.decision_signals ?? null, signalRecord);
+  // Door and blast radius (lib/mergeDanger.js, MS-1): the track's two lines, from the report, else the reply. One DOOR
+  // line, a section in the package for the reviewer, merge_danger on the task for Decisions and the PR body. Written by
+  // the agent, so NEVER a guard: missing or malformed is "not stated", nothing is blocked or approved by it. A PARTIAL
+  // delivery is unfinished, so it gets none.
+  const MDG = require('./lib/mergeDanger.js');
+  const dangerValues = result?.status === 'PARTIAL' ? null : MDG.fromTrack({ report: reportText, reply: trackReply });
+  if (dangerValues) console.log(MDG.receiveLine(id, dangerValues));
   // Red on base (lib/redOnBase.js): do the new tests fail without the change? Off unless gates.redOnBase is set; a
   // PARTIAL track is unfinished, so not for it. A warning, never a stop.
   const RB = require('./lib/redOnBase.js');
@@ -1282,6 +1289,7 @@ export function cmdReceive() {
           newNames: require('./lib/catalog.js').setupOf(CONFIG).index ? reviewNewNames(diff) : null,
         })?.lines ?? null,
       assumptions,
+      mergeDanger: dangerValues ? MDG.packageSection(dangerValues) : null,
       delta,
       deltaSection: delta ? DR.packageSection(delta, { previousFindings: !!files.previousFindings }) : null,
     }),
@@ -1319,6 +1327,10 @@ export function cmdReceive() {
     // The decision signals of this delivery replace the last ones ("Decided for you" reads them).
     if (signalRecord) o.decision_signals = signalRecord;
     else delete o.decision_signals;
+    // This delivery's door and blast radius replace the last ones, the reviewers' calls with them (a new round is
+    // reviewed again; merge records the reviewers' lines).
+    if (dangerValues) o.merge_danger = MDG.record(dangerValues, { at: new Date().toISOString() });
+    else delete o.merge_danger;
     if (evidenceRead?.evidence) o.evidence = evidenceRead.evidence;
     // The check rules' record (lib/catalogChecks.js record): the latest hits and every rule that ever enforced on the
     // task, for the repeat count. Not for a PARTIAL delivery (unfinished), and untouched when no rule was tried.
@@ -1785,6 +1797,8 @@ export async function cmdMerge() {
     // or with its HIGH still open. --allow-unreviewed is the owner's, logged.
     const reports = reviewReports(o);
     registerReviewItems(id, reports);
+    // The reviewers' door and blast radius next to the track's (MS-1): display only, never part of the gate below.
+    registerReviewerDanger(o);
     if (RI.requireOn(CONFIG)) {
       const gate = RI.reviewGate({ required: o.review_reviewers, since: o.review_at ?? o.t_receive ?? null, reports });
       const lines = RI.gateLines(id, gate, { cli: CLI });

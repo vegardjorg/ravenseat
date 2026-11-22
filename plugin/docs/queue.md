@@ -334,6 +334,17 @@ rules" or "The agent decided"), when, and the cheapest way to undo it from where
 undo <id>` before the start, a cancel after it, a fix round before the merge, a revert after it. It is never counted as
 waiting on you. Settings: `decisionSignals.*`.
 
+### Door and blast radius
+
+Every track report has two lines: `Door: one-way` or `Door: two-way` (one-way: hard to undo once merged or used) and
+`Blast radius: <one word>` (what breaks if it is wrong). `receive` reads them from the report (else the answer), prints
+one `DOOR:` line, puts them in the review package and stores them on the task (`merge_danger`); a missing or malformed
+line is **not stated**, never a refusal. The main reviewer writes its own two lines, and merge records them. A Check or
+review card in Decisions, `ravenseat decide`, Decided for you and the `ravenseat pr` body show them; a one-way door gets
+the badge **One-way door: hard to undo** and comes first within its group, and a reviewer who disagrees is shown next to
+the track's call, not resolved. The agents write these lines, so they are **never a guard**: nothing is blocked,
+approved or merged because of them. Always on, no setting (two lines per report).
+
 ## Everyday commands
 
 | Command | What it does |

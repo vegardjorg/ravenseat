@@ -122,6 +122,8 @@ function questionHead(item) {
     item.notFilled
       ? el('span', { class: 'badge sp-not-filled', text: QD()?.NOT_FILLED ?? 'Not filled in by the agent' })
       : null,
+    // A delivery with a one-way door (MS-1): the badge in words on the warn pair, never only a colour.
+    item.danger?.badge ? el('span', { class: 'badge tone-warn sp-one-way', text: item.danger.badge }) : null,
     el('span', { class: 'sp-id', text: item.id }),
   );
 }

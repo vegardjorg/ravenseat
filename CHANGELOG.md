@@ -6,6 +6,8 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 ## Unreleased
 
 ### Added
+- **Track reports state a one-way or two-way door and a one-word blast radius, the reviewer checks them, and Decisions,
+  `ravenseat decide` and the PR body show them, a one-way door first with a badge.** Display only, never a guard.
 - **Receive spots a new package, a migration, deleted files and unstated choices, marks what was not asked, and
   Decisions shows them with auto-approved proposals under Decided for you, each with how to undo it.** `decisionSignals.enabled` on.
 - **`ravenseat undo <id>` takes a merged task back out with one new revert commit, after showing what else touches the

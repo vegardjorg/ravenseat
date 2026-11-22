@@ -2996,6 +2996,31 @@ body.with-option-line .toaster {
   font-weight: 600;
 }
 
+/* Door and blast radius on a delivery (MS-1, board/decide.js dangerBlock): one quiet line with the track's call, a
+   reviewer's differing call under it. A one-way door gets the warn pair as a left rule, next to the badge in words
+   (.badge.tone-warn.sp-one-way), so the colour is never the only sign. Tokens only, in both modes. */
+.decide-danger {
+  margin: var(--distance-xs) 0 0;
+  padding-left: var(--distance-sm);
+  border-left: 3px solid var(--color-outline-variant);
+}
+
+.decide-danger.one-way {
+  border-left-color: var(--color-tone-warn);
+}
+
+.decide-danger-text,
+.decide-danger-disagree {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--color-on-surface-variant);
+  overflow-wrap: anywhere;
+}
+
+.decide-danger-disagree {
+  font-style: italic;
+}
+
 .sp-if {
   display: grid;
   gap: var(--distance-xs);

@@ -91,8 +91,35 @@ export function registerReviewItems(id, reports) {
   });
 }
 
+/**
+ * The reviewers' own door and blast radius lines (lib/mergeDanger.js reviewerCalls, MS-1) on the task's merge_danger,
+ * so Decisions and the PR body show a disagreement next to the track's call. Shown, never resolved: the track's values
+ * stay. Only on a delivery receive gave a record. Never stops the caller: it is display, a warning line at most.
+ */
+export function registerReviewerDanger(o) {
+  try {
+    if (!o?.merge_danger) return;
+    const MDG = require('./lib/mergeDanger.js');
+    const want = new Set(Array.isArray(o.review_reviewers) ? o.review_reviewers : []);
+    const calls = MDG.reviewerCalls(
+      taskAgents(o)
+        .filter((x) => x?.text && (L.REVIEWER_TYPES.includes(x.type) || want.has(x.type)))
+        .map((x) => ({ type: x.type, text: L.lastAnswer(x.text) })),
+    );
+    edit((queue) => {
+      const t = queue.tasks.find((x) => x.id === o.id);
+      if (!t?.merge_danger) return;
+      if (calls.length) t.merge_danger.reviewers = calls;
+      else delete t.merge_danger.reviewers;
+    });
+  } catch (e) {
+    console.log(`WARNING: the reviewers' door and blast radius for ${o?.id} were not recorded (${e?.message ?? e}).`);
+  }
+}
+
 /** Registration that never stops the caller (resume, the resume path of merge): a warning line at most. */
 export function registerQuietly(o) {
+  registerReviewerDanger(o);
   try {
     return registerReviewItems(o.id, reviewReports(o));
   } catch (e) {

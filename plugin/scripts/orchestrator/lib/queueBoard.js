@@ -787,6 +787,8 @@ function inbox(
         id: o.id,
         title: o.title ?? '',
         done: o.done ?? null,
+        // The track's door and blast radius (lib/mergeDanger.js, MS-1), only when receive stored them.
+        ...(o.merge_danger ? { merge_danger: o.merge_danger } : {}),
       })),
     })),
   }));
@@ -880,6 +882,8 @@ function inbox(
       long_spinning: longSpinning.get(k.id) ?? null,
       awaiting_approval: onApproval.get(k.id) ?? null,
       tool_trouble: onTrouble.get(k.id) ?? null,
+      // A delivery in review: the track's door and blast radius (MS-1), only when receive stored them.
+      ...(k.status === 'review' && map.perId.get(k.id)?.merge_danger ? { merge_danger: map.perId.get(k.id).merge_danger } : {}),
     }));
 
   const unlogged = L.unlogged(queue).map((x) => ({ sp: x.sp, time: x.time ?? null, by: x.by ?? null }));
