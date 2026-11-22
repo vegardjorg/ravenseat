@@ -79,8 +79,9 @@ Stop after the report, unless the argument already had an instruction: then carr
   `--set-by owner`.
 - **Priority limits:** an agent never changes a priority the owner has set (`priority_set_by: owner`), except that a
   new security finding may raise it to Now. Drop needs one sentence of reason.
-- **Owner questions:** `ravenseat question <id> --text "…" --type <question|condition|lawyer|owner-task>`, linked in
-  `ownerQuestions`. The owner's answer: `ravenseat resolve <id> --answer "…"`.
+- **Owner questions:** `ravenseat question <id> --text "…" --type <question|condition|lawyer|owner-task> --category product --context "<what it is about and why now>" --if-yes "<what follows from the recommendation>" --if-no "<what follows otherwise>" --recommendation "…"`,
+  linked in `ownerQuestions` (the card fields are required for type question; the category is a key in
+  `ask-catalog/categories.json`). The owner's answer: `ravenseat resolve <id> --answer "…"`.
 - **Verification:** `ravenseat plan verify <id> --findings "short finding" [--commit <sha>]` after checking against the
   code. It resets the stale warning.
 

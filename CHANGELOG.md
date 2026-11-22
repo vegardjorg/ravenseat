@@ -105,6 +105,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **Plans: polish: clearer empty states, sticky Roadmap column headers, start lines in one Copy menu, and the deadline
   band only when there is a deadline.** On a phone the room tabs stay on one line.
 ### Fixed
+- **The owner-question examples in the add-to-queue, review and plans skills carry the card fields, so a copied example is no longer refused.** No setting: they are examples.
 - **Moving a card on the board counts as your edit and stamps `edited_at`, also with its dependencies.** No setting: it is a recorded timestamp.
 - **`edit-many` run by you stamps `edited_at` like a single edit, so bulk changes show in Changed 24 h.** No setting: it is a recorded timestamp; agents and track worktrees never stamp it.
 - **A QA deviation answered on the board records you as the one who answered, as QA ok and approve do.** No setting: it is a recorded actor.
