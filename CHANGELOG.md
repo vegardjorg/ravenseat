@@ -6,6 +6,8 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 ## Unreleased
 
 ### Added
+- **Since you left: what merged, recovered, got stuck, waits on you and cost while you were away, in Decisions and
+  `ravenseat since`.** `board.sinceLast` on, `board.sinceLastWindow` `last-seen` (or `24h`, `7d`).
 - **The board counts what waits on you in the tab title, links to a view and card in the address, has keyboard
   shortcuts with a `?` overview and quick filter buttons, and the time log marks when the queue starts and goes idle.**
   `board.titleCount` on, `board.shortcuts` on, `board.quickFilters` on in full, off in lite.
