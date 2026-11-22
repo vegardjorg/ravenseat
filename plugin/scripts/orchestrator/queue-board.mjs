@@ -3303,6 +3303,7 @@ const BOARD_SCRIPTS = [
   'cloud.js',
   'route.js',
   'keys.js',
+  'palette.js',
   'start.js',
 ];
 const STATIC = {

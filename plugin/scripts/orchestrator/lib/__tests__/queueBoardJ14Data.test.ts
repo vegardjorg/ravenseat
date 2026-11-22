@@ -22,7 +22,7 @@ describe('the display settings', () => {
     expect(KK.STANDARD.board.titleCount).toBe(true);
     expect(KK.STANDARD.board.shortcuts).toBe(true);
     expect(KK.STANDARD.board.quickFilters).toBe(true);
-    expect(KK.boardDisplay(resolved({}))).toEqual({ titleCount: true, shortcuts: true, quickFilters: true });
+    expect(KK.boardDisplay(resolved({}))).toEqual({ titleCount: true, shortcuts: true, quickFilters: true, palette: true, structuredSearch: true });
   });
 
   it('lite turns the quick filters off, unless the file sets them', () => {
@@ -36,8 +36,10 @@ describe('the display settings', () => {
       titleCount: false,
       shortcuts: true,
       quickFilters: true,
+      palette: true,
+      structuredSearch: true,
     });
-    expect(KK.boardDisplay(null)).toEqual({ titleCount: true, shortcuts: true, quickFilters: true });
+    expect(KK.boardDisplay(null)).toEqual({ titleCount: true, shortcuts: true, quickFilters: true, palette: true, structuredSearch: true });
   });
 
   it('each has a registry row in Board and advice; quickFilters follows the mode', () => {

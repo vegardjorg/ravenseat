@@ -607,6 +607,16 @@ move between the cards in Flat and Project lanes; `Enter` opens one. Decisions k
 text field, a dialog or with Ctrl, Alt or Cmd held, so the browser's own keys are untouched. `board.shortcuts` (on by
 default) turns them off, as does the button in the overview; the keys on a focused card and in Decisions stay.
 
+## Command palette
+
+`Ctrl+K` (`Cmd+K` on a Mac), or **Open the palette** in the `?` overview, opens one field that finds a view (the tabs),
+Settings, Since you left, a card by id or a word of its title, or a setting by its name or explanation. The arrows move,
+`Enter` goes there (a card opens through its deep link, a setting opens Settings on its row), `Shift+Enter` or **Copy
+command** copies the `ravenseat` command behind the item (`ravenseat info EX-12`, `ravenseat settings board.palette`), and
+`Esc` closes. It never changes anything itself: a switch is changed in Settings, where a weakened guard asks first. It
+never fires in a text field or a dialog. `board.palette` (on) together with `board.shortcuts` turns it on; off leaves
+`Ctrl+K` to the browser.
+
 ## Deep links and the tab title
 
 The view and the open card stand in the address, for example `#view=flat&task=EX-12`, so the back button works and a
@@ -800,7 +810,7 @@ serves only the files in its allow list (`STATIC`), all with the same strict Con
   gear), `question.js` (the one renderer for owner questions and answer buttons), `decide.js` (the Decisions tab and the "Waiting on you" button), `checks.js` (the Checks tab), `panel.js` (the detail panel), `edit.js` (cancel, decline, edit, markdown),
   `select.js` (multi-select and the selection menu), `bulk.js` (bulk dialog and undo), `interact.js` (writing, drag, keyboard), `top.js`
   (theme, gear sections, modules, view tabs), `cloud.js` (the Cloud view), `route.js` (deep links and the count in the
-  tab title), `keys.js` (the shortcuts and the `?` overview) and `start.js` (update banner, logo and
+  tab title), `keys.js` (the shortcuts and the `?` overview), `palette.js` (the Ctrl+K palette) and `start.js` (update banner, logo and
   the start). They share the page's global scope, so a top-level name in one is visible in the others, as when they
   were one `board.js`. Code that runs while a script loads may only use names from the scripts before it; a new
   file goes into `BOARD_SCRIPTS` in `queue-board.mjs` and into `index.html` in the same place.

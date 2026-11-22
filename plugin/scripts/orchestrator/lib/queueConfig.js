@@ -865,6 +865,12 @@ const STANDARD = Object.freeze({
     // Keyboard shortcuts on the whole board (J3): ? lists them, / search, g and a letter for a tab, j and k between
     // cards. Never in text fields or dialogs. false turns them all off (the Decisions keys and the card keys stay).
     shortcuts: true,
+    // The command palette on Ctrl+K (J7): find a view, a card or a setting and go there, or copy its ravenseat command.
+    // It never changes anything. Needs shortcuts on too. false leaves Ctrl+K to the browser.
+    palette: true,
+    // Structured search (J6): class:D status:blocked age>2d and the like in the search box, with suggestions. Plain
+    // words search as before. false treats everything as plain words again.
+    structuredSearch: true,
     // The quick filter buttons over the columns (J4): Changed 24 h, Older than usual, Red gate. Off in lite unless set
     // (resolveOwn below), so the lite board stays simple.
     quickFilters: true,
@@ -1096,14 +1102,15 @@ function boardPanelMode(cfg = config()) {
   return PANEL_MODES.includes(v) ? v : STANDARD.board.panelMode;
 }
 
-/** The board's display switches (roadmap 0ø J1, J3, J4), each a plain on/off in queue.config.json board. */
-const BOARD_DISPLAY = Object.freeze(['titleCount', 'shortcuts', 'quickFilters']);
+/** The board's display switches (roadmap 0ø J1, J3, J4, J6, J7), each a plain on/off in queue.config.json board. */
+const BOARD_DISPLAY = Object.freeze(['titleCount', 'shortcuts', 'quickFilters', 'palette', 'structuredSearch']);
 /**
- * The display switches for the board's state: board.titleCount, .shortcuts and .quickFilters from the configuration
+ * The display switches for the board's state: board.titleCount, .shortcuts, .quickFilters, .palette (J7) and
+ * .structuredSearch (J6) from the configuration
  * (lite already resolved by resolveOwn), each a real boolean or its STANDARD default. Read fresh by the board server,
  * so `settings set` reaches an open board on its next poll.
  * @param {object|null} [cfg] the configuration (default: config())
- * @returns {{ titleCount: boolean, shortcuts: boolean, quickFilters: boolean }}
+ * @returns {{ titleCount: boolean, shortcuts: boolean, quickFilters: boolean, palette: boolean, structuredSearch: boolean }}
  */
 function boardDisplay(cfg = config()) {
   const out = {};

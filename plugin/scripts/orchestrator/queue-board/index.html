@@ -52,6 +52,7 @@
     <script src="/board/cloud.js" defer></script>
     <script src="/board/route.js" defer></script>
     <script src="/board/keys.js" defer></script>
+    <script src="/board/palette.js" defer></script>
     <script src="/board/start.js" defer></script>
     <!-- The Plans room. The rules (queuePlanView.js) are the same file the tests use; plans.js draws. After
          the board (board/), so the key from the link is saved before Plans fetches the register. -->
@@ -344,6 +345,10 @@
     <!-- J3: the keyboard shortcut overview (?), drawn by board/keys.js. -->
     <div id="keys-background" class="guard-background" hidden>
       <div id="keys" class="guard keys" role="dialog" aria-modal="true" aria-labelledby="keys-title"></div>
+    </div>
+    <!-- J7: the command palette (Ctrl+K), drawn by board/palette.js. It navigates and copies commands, nothing else. -->
+    <div id="palette-background" class="guard-background palette-background" hidden>
+      <div id="palette" class="guard palette" role="dialog" aria-modal="true" aria-labelledby="palette-title"></div>
     </div>
     <!-- The selection bar (shown when something is selected), the bulk action dialog and the "Undo" message. -->
     <div id="optionLine" class="optionLine" role="region" aria-label="Marked tasks" hidden></div>

@@ -24,6 +24,7 @@ const SHORTCUTS = [
     keys: [
       ['?', 'This overview'],
       ['/', 'Go to the search'],
+      ['Ctrl K', 'Command palette: go to a view, a card or a setting (J7, board.palette)'],
       ['g d', 'Decisions'],
       ['g q', 'Queue (the view you had)'],
       ['g c', 'Checks'],
@@ -97,7 +98,7 @@ function drawKeys() {
     el('p', {
       class: 'keys-state',
       text: on
-        ? 'One key at a time, never while you type in a field. Ctrl, Alt and Cmd stay with the browser.'
+        ? 'One key at a time, never while you type in a field. Ctrl, Alt and Cmd stay with the browser, apart from Ctrl K for the palette.'
         : 'The shortcuts are off. The keys on a focused card and in Decisions still work.',
     }),
     el(
@@ -121,6 +122,18 @@ function drawKeys() {
     el(
       'div',
       { class: 'guard-buttons keys-buttons' },
+      // J7: the palette from here too, for whoever reads the list before trying the key (palette.js loads after this).
+      on && typeof openPalette === 'function' && displayOn('palette')
+        ? el('button', {
+            type: 'button',
+            class: 'button button-outline',
+            text: 'Open the palette',
+            onclick: () => {
+              closeKeys();
+              openPalette();
+            },
+          })
+        : null,
       el('button', {
         type: 'button',
         class: 'button button-outline',
