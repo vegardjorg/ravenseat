@@ -884,6 +884,8 @@ function inbox(
     unlogged: unlogged,
     // What the owner decided today (queueDecisions.decidedToday), for "Decided today" in the Decisions view.
     decided: DEC.decidedToday(queue, { now }),
+    // What was decided without the owner today (queueDecisions.decidedForYou): shown next to it, never in count.
+    decided_for_you: DEC.decidedForYou(queue, { now }),
   };
 }
 

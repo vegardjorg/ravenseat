@@ -39,6 +39,7 @@ t.decide = {
   draft: new Map(), // key → text written so far
   keep: new Set(), // keys with "Keep as design choice" pressed (catalog.captureAnswers, roadmap 0z Z-A)
   doneOpen: false, // "Decided today" is open
+  forYouOpen: false, // "Decided for you" is open
   nbOpen: false, // "Not building" is open (roadmap 0f)
   nbQuery: '', // its search, kept across the redraws
   catOpen: false, // "Project catalog" is open (roadmap 0å KD-0)
@@ -831,6 +832,47 @@ function decidedPart() {
   return box;
 }
 
+/**
+ * "Decided for you" next to "Decided today" (section 5.2 of the question level study): proposals your rules approved and
+ * the choices receive spotted in a delivery, each with who, why and how to undo it. Closed unless the owner opened it,
+ * follows the band's window like "Decided today", and is never counted in the Decisions tab (display only).
+ */
+function decidedForYouPart() {
+  const sd = t.since.data;
+  const windowed = sd?.on && Array.isArray(sd.decided_for_you) && sd.window;
+  const list = windowed ? sd.decided_for_you : (t.data?.inbox?.decided_for_you ?? []);
+  if (!list.length) return null;
+  const clock = (iso) => (windowed ? sinceClock(iso) : new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
+  const box = el(
+    'details',
+    { class: 'decide-done decide-for', open: t.decide.forYouOpen },
+    el('summary', { text: `Decided for you (${list.length})` }),
+    el('p', { class: 'decide-for-note', text: 'Not waiting on you. Undo is cheapest before a task starts or merges.' }),
+    el(
+      'ul',
+      { class: 'decide-done-list' },
+      list.map((d) =>
+        el(
+          'li',
+          { class: 'decide-for-item' },
+          el(
+            'span',
+            { class: 'decide-for-head' },
+            el('span', { class: 'decide-done-time', text: clock(d.at) }),
+            el('span', { class: 'badge', text: d.category }),
+            el('span', { class: 'sp-id', text: d.id }),
+            el('span', { class: 'decide-done-what', text: d.what }),
+          ),
+          el('span', { class: 'decide-for-meta', text: `${d.who}, ${d.why}` }),
+          el('span', { class: 'decide-for-meta' }, 'Undo: ', el('code', { class: 'decide-for-undo', text: d.undo })),
+        ),
+      ),
+    ),
+  );
+  box.addEventListener('toggle', () => (t.decide.forYouOpen = box.open));
+  return box;
+}
+
 /** The status of a catalog entry in words: the badge text and whether it holds. */
 function catalogBadge(status) {
   if (status === 'accepted') return { text: 'Holds', hold: true };
@@ -1113,7 +1155,7 @@ function drawDecisions(fresh) {
       ),
     );
   }
-  parts.push(sortPart(t.data.inbox?.sort), unloggedLine(), decidedPart(), catalogPart(), notBuildingPart());
+  parts.push(sortPart(t.data.inbox?.sort), unloggedLine(), decidedPart(), decidedForYouPart(), catalogPart(), notBuildingPart());
   main.append(el('section', { class: 'decide', 'aria-labelledby': 'decide-title' }, parts));
   main.scrollTop = scroll;
   if (!hadFocus) return;

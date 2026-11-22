@@ -1157,6 +1157,33 @@ export function cmdReceive() {
         });
   const weakLine = weak && TW.summaryLine(weak);
   if (weakLine) console.log(weakLine);
+  // Decision signals (lib/decisionSignals.js, phase 1 of plans/autonomi-nivaa-utredning.md): a new package, a migration or
+  // schema file, deleted files, unstated choices, each marked "not asked" without a matching owner question. Read from
+  // the diff already here (no tokens), one SIGNALS line, stored on the task for "Decided for you". Never a stop.
+  // A PARTIAL delivery is unfinished, so it gets none. decisionSignals.enabled false: nothing.
+  const DSIG = require('./lib/decisionSignals.js');
+  const signalRecord =
+    CONFIG.decisionSignals?.enabled === false || result?.status === 'PARTIAL'
+      ? null
+      : DSIG.record(
+          DSIG.detect({
+            diff,
+            migrations: MIGR,
+            testPaths: CONFIG.testWeakening?.testPaths ?? [],
+            read: (side, p) => (side === 'base' && !weakBase ? null : git(['show', `${side === 'base' ? weakBase : branch}:${p}`])),
+            setup: CONFIG.decisionSignals ?? {},
+            report: {
+              assumptions,
+              questionText: L.ownerQuestionSection(reportText) ?? L.ownerQuestionSection(trackReply),
+              ownerQuestions: result?.ownerQuestions ?? null,
+            },
+          }),
+          { tip: git(['rev-parse', '-q', '--verify', `refs/heads/${branch}`]), at: new Date().toISOString() },
+        );
+  const signalLine = DSIG.receiveLine(id, signalRecord);
+  if (signalLine) console.log(signalLine);
+  // One time log row per delivery (a second receive of the same tip adds none), read before the edit below replaces it.
+  const signalNew = signalRecord && DSIG.isNewDelivery(o0.decision_signals ?? null, signalRecord);
   // Red on base (lib/redOnBase.js): do the new tests fail without the change? Off unless gates.redOnBase is set; a
   // PARTIAL track is unfinished, so not for it. A warning, never a stop.
   const RB = require('./lib/redOnBase.js');
@@ -1279,6 +1306,9 @@ export function cmdReceive() {
     // Every receive sets it anew (a fix round's delivery replaces the old verdict).
     if (redBase) o.red_on_base = redBase;
     else delete o.red_on_base;
+    // The decision signals of this delivery replace the last ones ("Decided for you" reads them).
+    if (signalRecord) o.decision_signals = signalRecord;
+    else delete o.decision_signals;
     if (evidenceRead?.evidence) o.evidence = evidenceRead.evidence;
     // The check rules' record (lib/catalogChecks.js record): the latest hits and every rule that ever enforced on the
     // task, for the repeat count. Not for a PARTIAL delivery (unfinished), and untouched when no rule was tried.
@@ -1340,6 +1370,8 @@ export function cmdReceive() {
   if (catalogCheck.result && result?.status !== 'PARTIAL') for (const l of proposeRuleGates(catalogCheck.result, { from: id })) console.log(l);
   if (o0.status !== 'review' && r.started)
     logTime(id, 'delivered', `${minutes(r.started, r.delivered)} min to delivery`);
+  // The signal row: categories and what was not asked, never diff text (logEvent fails open, as measurements do).
+  if (signalNew) logEvent([DSIG.row(id, signalRecord)]);
   if (!r.picked_by) pulseCursor(`receive ${id}`);
   console.log(
     `${id}: review · ${result ? result.line : 'no RESULT line (read trackReply.md)'}\n` +

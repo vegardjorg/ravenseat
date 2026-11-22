@@ -6,6 +6,8 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 ## Unreleased
 
 ### Added
+- **Receive spots a new package, a migration, deleted files and unstated choices, marks what was not asked, and
+  Decisions shows them with auto-approved proposals under Decided for you, each with how to undo it.** `decisionSignals.enabled` on.
 - **Since you left: what merged, recovered, got stuck, waits on you and cost while you were away, in Decisions and
   `ravenseat since`.** `board.sinceLast` on, `board.sinceLastWindow` `last-seen` (or `24h`, `7d`).
 - **`ravenseat catalog deps --audit` checks your lockfiles against OSV.dev, only when you run it.** `deps.audit` `manual`.

@@ -43,7 +43,22 @@ const task = (id: string, status: string, own: object = {}) => ({
 const queue = {
   created: iso,
   limits: { maxConcurrent: 5, maxDPlus: 2, maxPerDomain: 5, maxDb: 2 },
-  tasks: [task('EX-1', 'proposed'), task('EX-2', 'proposed'), task('EX-3', 'waiting')],
+  tasks: [
+    task('EX-1', 'proposed'),
+    task('EX-2', 'proposed'),
+    // Approved by the owner's rules today and a merged delivery with a decision signal: "Decided for you", not counted.
+    task('EX-3', 'waiting', { approved: new Date().toISOString() }),
+    task('EX-4', 'done', {
+      merge_commit: 'abcdef1234567890',
+      decision_signals: {
+        at: new Date().toISOString(),
+        tip: 'abc',
+        signals: [{ category: 'dependency', what: '1 new package: date-fns', items: ['date-fns'], asked: false, told: false }],
+        not_asked: ['dependency'],
+      },
+    }),
+  ],
+  auto_accepted: [{ id: 'EX-3', at: new Date().toISOString(), reason: 'class K' }],
   projects: { ex: { title: 'Example', prefixes: ['EX-'] } },
   areas: {},
   question: [],
@@ -111,6 +126,21 @@ describe('the Decisions view', () => {
     const first = cards()[0];
     expect(first.querySelector('.button-filled')?.textContent).toContain('Approve (recommended)');
     expect(first.querySelector('.decide-impact')?.textContent).toMatch(/^queues it/);
+  });
+
+  it('"Decided for you" sits next to "Decided today", closed, with who, why and the undo step, outside the count', () => {
+    const box = document.querySelector('details.decide-for') as HTMLDetailsElement;
+    expect(box).not.toBeNull();
+    expect(box.open).toBe(false);
+    expect(box.querySelector('summary')?.textContent).toBe('Decided for you (2)');
+    const rows = [...box.querySelectorAll('.decide-for-item')].map((li) => li.textContent);
+    expect(rows[0]).toContain('Follow-up tasks');
+    expect(rows[0]).toContain('Approved by your rules, class K');
+    expect(rows[0]).toContain('Undo: ravenseat proposals undo EX-3');
+    expect(rows[1]).toContain('New package');
+    expect(rows[1]).toContain('The agent decided, not asked');
+    expect(rows[1]).toContain('Undo: merged: git revert -m 1 abcdef123456');
+    expect($('inbox').querySelector('.inbox-count')?.textContent).toBe('2');
   });
 
   it('Enter takes the recommendation behind an undo window; u takes it back and nothing is written', async () => {

@@ -252,3 +252,74 @@ describe('the "focus ended" owner question (focus-done-<n>)', () => {
     expect(D.cliArgs(list[0].options[1].action)).toEqual(['resolve', 'focus-done-1', '--choice', '2', '--by', 'owner']);
   });
 });
+
+describe('decided for you (phase 1 of the question level study, section 5.2)', () => {
+  const now = new Date(2026, 4, 10, 15, 0).getTime();
+  const at = (h: number) => new Date(2026, 4, 10, h, 0).toISOString();
+  const yesterday = new Date(2026, 4, 9, 23, 0).toISOString();
+  const sig = (h: number, signals: any[]) => ({ at: at(h), tip: 'abc', signals, not_asked: signals.filter((s) => s.asked === false).map((s) => s.category) });
+  const queue = {
+    auto_accepted: [
+      { id: 'F-1', at: at(9), reason: 'class K, estimate 30 min <= 60' },
+      { id: 'F-2', at: at(10), reason: 'class K' },
+      { id: 'F-3', at: at(11), reason: 'class K', undone: at(12) },
+      { id: 'F-0', at: yesterday, reason: 'class K' },
+    ],
+    tasks: [
+      { id: 'F-1', title: 'Add a retry', status: 'waiting', approved: at(9) },
+      { id: 'F-2', title: 'Tidy logs', status: 'running', started: at(10), approved: at(10) },
+      { id: 'F-3', title: 'Old idea', status: 'proposed' },
+      { id: 'F-0', title: 'Yesterday', status: 'waiting' },
+      {
+        id: 'T-1',
+        title: 'Export',
+        status: 'review',
+        decision_signals: sig(13, [
+          { category: 'dependency', what: '1 new package: date-fns', items: ['date-fns'], asked: false, told: false },
+          { category: 'migration', what: '1 migration or schema file', items: ['db/migrations/1.sql'], asked: true, told: false },
+        ]),
+      },
+      {
+        id: 'T-2',
+        title: 'Cleanup',
+        status: 'done',
+        merge_commit: '0123456789abcdef',
+        decision_signals: sig(14, [{ category: 'deletion', what: '4 files deleted', items: [], asked: false, told: true }]),
+      },
+      { id: 'T-3', status: 'review', decision_signals: { ...sig(8, []), at: yesterday } },
+    ],
+  };
+
+  it('auto-approved proposals and delivered signals since the start of the day, newest first, with how to undo', () => {
+    const list = D.decidedForYou(queue, { now });
+    expect(list.map((x: any) => [x.id, x.category, x.who])).toEqual([
+      ['T-2', 'Deletion', 'The agent decided'],
+      ['T-1', 'New package', 'The agent decided'],
+      ['T-1', 'Migration or schema', 'The agent decided'],
+      ['F-3', 'Follow-up tasks', 'Approved by your rules'],
+      ['F-2', 'Follow-up tasks', 'Approved by your rules'],
+      ['F-1', 'Follow-up tasks', 'Approved by your rules'],
+    ]);
+    const by = (id: string, c?: string) => list.find((x: any) => x.id === id && (!c || x.category === c));
+    expect(by('F-1')).toMatchObject({ what: 'Add a retry', why: 'class K, estimate 30 min <= 60', at: at(9), undo: 'ravenseat proposals undo F-1' });
+    expect(by('F-2').undo).toBe('started: ravenseat set F-2 cancelled (the tokens it used are spent)');
+    expect(by('F-3').undo).toBe('undone already, back to proposed');
+    expect(by('T-1', 'New package')).toMatchObject({ what: '1 new package: date-fns', why: 'not asked', title: 'Export' });
+    expect(by('T-1', 'New package').undo).toBe('not merged: ravenseat resume T-1 --reason fix --answer "<what to change>"');
+    expect(by('T-1', 'Migration or schema').why).toBe('asked you');
+    expect(by('T-2')).toMatchObject({ why: 'not asked, but said under Assumptions', undo: 'merged: git revert -m 1 0123456789ab' });
+  });
+
+  it('follows a window, a max and an empty queue; the labels are the ones receive uses', () => {
+    expect(D.decidedForYou(queue, { now, from: new Date(2026, 4, 10, 12, 30).getTime() }).map((x: any) => x.id)).toEqual(['T-2', 'T-1', 'T-1']);
+    expect(D.decidedForYou(queue, { now, max: 2 })).toHaveLength(2);
+    expect(D.decidedForYou({}, { now })).toEqual([]);
+    expect(D.decidedForYou(queue, { now, ravenseat: 'cq' }).find((x: any) => x.id === 'F-1').undo).toBe('cq proposals undo F-1');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    expect(D.SIGNAL_LABELS).toEqual(require('../decisionSignals').LABELS);
+  });
+
+  it('is never in the decision count, and decided today still skips the auto-accepts', () => {
+    expect(D.decidedToday(queue, { now }).some((x: any) => x.id.startsWith('F-'))).toBe(false);
+  });
+});

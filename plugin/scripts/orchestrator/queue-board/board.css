@@ -5948,6 +5948,36 @@ body.stale .summary.stuck::before {
   color: var(--color-on-surface);
   overflow-wrap: anywhere;
 }
+/* "Decided for you": the same quiet list as "Decided today", with who and why under each row and the undo step as
+   code that wraps on a phone. */
+.decide-for-note {
+  margin: var(--distance-xs) 0 0;
+  font-size: var(--text-xs);
+  color: var(--color-on-surface-variant);
+}
+.decide-done-list li.decide-for-item {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding-bottom: var(--distance-xs);
+}
+.decide-for-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--distance-sm);
+  min-width: 0;
+}
+.decide-for-meta {
+  color: var(--color-on-surface-variant);
+  overflow-wrap: anywhere;
+}
+.decide-for-undo {
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  color: var(--color-on-surface);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 /* "Since you left" (roadmap 3e AW-2): a calm band under the Decisions head, the card surface with a quiet border. The
    numbers wrap on a phone; failures carry the word "Failed", so color is never the only signal. */
 .since {
