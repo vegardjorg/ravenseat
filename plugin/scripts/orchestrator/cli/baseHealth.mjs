@@ -395,17 +395,21 @@ function logBaseGate({ entry, run }) {
 }
 
 /** The orchestrator instruction after a red verdict (printed last, where it is read). */
-export function redLines({ entry, run, fix, causeId = null, stayedInReview = false }) {
+export function redLines({ entry, run, fix, causeId = null, stayedInReview = false, undo = false }) {
   const tail = run?.tail ?? [];
   const by = entry.made_red_by;
+  // undo: the call came from `ravenseat undo` (cli/undo.mjs). Its revert commit is the cause only when the base was green
+  // before it; when it was red already, made_red_by stays the earlier merge and the merge wording is right.
+  undo = undo && !!by && by.merge_commit === entry.tip;
+  const what = undo ? 'undo' : 'merge';
   const lines = [
     `BASE RED: ${BASE} is red at ${short(entry.tip)}` +
-      (by ? ` after the merge of ${by.task} (merge commit ${short(by.merge_commit)})` : '') +
+      (by ? ` after the ${what} of ${by.task} (${undo ? 'revert' : 'merge'} commit ${short(by.merge_commit)})` : '') +
       (run?.failed ? `: \`${run.failed}\` ${run.timedOut ? 'went over the time budget' : `exit ${run.exit ?? '?'}`}` : '') +
       '.',
     ...BH.excerpt(tail).map((l) => `  | ${l}`),
     ...(entry.tail_file ? [`Output tail: ${entry.tail_file}`] : []),
-    `${by ? `The merge of ${by.task} stays` : 'What is on the base stays'} (no automatic revert). ${CLI} merge refuses every other track until ${BASE} is green again (exit ${BH.EXIT_RED_BASE}).`,
+    `${by ? `The ${what} of ${by.task} stays` : 'What is on the base stays'} (no automatic revert). ${CLI} merge refuses every other track until ${BASE} is green again (exit ${BH.EXIT_RED_BASE}).`,
   ];
   if (fix)
     lines.push(
@@ -419,9 +423,15 @@ export function redLines({ entry, run, fix, causeId = null, stayedInReview = fal
       `${causeId} stays in review (the gates step stopped the merge flow): when ${fix?.id ?? 'the fix'} is merged and the ` +
         `base is green, run ${CLI} set ${causeId} done.`,
     );
-  if (by?.merge_commit)
+  if (by?.merge_commit && undo)
     lines.push(
-      `Undo instead (by hand, never done automatically): git -C "${GIT_ROOT}" revert -m 1 ${by.merge_commit}; the next ` +
+      `Take the undo back instead: git -C "${GIT_ROOT}" revert ${by.merge_commit}; the next ${CLI} merge checks the base ` +
+        `again${fix && !fix.reused ? ` (then cancel ${fix.id})` : ''}.`,
+    );
+  else if (by?.merge_commit)
+    lines.push(
+      `Undo instead (never done automatically): ${CLI} undo ${by.task} (a new revert commit after a y/N; by hand: ` +
+        `git -C "${GIT_ROOT}" revert -m 1 ${by.merge_commit}); the next ` +
         `${CLI} merge checks the base again${fix && !fix.reused ? ` (then cancel ${fix.id})` : ''}.`,
     );
   lines.push(`One merge on a red base anyway (logged as "base-red-overridden"): ${CLI} merge <id> --force-red-base`);

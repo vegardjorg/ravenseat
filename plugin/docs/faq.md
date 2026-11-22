@@ -124,7 +124,7 @@ It merges locally by itself, and that is the point: a track is merged when the g
 green, each reviewer the class needs has reported with no HIGH finding, and the base branch is green. It asks before it
 starts the queue. Tasks that agents propose wait for your approval, and database and high-risk tasks (D, D+) are never
 approved automatically, whatever the rules say. Nothing is pushed until you say "push" (`push.mode` is `owner` by
-default), and then in one batch. A merge that turns out wrong is undone with `git revert -m 1 <merge>`.
+default), and then in one batch. A merge that turns out wrong is undone with `ravenseat undo <id>`: a new revert commit after a y/N, never a rewrite.
 
 A queue agent is refused every push, not even `main`, through the hooks on Claude Code's Bash and PowerShell tools. That
 is a hook-level guard, not a limit set by the operating system (see the last question). From your own session, a forced
