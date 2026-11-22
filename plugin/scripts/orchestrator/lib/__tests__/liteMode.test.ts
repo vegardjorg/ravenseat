@@ -269,6 +269,22 @@ describe('ravenseat init, add, help and mode', () => {
     expect(help.stdout).toContain('ravenseat mode full');
   });
 
+  it('lite refuses a new owner question without the card fields, like full mode (owner 22.11)', async () => {
+    expect((await ravenseat('init', '--lite')).status).toBe(0);
+    const bare = await ravenseat(
+      'add',
+      '--json',
+      '{"tasks":[{"title":"Needs you","waiting_on":["Q-2"]}],"question":{"Q-2":{"type":"question","text":"Which colour?"}}}',
+    );
+    expect(bare.status).not.toBe(0);
+    expect(bare.stderr + bare.stdout).toMatch(/card fields \(missing: category, context, if_yes, if_no, recommendation\)/);
+    expect(queue().tasks).toEqual([]);
+    const q = await ravenseat('question', 'Q-3', '--text', 'Which font?');
+    expect(q.status).not.toBe(0);
+    expect(q.stderr + q.stdout).toMatch(/card fields/);
+    expect(queue().question?.['Q-3']).toBeUndefined();
+  });
+
   it('ravenseat mode full switches back: the guard and the JSON-only add return', async () => {
     expect((await ravenseat('init', '--lite')).status).toBe(0);
     const m = await ravenseat('mode', 'full');
