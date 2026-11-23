@@ -687,8 +687,11 @@ a wait on you is hatched, a review is the thin end of a bar, and tasks that cann
 Each focus step has a shaded band from P50 to P85: the plan is played many times with lengths drawn from the measured
 actual-to-estimate ratios (the last 28 days, at least 5 measured tasks), so the row says "done around X (likely by Y)".
 Under the chart a backtest line says how often past steps were done by the end of their band. Tasks get no band of
-their own, only their one rough bar. The table view has a step table with the same numbers. With too little data the
-row says why there is no band. `board.timelineUncertainty` (`true`), full only.
+their own, only their one rough bar; in a step with a band that bar drops its likely-range line, since the step's band
+shows the same doubt. The band can start after the step's last bar: the bars use typical lengths and some tasks take
+longer, so the chart says so in one line. The table view has a step table with the same numbers. With too little data
+the row says why there is no band, and the bars keep their likely-range line. `board.timelineUncertainty` (`true`),
+full only.
 
 Drag a planned bar up or down within its focus step to give it a new place (`ravenseat rank`), or a step row up or
 down to change the focus order. With the keyboard: Space lifts, the arrows move, Enter drops, Escape cancels; the

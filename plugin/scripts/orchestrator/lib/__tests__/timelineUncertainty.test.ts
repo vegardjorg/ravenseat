@@ -100,6 +100,26 @@ describe('the payload and the layout', () => {
     expect(g.band).toEqual({ x0: sc.x(one.end), x1: sc.x(one.likelyBy), clipped: false });
   });
 
+  // T-C follow-up: a step's band replaces the per-task "Likely range" whisker of its planned bars (two marks for the
+  // same doubt read as noise); a step without a band keeps the whisker. bandAfterBars says the band starts after the
+  // step's last bar (the board then explains why in one line).
+  it('a planned bar in a step with a band has no whisker; without a band it keeps one', () => {
+    const d = QT.timelineData(queue, { now: NOW, tz: 'UTC', uncertainty: true });
+    const w = TL.windowOf(d, { horizonDays: 3 });
+    const sc = TL.scale(w, 1000);
+    const banded = TL.layout(TL.buildRows(d, { by: 'step', horizonDays: 3 }), sc);
+    const g0 = banded.groups.find((x: any) => x.key === 'step:0');
+    const mine = banded.bars.filter((b: any) => b.row === 'step:0' && b.kind === 'planned');
+    expect(mine.length).toBe(2);
+    for (const b of mine) expect(b.bandX0 ?? null).toBeNull();
+    const last = Math.max(...mine.map((b: any) => b.x1));
+    expect(g0.bandAfterBars).toBe(g0.band.x0 > last);
+    const plain = TL.layout(TL.buildRows({ ...d, uncertainty: null }, { by: 'step', horizonDays: 3 }), sc);
+    const bare = plain.bars.filter((b: any) => b.row === 'step:0' && b.kind === 'planned');
+    for (const b of bare) expect(b.bandX1).toBeGreaterThan(b.bandX0);
+    expect(plain.groups.find((x: any) => x.key === 'step:0').bandAfterBars).toBe(false);
+  });
+
   it('the step table has the same numbers as the chart', () => {
     const d = QT.timelineData(queue, { now: NOW, tz: 'UTC', uncertainty: true });
     const rows = TL.buildRows(d, { by: 'step', horizonDays: 3 });

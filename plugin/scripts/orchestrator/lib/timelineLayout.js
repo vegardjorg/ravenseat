@@ -14,7 +14,9 @@
 //     a wait on the owner as its own segment, the phases of a ran bar (track, review).
 //   - tableRows: the same tasks as a table, with relative times only.
 //   - bandOf, stepTable (T-C): a focus step's P50 to P85 band from the payload's `uncertainty` (a step row's end is
-//     then the band's P50 and it gets `likelyBy`), and the step table with the same numbers. A task never gets one.
+//     then the band's P50 and it gets `likelyBy`), and the step table with the same numbers. A task never gets one,
+//     and a planned bar in a step with a band drops its own whisker (bandX0/bandX1); `bandAfterBars` marks a band
+//     that starts after the step's last bar.
 // HONESTY: no text here gives a clock time for one task (the measured spread per task is a factor 2.5 to 3); a step's
 // end is the only time the renderer may show as "around".
 //
@@ -398,6 +400,12 @@
       );
       const lanes = Math.max(1, packed.lanes);
       const h = SIZE.head + lanes * SIZE.lane + SIZE.gap;
+      const band =
+        r.end != null && r.likelyBy != null
+          ? { x0: sc.x(r.end), x1: sc.x(Math.min(r.likelyBy, sc.to)), clipped: r.likelyBy > sc.to }
+          : null;
+      // T-C follow-up: the band starts after the step's last planned bar (the board explains why in one line).
+      const lastBar = Math.max(-Infinity, ...mine.filter((b) => b.kind === 'planned').map((b) => b.x1));
       groups.push({
         key: r.key,
         kind: r.kind,
@@ -412,10 +420,8 @@
         endX: r.end == null ? null : sc.x(r.end),
         // T-C: the band from P50 to P85 in pixels (cut at the axis end: clipped), or null.
         likelyBy: r.likelyBy ?? null,
-        band:
-          r.end != null && r.likelyBy != null
-            ? { x0: sc.x(r.end), x1: sc.x(Math.min(r.likelyBy, sc.to)), clipped: r.likelyBy > sc.to }
-            : null,
+        band,
+        bandAfterBars: band != null && Number.isFinite(lastBar) && band.x0 > lastBar,
         later: r.later,
         unscheduled: r.unscheduled,
       });
@@ -447,8 +453,12 @@
       clippedRight: it.e > sc.to,
     };
     if (it.kind === 'planned') {
-      b.bandX0 = sc.x(it.band.low);
-      b.bandX1 = sc.x(it.band.high);
+      // T-C follow-up: in a step row with its own band (P50 to P85) the bar draws no per-task whisker, since the
+      // step's band already shows that doubt; without one (setting off, too few samples) the whisker stays.
+      if (r.likelyBy == null) {
+        b.bandX0 = sc.x(it.band.low);
+        b.bandX1 = sc.x(it.band.high);
+      }
       b.wait = it.waitsOnYou ? { x0: sc.x(sc.now), x1: sc.x(it.s) } : null;
     }
     if (it.kind === 'running') {

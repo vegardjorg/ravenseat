@@ -16,6 +16,8 @@
 // T-C: with board.timelineUncertainty on, each focus step row has a shaded band from P50 to P85 (the payload's
 // `uncertainty`, lib/scheduleUncertainty.js), its label says "done around X (likely by Y)", the table view has a step
 // table with the same numbers, and the notes carry the backtest line (or why there is no band). Tasks get no band.
+// The planned bars of a step with a band draw no "Likely range" whisker (the legend drops it when no bar has one), and
+// a help line explains a band that starts after its step's last bar.
 //
 // One of the board's classic scripts in queue-board/board/ (see docs/board.md): top-level names are shared with the
 // other scripts. Called from draw() (board/draw.js) and the polling (api.js, start.js). Tested in
@@ -151,6 +153,8 @@ function rowNotes(g) {
 // A turned phone or a narrowed window gets the chart again at its new width (the title column, the pixel scale and the
 // lanes all follow it), at most once per 150 ms while the window is dragged, and only when the width really changed.
 let tlDrawnWidth = 0;
+// T-C follow-up: the layout of the chart drawn last (the legend and the band help line read it).
+let tlDrawnLay = null;
 let tlResizeTimer = 0;
 window.addEventListener('resize', () => {
   if (tlResizeTimer) return;
@@ -172,6 +176,7 @@ function timelineChart(d, rows, horizon) {
   const width = Math.round(Math.max(room, hours * TL_PX_PER_HOUR * (narrow ? 1 : 0.5)));
   const sc = TL.scale(w, width);
   const lay = TL.layout(rows, sc);
+  tlDrawnLay = lay;
   const height = TL_AXIS + lay.height;
   const svg = svgEl('svg', {
     class: 'tl-svg',
@@ -336,7 +341,9 @@ function timelineChart(d, rows, horizon) {
 }
 
 /** The legend: each mark with its word (shapes and patterns as well as colors). */
-function timelineLegend(withBand = false) {
+// T-C follow-up: `withWhisker` false drops "Likely range" when no bar draws one (every planned bar sits in a step with
+// its own band and nothing runs).
+function timelineLegend(withBand = false, withWhisker = true) {
   const item = (cls, text) =>
     el(
       'li',
@@ -362,7 +369,7 @@ function timelineLegend(withBand = false) {
     item('tl-review', 'Review and merge'),
     item('tl-ran-part', 'Running'),
     item('tl-planned', 'Planned, rough'),
-    item('tl-band', 'Likely range'),
+    withWhisker ? item('tl-band', 'Likely range') : null,
     item('tl-wait', 'Waits on you'),
     item('tl-step-end', 'Step done, around'),
     withBand ? item('tl-step-band', 'Step likely done in here (P50 to P85)') : null,
@@ -561,7 +568,20 @@ function drawTimeline() {
     const steps = banded ? timelineStepTable(rows) : null;
     if (steps) view.append(steps);
     view.append(timelineTable(d, rows));
-  } else view.append(timelineChart(d, rows, horizon), timelineLegend(banded));
+  } else {
+    const chart = timelineChart(d, rows, horizon);
+    const whiskers = !tlDrawnLay || tlDrawnLay.bars.some((b) => b.bandX0 != null && b.bandX1 > b.bandX0);
+    view.append(chart, timelineLegend(banded, whiskers));
+    // T-C follow-up: a band that starts after its step's last bar looks wrong without a word on why, so one line
+    // right under the legend says it (chart only; the table view is unchanged).
+    if (tlDrawnLay?.groups.some((g) => g.bandAfterBars))
+      view.append(
+        el('p', {
+          class: 'tl-note tl-band-help',
+          text: 'The band can start after the last bar: the bars use typical task lengths, some tasks take longer, so the step as a whole usually finishes later.',
+        }),
+      );
+  }
   if (prefs.display !== 'table') {
     const cannot = timelineCannot(d);
     if (cannot) view.append(cannot);

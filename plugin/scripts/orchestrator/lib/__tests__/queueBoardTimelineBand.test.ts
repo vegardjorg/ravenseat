@@ -131,12 +131,39 @@ describe('the uncertainty band on the Timeline', () => {
     expect(text).toContain(withBand.backtest.text);
   });
 
+  // T-C follow-up: the step band replaces the per-task whisker of planned bars, and one line explains a band that
+  // starts after the step's last bar.
+  it('with a band the planned bars draw no likely-range whisker and the legend drops it', () => {
+    expect(view().querySelectorAll('.tl-svg .tl-bar.planned').length).toBeGreaterThan(0);
+    expect(view().querySelectorAll('.tl-svg .tl-bar.planned .tl-band').length).toBe(0);
+    const legend = [...view().querySelectorAll('.tl-legend-item')].map((n) => n.textContent);
+    expect(legend).not.toContain('Likely range');
+  });
+
+  it('the help line shows exactly when a band starts after the last bar of its step', () => {
+    const num = (e: Element, a: string) => Number(e.getAttribute(a));
+    const bars = [...view().querySelectorAll('.tl-svg .tl-bar.planned .tl-planned')];
+    const right = [...view().querySelectorAll('.tl-svg .tl-step-band')].some((band) => {
+      const top = num(band, 'y');
+      const bottom = top + num(band, 'height');
+      const mine = bars.filter((r) => num(r, 'y') >= top - 30 && num(r, 'y') <= bottom);
+      return mine.length > 0 && num(band, 'x') > Math.max(...mine.map((r) => num(r, 'x') + num(r, 'width')));
+    });
+    // The fixture's skewed history (16 to 48 minutes) puts at least one band after its bars.
+    expect(right).toBe(true);
+    const help = view().querySelectorAll('.tl-band-help');
+    expect(help.length).toBe(1);
+    expect(help[0].textContent).toMatch(/^The band can start after the last bar/);
+  });
+
   it('the table view has a step table with the same numbers', async () => {
     const button = [...document.querySelectorAll('.tl-switch .toggles-button')].find((b) => b.textContent === 'Table') as HTMLElement;
     button.click();
     await flush();
     const table = view().querySelector('.tl-step-table') as HTMLTableElement;
     expect(table).toBeTruthy();
+    // The table view is unchanged: no chart help line there.
+    expect(view().querySelectorAll('.tl-band-help').length).toBe(0);
     expect([...table.querySelectorAll('thead th')].map((th) => th.textContent)).toEqual(['Step', 'Tasks', 'Done around', 'Likely by']);
     const first = [...table.querySelectorAll('tbody tr')][0];
     expect(first.querySelector('th')?.textContent).toBe('1 Alpha');
@@ -160,5 +187,10 @@ describe('the uncertainty band on the Timeline', () => {
     expect(view().textContent).toContain('No band yet: 0 finished tasks with a measured time in the last 28 days, needs at least 5.');
     const notes = [...view().querySelectorAll('.tl-row-note')].map((n) => n.textContent ?? '');
     expect(notes.every((n) => !n.includes('likely by'))).toBe(true);
+    // No band: the planned bars keep their whisker, the legend keeps it, and there is no help line.
+    expect(view().querySelectorAll('.tl-svg .tl-bar.planned .tl-band').length).toBeGreaterThan(0);
+    const legend = [...view().querySelectorAll('.tl-legend-item')].map((n) => n.textContent);
+    expect(legend).toContain('Likely range');
+    expect(view().querySelectorAll('.tl-band-help').length).toBe(0);
   });
 });
