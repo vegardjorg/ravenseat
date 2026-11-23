@@ -486,7 +486,10 @@ describe('the board server: the Timeline (T-A) is read only', () => {
     const body = (await r.json()) as any;
     expect(body.ok).toBe(true);
     expect(body.data.enabled).toBe(true);
-    expect(body.data.settings).toEqual({ on: true, horizonDays: 3, rows: 'step', drag: true, dragPreview: true });
+    expect(body.data.settings).toEqual({ on: true, horizonDays: 3, rows: 'step', drag: true, dragPreview: true, uncertainty: true });
+    // T-C: the band and the backtest ride along (read only, the same write check below covers them).
+    expect(typeof body.data.uncertainty.enough).toBe('boolean');
+    expect(typeof body.data.backtest.text).toBe('string');
     expect(body.data.schedule.rough).toBe(true);
     expect(Array.isArray(body.data.schedule.tasks)).toBe(true);
     expect(Array.isArray(body.data.ran)).toBe(true);
