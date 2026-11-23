@@ -211,6 +211,13 @@ message id); only turns with a timestamp in the window count.
   `task-notification`; older transcripts are matched on `<task-notification>` or "Background command ... completed"),
   the number of notifications and the turns' share of cost: what waking up after a background wait cost. A system
   reminder is no prompt.
+- **REPL (Code Mode).** Only when a group has any: the `REPL` calls (the tool that runs the code Claude writes in
+  Claude Code's experimental Code Mode), the turns that make one and their share of cost, and the inner calls the code
+  made, from the result row's `toolsUsed` when the transcript has it ("toolsUsed in N of M"; where Claude Code writes
+  that list in the transcript is not documented, so a missing list counts nothing). Calls whose id starts with `repl_`
+  or `toolu_cc_` (the documented prefix of a call from code) are counted too, if such rows appear. A REPL call stays one
+  call in its turn, so calls per turn and "parallel" keep their meaning. JSON field `repl`. No setting: measurement only.
+  `ravenseat doctor` shows one INFO row while Code Mode is on (`codeMode.policy`).
 - **Worked in another repo.** A main session whose tool calls mostly point outside the project is listed on its own
   line with its cost (from the status line, otherwise from the transcript) and left out of the groups and of the
   orchestration figures above it. The rule is conservative on purpose: only calls with a path count (a tool's

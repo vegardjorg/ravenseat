@@ -41,6 +41,13 @@ describe('push.allowBranches', () => {
     expect(assess('git push origin feat/x', c)).toBeNull();
     expect(assess('git push origin main', c)?.decision).toBe('ask');
   });
+  // Code Mode (code.claude.com/docs/en/code-mode, "Permission checks"): a shell call from code can reach the hook as
+  // `cd 'app' && git push`. The guard reads each part, so the push behind the cd is judged as on its own.
+  it('a push behind the Code Mode cd prefix is judged like the push alone', () => {
+    expect(decision("cd 'app' && git push --force origin main")).toBe('deny');
+    expect(decision("cd 'app' && git push origin other")).toBe(decision('git push origin other'));
+    expect(decision("cd 'app' && git push origin other")).not.toBeNull();
+  });
   it('a forced push of an allowed branch asks; the base, another branch and an agent stay denied', () => {
     expect(decision('git push --force origin feat/x', allow)).toBe('ask');
     expect(decision('git push --force-with-lease origin feat/x', allow)).toBe('ask');

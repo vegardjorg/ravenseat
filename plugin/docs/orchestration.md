@@ -369,6 +369,11 @@ context size. The system keeps both small:
   On an internal error (a module that does not load, a rule that throws) the guard fails open, except for a forced
   push, a branch delete and `--mirror`: those are denied by a coarse fallback rule with no dependencies
   (`lib/pushGuardFallback.js`), since no deny list in the settings stands behind the guard.
+  When the guard process itself fails (cannot start, crashes, times out after 10 s, prints invalid output), Claude Code
+  refuses the call: the push guard and the write guard carry `"onFailure": "block"` (Claude Code v2.1.295+). Since
+  v2.1.329 a call from Code Mode would otherwise run after such a failure. `guards.onHookFailure` `allow` writes
+  `"continue"` instead in a vendored install; the plugin's `hooks/hooks.json` always blocks, and doctor says so. The
+  read guard and the measurement hooks never block on a failure.
   **Known limits:** the guard catches the usual ways of writing a command, not every way. It does not see inside a script
   file (`bash x.sh`) or code that builds the command at run time (`node -e`), and the agents run as the same OS user, so
   it is no security boundary. A queue agent's `ravenseat add` is judged by the branch the hook sees: a track that reached the main

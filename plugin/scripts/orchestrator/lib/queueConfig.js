@@ -288,7 +288,11 @@ const STANDARD = Object.freeze({
   // head/tail/less of .env* or *.pem/*.key, printenv, env or set with no arguments, Get-ChildItem env:. "log" = allowed,
   // one row in the time log (rule only, never the command), shown on the Checks tab. "block" = denied, with the hint to
   // reference the variable instead. "off" = nothing. Block is not the default because it can stop work.
-  guards: { secretReads: 'log' },
+  // onHookFailure (lib/hookFailure.js, C2): "block" = Claude Code refuses the call when the push or write guard process
+  // itself fails (onFailure "block" on those two hooks); "allow" = the call runs ("continue"). Block is the default by
+  // owner exception (23.11): since v2.1.329 a call from Code Mode runs after a hook failure, so a broken guard would
+  // guard nothing. Setup writes it into a vendored install; the plugin's hooks.json always blocks.
+  guards: { secretReads: 'log', onHookFailure: 'block' },
   // The values of the project's own .env files (main tree; never .env.example and the like) removed as literals from
   // everything Ravenseat stores from transcripts and commands (lib/secretLiterals.js, SP-1): held in memory only. It
   // only removes text, stops nothing, so it is on. false = the pattern redaction alone (a weakened setting).
@@ -775,6 +779,10 @@ const STANDARD = Object.freeze({
   // the newer system form to <dataFolder>/client-shapes.jsonl, so the form can be confirmed for the fixtures. Off by
   // default: it writes a file nobody reads unless they report a form.
   client: { canary: true, shapeLog: false },
+  // Code Mode (lib/codeMode.js, C3): "warn" = one doctor INFO row while CLAUDE_CODE_EXPERIMENTAL_CODE_MODE is on (read
+  // from the environment and ~/.claude/settings.json, never set), "off" = no row. No deny: Ravenseat supports the
+  // official feature. The REPL counts in `ravenseat cost` are measurement and have no setting.
+  codeMode: { policy: 'warn' },
   // Rolling copies of queue.json at a few ages (lib/stateSnapshots.js), in <dataFolder>/snapshots: on each write a tier
   // whose copy is at least as old as the tier takes the next younger copy, and the youngest takes the current state.
   // tiers: 2 to 8 ages such as "30m", "5h", "7d". enabled false turns it off.

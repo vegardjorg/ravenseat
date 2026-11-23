@@ -282,7 +282,9 @@ function apiErrorKind(r) {
  *               prompt are the kind and the number of the last real prompt before the turn (a system reminder, isMeta,
  *               and a user entry with only tool results are no prompt; a background task notification is
  *               'notification', see isNotification). resultChars = tool_use id -> the characters of its tool_result
- *               text. cwd = the working directory the entries record most often.
+ *               text. cwd = the working directory the entries record most often. replTools = REPL tool_use id -> the
+ *               tool names its code used (the result row's toolsUsed, C3 Code Mode), only for a REPL call whose
+ *               result row has that list (an assumed transcript field: absent is the normal case).
  * @param {string} text
  * @param {{ idleGapMin?: number, detail?: boolean }} [option]
  */
@@ -307,6 +309,7 @@ function analyzeTranscript(text, { idleGapMin = IDLE_GAP_MIN, detail = false } =
   let origin = null;
   let promptNo = 0;
   const resultChars = {};
+  const replTools = {};
   const cwds = new Map();
   const rows = E();
   for (const line of String(text).split('\n')) {
@@ -341,6 +344,10 @@ function analyzeTranscript(text, { idleGapMin = IDLE_GAP_MIN, detail = false } =
       if (detail) {
         for (const p of parts)
           if (p.kind === 'result' && p.id && !(p.id in resultChars)) resultChars[p.id] = rows.resultText(p.content).length;
+        // C3: the tools a REPL call's code used, from the result row (assumed field; none = nothing kept).
+        if (e.toolsUsed)
+          for (const p of parts)
+            if (p.kind === 'result' && p.id && toolName.get(p.id) === 'REPL' && !(p.id in replTools)) replTools[p.id] = e.toolsUsed;
         // A real prompt (not a system reminder, not only tool results) starts what the next turns answer.
         const onlyResults = parts.length > 0 && parts.every((p) => p.kind === 'result');
         if (!e.meta && !onlyResults) {
@@ -485,6 +492,7 @@ function analyzeTranscript(text, { idleGapMin = IDLE_GAP_MIN, detail = false } =
               prompt: x.prompt ?? 0,
             })),
             resultChars,
+            replTools,
             cwd: [...cwds.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null,
           },
         }

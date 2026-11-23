@@ -5,7 +5,9 @@
 //   node        the Node version (>= 20, package.json engines), and that `node` is found on PATH the way the hooks
 //               start it (exec form: command "node" spawned without a shell)
 //   hooks       the hooks file (plugin: <plugin>/hooks/hooks.json, vendored: .claude/settings.json) parses, lists every
-//               queue hook under its events (queueBoard.hooksCoverage) and every hook script it names exists
+//               queue hook under its events (queueBoard.hooksCoverage) and every hook script it names exists; the push
+//               and write guard's onFailure against guards.onHookFailure (lib/hookFailure.js: WARN on a mismatch, INFO
+//               for allow in a plugin install, whose hooks.json always blocks)
 //   config      queue.config.json parses, has no unknown keys (WARN) and no value of the wrong type (FAIL)
 //   issues      only when issues.labelMap is set and wrong: one WARN with the expected shape (never FAIL)
 //   queue       queue.json (and plans.json, follow.json when they exist) parse
@@ -40,6 +42,9 @@
 //               reads as expected, so it is no gap), WARN for rows read differently (unknown row types, turns without
 //               usage, unknown API errors); never FAIL, no row without a transcript or with client.canary off. Type
 //               names and counts only, never content
+//   code mode   only while Claude Code's Code Mode is on (CLAUDE_CODE_EXPERIMENTAL_CODE_MODE in the environment or in
+//               ~/.claude/settings.json, read only, lib/codeMode.js): one INFO row on what it means for the guards and
+//               the cost figures; never WARN or FAIL, none with codeMode.policy off
 //   cloud rows  only with features.cloud on: what cloud tracks need (lib/cloudSetup.js), read locally; the setup itself is
 //               `ravenseat cloud setup`
 //   links       only when there is a finding: one INFO row with counts over the open tasks' links (cli/taskLinksCheck.mjs):
@@ -91,7 +96,7 @@ const MIN_NODE = 20;
 /** A lock older than this was left by a process that died (the same limit as withLock in cli/context.mjs). */
 const STALE_LOCK_MS = 60_000;
 /** The config objects whose keys are fixed: an unknown key in them is a typo. The others are open maps. */
-const CLOSED = ['identity', 'cloud', 'gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan', 'gitignoreCheck', 'permissionsCheck', 'dbGuard', 'testWeakening', 'focus', 'gateQueue', 'gateTemp', 'usageLimit', 'stateSnapshots', 'reads', 'agentGuard', 'agentPushBlock', 'controlFiles', 'guardLog', 'gateEvidence', 'ownership', 'history', 'share', 'client', 'updates', 'notBuilding', 'deps', 'tidy', 'issues'];
+const CLOSED = ['identity', 'cloud', 'gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan', 'gitignoreCheck', 'permissionsCheck', 'dbGuard', 'testWeakening', 'focus', 'gateQueue', 'gateTemp', 'usageLimit', 'stateSnapshots', 'reads', 'agentGuard', 'agentPushBlock', 'controlFiles', 'guardLog', 'gateEvidence', 'ownership', 'history', 'share', 'client', 'updates', 'notBuilding', 'deps', 'tidy', 'issues', 'codeMode'];
 
 const ok = (name, message) => ({ status: 'OK', name, message, fix: null });
 const warn = (name, message, fix) => ({ status: 'WARN', name, message, fix });
@@ -243,6 +248,10 @@ function checkHooks() {
       ),
     );
   if (!out.length) out.push(ok('hooks', `${BOARD.QUEUE_HOOKS.length} queue hooks listed in ${file}, all scripts exist`));
+  // C2 (lib/hookFailure.js): the push and write guard's onFailure against guards.onHookFailure; no row when they match.
+  const HF = require('./lib/hookFailure.js');
+  const fl = HF.doctorLine({ hooks: settings.hooks, setting: HF.settingOf(CONFIG), mode: src.mode === 'plugin' ? 'plugin' : 'vendored' });
+  if (fl) out.push((fl.status === 'WARN' ? warn : info)('hooks', fl.message, fl.fix));
   return out;
 }
 
@@ -823,6 +832,16 @@ function checkGuardDecisions() {
   return out;
 }
 
+/**
+ * Code Mode (lib/codeMode.js, C3): one INFO row while CLAUDE_CODE_EXPERIMENTAL_CODE_MODE is on in the environment or in
+ * ~/.claude/settings.json, saying what it means for the guards and the cost figures. Read only; codeMode.policy off
+ * hides it. Never WARN or FAIL.
+ */
+function checkCodeMode() {
+  const CM = require('./lib/codeMode.js');
+  return CM.doctorRows({ state: CM.readState(), policy: CM.policyOf(CONFIG) }).map((r) => info(r.name, r.message, r.fix));
+}
+
 function checkCanary() {
   const CC = require('./lib/clientCanary.js');
   if (!CC.setupOf(CONFIG).on) return [];
@@ -943,7 +962,7 @@ export async function cmdDoctor() {
     fixed = gitignoreNote(writeGitignore(CONFIG.root, CONFIG));
     if (!a.includes('--json')) console.log(`doctor --fix: ${fixed}\n`);
   }
-  const every = [checkNode, checkHooks, checkConfig, checkIssues, checkState, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkTidy, checkProjectFiles, checkSettings, checkTaxonomy, checkCatalog, checkNotBuilding, checkDepsAudit, checkLinks, checkGuards, checkGuardDecisions, checkCanary, ...REPO_CHECKS, checkCloud, checkMachine, checkBudget, checkTemp, checkCleanCopies, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
+  const every = [checkNode, checkHooks, checkConfig, checkIssues, checkState, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkTidy, checkProjectFiles, checkSettings, checkTaxonomy, checkCatalog, checkNotBuilding, checkDepsAudit, checkLinks, checkGuards, checkGuardDecisions, checkCanary, checkCodeMode, ...REPO_CHECKS, checkCloud, checkMachine, checkBudget, checkTemp, checkCleanCopies, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
     try {
       return f();
     } catch (e) {

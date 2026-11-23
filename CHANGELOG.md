@@ -6,6 +6,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 ## Unreleased
 
 ### Added
+- **Doctor says when Claude Code's Code Mode is on, and `ravenseat cost` counts REPL calls and the tools inside them on one line.** `codeMode.policy` `warn`; read only, never sets the flag.
 - **An empty board offers a made-up demo board, locked down in its own folder.** `board.demoOffer` `true`.
 - **A Timeline tab on the board shows what ran, what runs and the rough plan ahead, as a chart or a table.** Read only;
   `board.timeline` (on in full, off in lite), `board.timelineHorizonDays` `3`, `board.timelineRows` `step`.
@@ -88,6 +89,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **Door and blast radius has a setting, so a project can turn it off everywhere.** `mergeDanger.show`, on by default.
 - **The Timeline shows a P50 to P85 band per focus step and a backtest line on how often past steps finished inside it.** `board.timelineUncertainty`, on by default.
 ### Changed
+- **The reviewers and the researcher put independent calls in the same turn, as the tracks already did.** Text only, no setting; `ravenseat cost` "parallel" is the before and after.
 - **On the Timeline a step's band replaces the per-task likely range of its planned bars, and one line explains a band that starts after the last bar.** Rides on `board.timelineUncertainty`, no new setting.
 - **A Timeline drop's preview puts the plan sentence first with the raw field changes behind Details, and the drag tag no longer covers the step label.** Display only, no setting.
 - **The board's Dependencies view leads with titles: each node shows its title, a sentence names the question that unlocks the most and the longest chain, and Review shows as in review.** Display only, no setting.
@@ -137,6 +139,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **Plans tree map: the built fill's line no longer runs through a label such as "43 % built", in light and dark.**
 - **Checks: suggestion groups with one card sit side by side and use the width instead of one narrow column.**
 ### Hardened
+- **A push or write guard that crashes, does not start or times out now refuses the call instead of letting it through, also from Code Mode.** `guards.onHookFailure` `block`.
 - **The shell reader treats a backslash-escaped space as part of the word, so `C:/Program\ Files/GitHub\ CLI/gh.exe` is checked as `gh`.**
 - **Queue agents may only read with the GitHub CLI: `gh api`, `gh auth`, `gh gist` and every write are denied (rule `gh-cli`).**
 - **Secrets in transcripts: the key scan reads every worktree git lists and passwords of any length, an agent printing a

@@ -32,6 +32,12 @@
 //          half of the outside calls.
 //      Such a session is listed apart with its cost and left out of the groups (and, in cli/cost.mjs, of the
 //      orchestration totals), never mixed into this project's figures. Its subagents stay where the time log put them.
+//   7. REPL (Code Mode, C3): the REPL calls (the tool that runs Claude's code), the turns that make one and their cost
+//      share; the inner calls the code made, from the result row's toolsUsed when the transcript has it (detail.
+//      replTools; an assumed field, so "listed in N of M" says how many had it); and calls whose id has the documented
+//      prefix of a call from code (repl_, toolu_cc_), in case such rows appear. A REPL call stays ONE call in its turn,
+//      so the figures above keep their meaning; this only says how much work hides inside those calls. Shown (JSON
+//      field repl, one line) only when there is any.
 //
 // Measurement only: nothing here stops the queue. Pure functions without I/O (cli/cost.mjs reads the transcripts).
 // Tested in lib/__tests__/turnTools.test.ts.
@@ -138,8 +144,12 @@ function emptyStats() {
     above: { turns: 0, usd: 0 },
     below: { turns: 0, usd: 0 },
     notif: { episodes: 0, turns: 0, usd: 0 },
+    repl: { calls: 0, turns: 0, listed: 0, inner: 0, tools: {}, byId: 0, usd: 0 },
   };
 }
+
+/** The tool_use id prefixes of a call made from code (the Code Mode docs, OpenTelemetry section). */
+const CODE_CALL_ID = /^(?:repl_|toolu_cc_)/;
 
 /**
  * The raw counts of one transcript's turns in [from, to) (analyzeTranscript(..., { detail: true }).detail).
@@ -182,6 +192,23 @@ function transcriptStats(detail, { from = -Infinity, to = Infinity, thresholdTok
       s.notif.usd += usd;
       episodes.add(t.prompt);
     }
+    // 7. REPL (Code Mode): the call stays one call above; here what it hid.
+    let replHere = 0;
+    for (const c of calls) {
+      if (CODE_CALL_ID.test(String(c.id ?? ''))) s.repl.byId++;
+      if (c.name !== 'REPL') continue;
+      replHere++;
+      const used = detail.replTools?.[c.id];
+      if (!Array.isArray(used)) continue;
+      s.repl.listed++;
+      s.repl.inner += used.length;
+      for (const n of used) s.repl.tools[n] = (s.repl.tools[n] ?? 0) + 1;
+    }
+    if (replHere) {
+      s.repl.calls += replHere;
+      s.repl.turns++;
+      s.repl.usd += usd;
+    }
     for (const c of calls) {
       const n = detail.resultChars?.[c.id];
       if (n == null) continue;
@@ -208,6 +235,10 @@ function mergeStats(a, b) {
       s[side].usd += x[side].usd;
     }
     for (const k of ['episodes', 'turns', 'usd']) s.notif[k] += x.notif[k];
+    if (x.repl) {
+      for (const k of ['calls', 'turns', 'listed', 'inner', 'byId', 'usd']) s.repl[k] += x.repl[k];
+      for (const [n, c] of Object.entries(x.repl.tools)) s.repl.tools[n] = (s.repl.tools[n] ?? 0) + c;
+    }
     for (const [name, t] of Object.entries(x.tools)) {
       const y = (s.tools[name] ??= { results: 0, chars: 0, sizes: [] });
       y.results += t.results;
@@ -271,6 +302,20 @@ function summarize(s, { thresholdK = null } = {}) {
       above_pct: pct(s.above.usd, s.usd),
     },
     notifications: { episodes: s.notif.episodes, turns: s.notif.turns, usd: s.notif.usd, pct: pct(s.notif.usd, s.usd) },
+    ...(s.repl.calls || s.repl.byId
+      ? {
+          repl: {
+            calls: s.repl.calls,
+            turns: s.repl.turns,
+            listed: s.repl.listed,
+            inner_calls: s.repl.inner,
+            inner_tools: Object.fromEntries(Object.entries(s.repl.tools).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))),
+            by_id: s.repl.byId,
+            usd: s.repl.usd,
+            pct: pct(s.repl.usd, s.usd),
+          },
+        }
+      : {}),
   };
 }
 
@@ -425,6 +470,15 @@ function turnsToolsLines(rep, label) {
         `${pad}output: ` +
           g.tool_output.top.map((t) => `${t.name} ${short(t.chars)} (median ${short(t.median_chars)})`).join(', '),
       );
+    const r = g.repl;
+    if (r) {
+      const inner = Object.entries(r.inner_tools).map(([n, c]) => `${n} ${c}`).join(', ');
+      out.push(
+        `${pad}REPL (Code Mode) ${r.calls} call(s) in ${r.turns} turn(s), ${usd(r.usd)} (${r.pct} % of cost); ` +
+          (r.listed ? `toolsUsed in ${r.listed} of ${r.calls}: ${r.inner_calls} inner call(s)${inner ? ` (${inner})` : ''}` : 'toolsUsed not in the transcript') +
+          (r.by_id ? `; ${r.by_id} call(s) with a code id` : ''),
+      );
+    }
   }
   for (const o of rep.otherRepo)
     out.push(
