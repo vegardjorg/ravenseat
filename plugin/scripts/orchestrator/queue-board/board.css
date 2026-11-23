@@ -7604,11 +7604,103 @@ body.stale .summary.stuck::before {
   stroke-dasharray: 4 2;
 }
 
+/* tbx (owner report 23.11): the landing must be clear with a real mouse. The insertion mark is thick with end caps,
+   the step row it lands in is lit, the task it goes above or below is outlined, and a ghost of the bar follows the
+   pointer. While something is lifted the chart takes no text selection (only then: the labels and the table stay
+   selectable otherwise) and shows the grabbing cursor, or not-allowed while the move is refused. */
 .tl-drop-line {
+  fill: none;
   stroke: var(--color-tertiary);
-  stroke-width: 3;
+  stroke-width: 4;
   stroke-linecap: round;
   pointer-events: none;
+}
+
+.tl-frame.dragging {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.tl-frame.dragging,
+.tl-frame.dragging * {
+  cursor: grabbing;
+}
+
+.tl-frame.dragging.refused,
+.tl-frame.dragging.refused * {
+  cursor: not-allowed;
+}
+
+.tl-bar[data-movable]:hover rect.tl-planned {
+  stroke: var(--color-tertiary);
+  stroke-width: 2;
+}
+
+.tl-drop-lane {
+  fill: color-mix(in srgb, var(--color-tertiary-container) 70%, transparent);
+  stroke: var(--color-tertiary);
+  stroke-width: 1;
+  stroke-dasharray: 6 3;
+  pointer-events: none;
+}
+
+.tl-refuse-lane {
+  fill: color-mix(in srgb, var(--color-error-container) 50%, transparent);
+  stroke: var(--color-error);
+  stroke-width: 1;
+  stroke-dasharray: 6 3;
+  pointer-events: none;
+}
+
+.tl-bar.tl-drop-ref rect.tl-planned {
+  stroke: var(--color-tertiary);
+  stroke-width: 2;
+}
+
+.tl-ghost {
+  pointer-events: none;
+  opacity: 0.9;
+}
+
+.tl-ghost rect.tl-planned,
+.tl-ghost rect.tl-wait {
+  fill: var(--color-tertiary-container);
+  stroke: var(--color-tertiary);
+  stroke-width: 2;
+}
+
+/* The ghost's id stays readable where it passes over another bar: a halo in the chart's own background. */
+.tl-svg .tl-ghost .tl-bar-text {
+  fill: var(--color-on-surface);
+  font-weight: 600;
+  paint-order: stroke;
+  stroke: var(--color-surface-container-lowest);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+.tl-ghost.refused rect.tl-planned,
+.tl-ghost.refused rect.tl-wait,
+.tl-ghost.refused .tl-ghost-row {
+  fill: var(--color-error-container);
+  stroke: var(--color-error);
+  stroke-dasharray: 4 2;
+}
+
+.tl-svg .tl-ghost.refused .tl-bar-text {
+  fill: var(--color-error);
+}
+
+.tl-ghost-row {
+  fill: color-mix(in srgb, var(--color-tertiary-container) 80%, transparent);
+  stroke: var(--color-tertiary);
+  stroke-width: 2;
+}
+
+.tl-ghost-text {
+  fill: var(--color-on-tertiary-container);
+  font-size: var(--text-sm);
+  font-weight: 600;
 }
 
 .tl-drag-tag {

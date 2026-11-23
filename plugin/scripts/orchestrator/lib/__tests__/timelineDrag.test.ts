@@ -192,3 +192,39 @@ describe('tagSpot: the drag tag never covers the step label (T-C 0b)', () => {
     });
   });
 });
+
+describe('ghostShift: the lifted bar follows the pointer up and down, inside its step row (tbx)', () => {
+  // The step row runs from y 60 to 144 (rows' coordinates); the bar sits at 80 to 100.
+  const box = { top: 60, bottom: 144, barTop: 80, barBottom: 100 };
+  it('follows the pointer while the bar stays inside the row', () => {
+    expect(D.ghostShift({ ...box, dy: 0 })).toBe(0);
+    expect(D.ghostShift({ ...box, dy: 30 })).toBe(30);
+    expect(D.ghostShift({ ...box, dy: -12 })).toBe(-12);
+  });
+  it('stops at the row edges (2 pixels inside), never into another step', () => {
+    expect(D.ghostShift({ ...box, dy: 400 })).toBe(42);
+    expect(D.ghostShift({ ...box, dy: -400 })).toBe(-18);
+  });
+  it('a bar taller than its row stays where it is', () => {
+    expect(D.ghostShift({ top: 0, bottom: 10, barTop: 0, barBottom: 20, dy: 15 })).toBe(0);
+  });
+});
+
+describe('barHint: the hover words on a bar, so a bar that cannot move says why (tbx)', () => {
+  it('a movable bar says how it moves', () => {
+    expect(D.barHint({ kind: 'planned', movable: true, drag: true, by: 'step' })).toBe('Drag up or down to change its place in the step.');
+  });
+  it('ran and running bars say why they stay', () => {
+    expect(D.barHint({ kind: 'ran', movable: false, drag: true, by: 'step' })).toBe('Cannot move: it already ran.');
+    expect(D.barHint({ kind: 'running', movable: false, drag: true, by: 'step' })).toBe('Cannot move: it is running now.');
+  });
+  it('a planned bar with projects as rows points to the Focus steps rows', () => {
+    expect(D.barHint({ kind: 'planned', movable: false, drag: true, by: 'project' })).toBe(
+      'Cannot move here: show the rows as Focus steps to change the order.',
+    );
+  });
+  it('with the drag off nothing is added (the bar opens its card, as before)', () => {
+    expect(D.barHint({ kind: 'ran', movable: false, drag: false, by: 'step' })).toBeNull();
+    expect(D.barHint({ kind: 'planned', movable: false, drag: false, by: 'step' })).toBeNull();
+  });
+});

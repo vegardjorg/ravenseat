@@ -8,6 +8,10 @@
 //   - A step row's title dragged up or down gets a new place in the focus: the saved focus with only the order changed,
 //     through POST /api/focus (the same path as the Plan view's Save focus).
 //   - Sideways, or a task into another step, is refused with the reason (lib/timelineDrag.js REFUSAL), never mapped.
+//   - The pointer (tbx, owner report 23.11): the press takes the pointer (no text selection, pointer capture); while
+//     lifted a ghost follows the pointer, the landing row is lit with a thick insertion mark and the place tag (a
+//     refusal lights the row red), and Escape, pointercancel and leaving the window cancel. Bars say on hover whether
+//     and how they move (lib barHint).
 //   - The keyboard does the same: Space lifts, the arrows move, Enter (or Space) drops, Escape cancels, said in the
 //     #tl-live region. The table view has Move up and Move down per planned task.
 //   - Every drop runs the dry run first. With board.timelineDragPreview on (default) the preview dialog says what the
@@ -30,6 +34,8 @@ let tlChart = null;
 let tlPlace = new Map();
 /** The step rows that can move, in their order: [{ stage, step, name, label, y, h }]. */
 let tlSteps = [];
+/** What the rows are now: 'step' (focus steps) or 'project' (the hover words say why a bar cannot move there). */
+let tlRowsBy = 'step';
 /** What is lifted (keyboard or pointer), or null. */
 let tlLift = null;
 /** A pointer press on a bar or a step title, before and during a drag. */
@@ -73,6 +79,7 @@ function tlStepText(g) {
 function tlSetRows(rows, by) {
   tlPlace = new Map();
   tlSteps = [];
+  tlRowsBy = by;
   if (!tlDragOn() || by !== 'step') return;
   for (const r of rows) {
     if (r.kind !== 'step') continue;
@@ -100,6 +107,12 @@ function tlSetChart(svg, lay) {
 /** Can this bar move (a planned bar in a step row, with the drag on)? */
 const tlMovable = (id) => tlPlace.has(id);
 
+/** tbx: the bar's tooltip: its words, then how it moves or why it cannot (lib/timelineDrag.js barHint). */
+function tlBarTitle(b) {
+  const hint = tlDragLib()?.barHint?.({ kind: b.kind, movable: tlMovable(b.id), drag: tlDragOn(), by: tlRowsBy });
+  return hint ? `${b.label}\n${hint}` : b.label;
+}
+
 // ---- What is lifted, and what it shows -------------------------------------------------------------------------------
 
 /** The bars of the chart for these ids. */
@@ -107,10 +120,18 @@ function tlBars(ids) {
   return ids.map((id) => main.querySelector(`.tl-bar[data-id="${CSS.escape(id)}"]`)).filter(Boolean);
 }
 
-/** Takes away the lifted marks, the drop line and the tag. */
+/** The drop marks drawn per move (the ghost is made once per drag and stays until the drag ends). */
+const TL_TARGET_MARKS = '.tl-drop-line, .tl-drag-tag, .tl-drop-lane, .tl-refuse-lane';
+
+/** The chart's frame (title column and scroller): it carries the dragging and refused classes. */
+const tlFrame = () => tlChart?.svg?.closest?.('.tl-frame') ?? null;
+
+/** Takes away the lifted marks, the ghost, the drop line, the lane, the tag and the frame's drag classes. */
 function tlClearMarks() {
   for (const e of main.querySelectorAll('.tl-bar.lifted, .tl-title.lifted')) e.classList.remove('lifted');
-  for (const e of main.querySelectorAll('.tl-drop-line, .tl-drag-tag')) e.remove();
+  for (const e of main.querySelectorAll('.tl-drop-ref')) e.classList.remove('tl-drop-ref');
+  for (const e of main.querySelectorAll(`${TL_TARGET_MARKS}, .tl-ghost`)) e.remove();
+  tlFrame()?.classList.remove('dragging', 'refused');
 }
 
 /** Lets go of what is lifted (no save) and catches up on a redraw that was held. */
@@ -172,32 +193,55 @@ function tlLiftStep(stage) {
   return true;
 }
 
-/** The drop line (and, for the pointer, the tag) where the lifted thing would go now. */
+/**
+ * The landing where the lifted thing would go now (keyboard and pointer). A task: its step row lit as the lane it lands
+ * in, a thick insertion mark with end caps at the edge of the task it goes above or below (that bar outlined too). A
+ * step: a thick line across the whole chart between the rows. For the pointer also the tag with the place or the
+ * refusal; tag.lane (a refusal into another row) lights that row as refused.
+ */
 function tlShowTarget(tag) {
-  for (const e of main.querySelectorAll('.tl-drop-line, .tl-drag-tag')) e.remove();
+  for (const e of main.querySelectorAll(TL_TARGET_MARKS)) e.remove();
+  for (const e of main.querySelectorAll('.tl-drop-ref')) e.classList.remove('tl-drop-ref');
   const l = tlLift;
   if (!l || !tlChart?.svg?.isConnected) return;
   const { svg, lay } = tlChart;
   const width = Number(svg.getAttribute('width')) || 0;
-  let line = null;
+  // Lanes go behind the rows' notes, bands and bars, so all of them stay readable on top (only the grid is under it).
+  const behind = (node) => svg.insertBefore(node, svg.querySelector('.tl-rows') ?? svg.querySelector('.tl-bars'));
+  let path = null;
   let tagAt = null;
   if (l.kind === 'task' && l.slot !== l.start && l.rest.length) {
     const sp = tlDragLib().spaceFor(l.rest, l.slot, l.slot < l.start);
     const ref = lay.bars.find((b) => b.id === sp.ref);
     const g = lay.groups.find((x) => x.key === l.rowKey);
     if (ref && g) {
-      const x = sp.space === 'over' ? Math.max(1, ref.x0 - 3) : Math.min(width - 1, ref.x1 + 3);
-      const y0 = TL_AXIS + g.y + 4;
-      line = { x1: x, x2: x, y1: y0, y2: TL_AXIS + g.y + g.h - 4 };
-      tagAt = { x: x + 6, y: y0 + 2 };
+      behind(svgEl('rect', { class: 'tl-drop-lane', x: 0, y: TL_AXIS + g.y + 1, width, height: Math.max(2, g.h - 2) }));
+      const x = sp.space === 'over' ? Math.max(4, ref.x0 - 4) : Math.min(width - 4, ref.x1 + 4);
+      // The mark starts under the row's head line (its "done around ..." note), where the bars and the band start.
+      const y0 = TL_AXIS + g.y + 20;
+      const y1 = TL_AXIS + g.y + g.h - 4;
+      path = `M${x - 5} ${y0} H${x + 5} M${x} ${y0} V${y1} M${x - 5} ${y1} H${x + 5}`;
+      tagAt = { x: x + 8, y: TL_AXIS + g.y + 6 };
+      for (const e of tlBars([ref.id])) e.classList.add('tl-drop-ref');
     }
   } else if (l.kind === 'step' && l.slot !== l.start) {
     const others = tlSteps.filter((_, i) => i !== l.start);
     const y = l.slot < others.length ? others[l.slot].y : others[others.length - 1].y + others[others.length - 1].h;
-    line = { x1: 0, x2: width, y1: TL_AXIS + y, y2: TL_AXIS + y };
+    path = `M0 ${TL_AXIS + y} H${width}`;
     tagAt = { x: 8, y: TL_AXIS + y + 4 };
   }
-  if (line) svg.append(svgEl('line', { class: 'tl-drop-line', ...line }));
+  // No insertion mark (it is back at its own place): the tag sits right after the lifted bar, or in the step's row.
+  if (!tagAt && l.kind === 'task') {
+    const own = lay.bars.find((b) => b.id === l.ids[0]);
+    if (own) tagAt = { x: own.x1 + 8, y: TL_AXIS + own.y };
+  } else if (!tagAt && l.kind === 'step') {
+    const st = tlSteps[l.start];
+    if (st) tagAt = { x: 8, y: TL_AXIS + st.y + st.h - 24 };
+  }
+  if (tag?.lane) behind(svgEl('rect', { class: 'tl-refuse-lane', x: 0, y: TL_AXIS + tag.lane.y + 1, width, height: Math.max(2, tag.lane.h - 2) }));
+  if (path) svg.append(svgEl('path', { class: 'tl-drop-line', d: path }));
+  // The ghost stays on top of the lane and the line.
+  for (const gh of svg.querySelectorAll('.tl-ghost')) svg.append(gh);
   if (tag) {
     const want = tag.at ?? tagAt;
     if (!want) return;
@@ -309,11 +353,86 @@ function tlCancel() {
 
 // ---- The pointer -----------------------------------------------------------------------------------------------------
 
-/** A press on a movable bar (b) or step title (stage). A Ctrl or Cmd click marks instead (board/select.js). */
+/**
+ * A press on a movable bar (b) or step title (stage). A Ctrl or Cmd click marks instead (board/select.js).
+ * tbx (owner report 23.11): the press takes the pointer. preventDefault stops the browser from starting a text
+ * selection across the chart's labels (the click that follows still opens the card), and the pointer capture keeps the
+ * moves and the release coming here when the pointer leaves the bar or the window.
+ */
 function tlPointerDown(e, what) {
   if (!tlDragOn() || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || tlBusy) return;
   if (what.id != null && !tlMovable(what.id)) return;
-  tlPointer = { ...what, x: e.clientX, y: e.clientY, started: false, target: null };
+  e.preventDefault();
+  const el = e.currentTarget ?? null;
+  try {
+    el?.setPointerCapture?.(e.pointerId);
+  } catch {
+    /* no capture for this pointer (an old browser): the window listeners below still get the moves */
+  }
+  tlPointer = { ...what, x: e.clientX, y: e.clientY, started: false, target: null, el, pointerId: e.pointerId };
+}
+
+/** Lets go of the pointer capture of a press (best effort). */
+function tlLetGo(p) {
+  try {
+    if (p?.el?.hasPointerCapture?.(p.pointerId) !== false) p?.el?.releasePointerCapture?.(p.pointerId);
+  } catch {
+    /* already released */
+  }
+}
+
+/** The click right after a drag is no click on the bar (it would open the card). */
+function tlSkipClick() {
+  tlNoClick = true;
+  setTimeout(() => {
+    tlNoClick = false;
+  }, 0);
+}
+
+/**
+ * The ghost: a copy of what is lifted that follows the pointer up and down (tbx). A task: its bar (or the block's bars),
+ * held inside its step row (lib ghostShift). A step: a band the height of the row with its name.
+ */
+function tlMakeGhost(l) {
+  const { svg, lay } = tlChart;
+  const width = Number(svg.getAttribute('width')) || 0;
+  const ghost = svgEl('g', { class: 'tl-ghost', 'aria-hidden': 'true' });
+  if (l.kind === 'task') {
+    for (const bar of tlBars(l.ids)) {
+      const copy = bar.cloneNode(true);
+      for (const a of ['role', 'tabindex', 'aria-label', 'aria-describedby', 'data-id', 'data-focus', 'data-movable']) copy.removeAttribute(a);
+      copy.classList.remove('lifted', 'marked');
+      copy.querySelector('title')?.remove();
+      ghost.append(copy);
+    }
+    const boxes = lay.bars.filter((b) => l.ids.includes(b.id));
+    const g = lay.groups.find((x) => x.key === l.rowKey);
+    l.ghostBox = {
+      top: TL_AXIS + (g?.y ?? 0),
+      bottom: TL_AXIS + (g ? g.y + g.h : 0),
+      barTop: TL_AXIS + Math.min(...boxes.map((b) => b.y)),
+      barBottom: TL_AXIS + Math.max(...boxes.map((b) => b.y + b.h)),
+    };
+  } else {
+    const st = tlSteps[l.start];
+    const y = TL_AXIS + (st?.y ?? 0);
+    ghost.append(
+      svgEl('rect', { class: 'tl-ghost-row', x: 0, y, width, height: st?.h ?? 0, rx: 4 }),
+      svgEl('text', { class: 'tl-ghost-text', x: 10, y: y + 16, text: tlCap(l.label) }),
+    );
+    l.ghostBox = { top: TL_AXIS, bottom: TL_AXIS + lay.height, barTop: y, barBottom: y + (st?.h ?? 0) };
+  }
+  svg.append(ghost);
+  return ghost;
+}
+
+/** Moves the ghost to the pointer (dy from the press for a task; the pointer's row y for a step). */
+function tlMoveGhost(l, dy, refused) {
+  const ghost = tlChart?.svg?.querySelector('.tl-ghost');
+  if (!ghost || !l.ghostBox) return;
+  const shift = tlDragLib().ghostShift({ dy, ...l.ghostBox });
+  ghost.setAttribute('transform', `translate(0 ${Math.round(shift)})`);
+  ghost.classList.toggle('refused', !!refused);
 }
 
 /** The pointer's y in the rows' coordinates (under the axis). */
@@ -333,41 +452,64 @@ window.addEventListener('pointermove', (e) => {
     if (tlLift) tlRelease();
     const ok = p.stage ? tlLiftStep(p.stage) : tlLiftTask(p.id);
     if (!ok) {
+      tlLetGo(p);
       tlPointer = null;
       return;
     }
     p.started = true;
+    // tbx: while lifted the chart is unselectable and shows the grabbing cursor (board.css .tl-frame.dragging).
+    tlFrame()?.classList.add('dragging');
+    tlMakeGhost(tlLift);
   }
   const l = tlLift;
+  if (!l) return;
   const y = tlRowsY(e.clientY);
   if (l.kind === 'step') {
     const r = D.stepTarget({ steps: tlSteps, from: l.start, y });
     l.slot = r.to;
     p.target = r;
-    tlShowTarget(r.kind === 'same' ? null : { text: `Place ${r.to + 1} of ${r.of} in the focus` });
+    tlFrame()?.classList.remove('refused');
+    const st = tlSteps[l.start];
+    tlMoveGhost(l, y - ((st?.y ?? 0) + (st?.h ?? 0) / 2), false);
+    const others = tlSteps.filter((_, i) => i !== l.start);
+    const near = r.kind === 'same' ? 'where it is now' : r.to < others.length ? `above ${others[r.to].label}` : `below ${others[r.to - 1].label}`;
+    tlShowTarget({ text: `Place ${r.to + 1} of ${r.of} in the focus, ${near}` });
     return;
   }
   const r = D.taskTarget({ order: l.order, block: l.ids, rowKey: l.rowKey, groups: tlChart.lay.groups, dx, dy, y });
   p.target = r;
-  if (r.kind === 'sideways' || r.kind === 'step') {
+  const refused = r.kind === 'sideways' || r.kind === 'step';
+  tlFrame()?.classList.toggle('refused', refused);
+  tlMoveGhost(l, dy, refused);
+  if (refused) {
     l.slot = l.start;
     const svgBox = tlChart.svg.getBoundingClientRect();
-    tlShowTarget({ text: r.kind === 'sideways' ? 'Time is calculated: drag up or down' : 'A task stays in its step', refused: true, at: { x: e.clientX - svgBox.left + 12, y: e.clientY - svgBox.top - 26 } });
+    // The refusal is as visible as a landing: the row the pointer is in (another step), or the bar's own row (sideways),
+    // lit in the error tone.
+    const lane = r.kind === 'step' ? D.groupAt(tlChart.lay.groups, y) : tlChart.lay.groups.find((g) => g.key === l.rowKey) ?? null;
+    tlShowTarget({
+      text: r.kind === 'sideways' ? 'Time is calculated: drag up or down' : 'A task stays in its step',
+      refused: true,
+      lane,
+      at: { x: e.clientX - svgBox.left + 12, y: e.clientY - svgBox.top - 26 },
+    });
     return;
   }
-  if (r.kind === 'none') return;
+  // Back within a few pixels of the press, or back at its own place: it says so (some feedback all the time).
+  if (r.kind === 'none' || r.kind === 'same') {
+    l.slot = l.start;
+    tlShowTarget({ text: `Place ${l.start + 1} of ${l.order.length}, where it is now` });
+    return;
+  }
   l.slot = r.slot;
-  tlShowTarget(r.kind === 'same' ? null : { text: `Place ${r.place} of ${r.of}, ${r.space === 'over' ? `above ${r.ref}` : `below ${r.ref}`}` });
+  tlShowTarget({ text: `Place ${r.place} of ${r.of}, ${r.space === 'over' ? `above ${r.ref}` : `below ${r.ref}`}` });
 });
 
 function tlPointerEnd(cancelled) {
   const p = tlPointer;
   tlPointer = null;
   if (!p?.started) return;
-  tlNoClick = true;
-  setTimeout(() => {
-    tlNoClick = false;
-  }, 0);
+  tlSkipClick();
   const r = p.target;
   if (cancelled || !tlLift) return tlRelease();
   if (r && (r.kind === 'sideways' || r.kind === 'step')) {
@@ -377,10 +519,45 @@ function tlPointerEnd(cancelled) {
   }
   if (tlLift.slot === tlLift.start) return tlRelease();
   tlSay(tlLift.kind === 'step' ? tlStepPlaceText(tlLift) : tlTaskText(tlLift));
+  // The ghost and the drag state go; the landing (lane, line, tag) stays behind the preview until it is answered.
+  for (const e of main.querySelectorAll('.tl-ghost')) e.remove();
+  tlFrame()?.classList.remove('dragging', 'refused');
   tlDrop();
 }
+
+/**
+ * tbx: a pointer drag stopped before its release (Escape, pointercancel, the window lost focus, the capture was lost):
+ * nothing moves, the marks go, the live region says so, and the release that may still come does nothing.
+ */
+function tlPointerAbort() {
+  const p = tlPointer;
+  if (!p) return false;
+  tlPointer = null;
+  tlLetGo(p);
+  if (!p.started) return false;
+  tlSkipClick();
+  if (tlLift) tlCancel();
+  else tlClearMarks();
+  return true;
+}
 window.addEventListener('pointerup', () => tlPointerEnd(false));
-window.addEventListener('pointercancel', () => tlPointerEnd(true));
+window.addEventListener('pointercancel', () => tlPointerAbort());
+window.addEventListener('blur', () => tlPointerAbort());
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) tlPointerAbort();
+});
+// Escape mid-drag, wherever the focus is (the press does not move the focus): taken before the board's own Escape
+// handlers (closing the panel or a menu), so one Escape only cancels the drag.
+window.addEventListener(
+  'keydown',
+  (e) => {
+    if (e.key !== 'Escape' || !tlPointer?.started) return;
+    e.preventDefault();
+    e.stopPropagation();
+    tlPointerAbort();
+  },
+  true,
+);
 
 /** A click on a bar: Ctrl or Cmd marks it for a block move; right after a drag it is no click. true: taken. */
 function tlBarClick(e, b) {

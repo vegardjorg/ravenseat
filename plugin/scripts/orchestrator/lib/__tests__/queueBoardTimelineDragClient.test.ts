@@ -240,6 +240,144 @@ describe('a step row with the keyboard', () => {
   });
 });
 
+// tbx (owner report 23.11): with a real mouse the press started a text selection across the chart and nothing followed
+// the pointer. A press on a movable bar or step title now takes the pointer (no selection, pointer capture), the chart
+// is unselectable only while something is lifted, a ghost of the bar follows the pointer, the landing shows as a lane
+// highlight with an insertion line and the place tag, and Escape, pointercancel and leaving the window clean up.
+describe('the pointer (tbx)', () => {
+  const PE = ((window as any).PointerEvent ?? MouseEvent) as typeof MouseEvent;
+  const pointer = (target: EventTarget, type: string, x: number, y: number) => {
+    const e = new PE(type, { bubbles: true, cancelable: true, button: 0, buttons: 1, clientX: x, clientY: y, pointerId: 7 } as any);
+    target.dispatchEvent(e);
+    return e;
+  };
+  const frame = () => document.querySelector('.tl-frame') as HTMLElement;
+  const captured: unknown[] = [];
+  beforeAll(() => {
+    (Element.prototype as any).setPointerCapture = function (id: unknown) {
+      captured.push(id);
+    };
+    (Element.prototype as any).releasePointerCapture = function () {};
+  });
+
+  it('a press on a movable bar takes the pointer: no text selection starts, the pointer is captured', () => {
+    captured.length = 0;
+    const e = pointer(bar('A-1'), 'pointerdown', 100, 100);
+    expect(e.defaultPrevented).toBe(true);
+    expect(captured.length).toBe(1);
+    // A press alone lifts nothing and leaves the chart selectable.
+    expect(frame().classList.contains('dragging')).toBe(false);
+    pointer(window, 'pointerup', 100, 100);
+  });
+
+  it('a press on a step title takes the pointer too; a drag shows the step ghost and names the neighbour', async () => {
+    const title = document.querySelector('.tl-title[data-stage="project:a"]') as HTMLElement;
+    expect(pointer(title, 'pointerdown', 20, 100).defaultPrevented).toBe(true);
+    pointer(window, 'pointermove', 20, 2000);
+    expect(document.querySelectorAll('.tl-ghost .tl-ghost-row').length).toBe(1);
+    expect(document.querySelector('.tl-drag-tag text')?.textContent).toBe('Place 2 of 2 in the focus, below step 2 (Beta)');
+    const esc = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    document.body.dispatchEvent(esc);
+    pointer(window, 'pointerup', 20, 2000);
+    await flush();
+    expect(posts).toEqual([]);
+  });
+
+  it('a drag down: the chart is unselectable, a ghost follows, the lane and the place show; the drop previews', async () => {
+    pointer(bar('A-1'), 'pointerdown', 100, 100);
+    pointer(window, 'pointermove', 100, 110);
+    pointer(window, 'pointermove', 100, 120);
+    expect(frame().classList.contains('dragging')).toBe(true);
+    expect(document.querySelectorAll('.tl-ghost').length).toBe(1);
+    expect(document.querySelector('.tl-ghost')?.getAttribute('transform')).toMatch(/^translate\(0 /);
+    expect(document.querySelectorAll('.tl-drop-lane').length).toBe(1);
+    expect(document.querySelectorAll('.tl-drop-line').length).toBe(1);
+    expect(document.querySelector('.tl-drag-tag text')?.textContent).toBe('Place 2 of 2, below A-2');
+    pointer(window, 'pointerup', 100, 120);
+    await flush();
+    // The ghost and the drag state go at the release; the landing stays behind the preview as its context.
+    expect(frame().classList.contains('dragging')).toBe(false);
+    expect(document.querySelectorAll('.tl-ghost').length).toBe(0);
+    expect(document.querySelectorAll('.tl-drop-lane').length).toBe(1);
+    expect(posts[0]).toEqual({
+      path: '/api/bulk',
+      body: { action: 'rank', ids: ['A-1'], val: { space: 'under', ref: 'A-2' }, dry: true, plan_effect: true },
+    });
+    expect(dialog()!.querySelector('.tl-plan-sentence + p')?.textContent).toBe('A-1: place 2 of 2 in step 1 (Alpha), right below A-2.');
+  });
+
+  it('back where it was: the tag says so (always some feedback while lifted)', () => {
+    pointer(bar('A-1'), 'pointerdown', 100, 100);
+    pointer(window, 'pointermove', 100, 110);
+    pointer(window, 'pointermove', 100, 101);
+    expect(document.querySelector('.tl-drag-tag text')?.textContent).toBe('Place 1 of 2, where it is now');
+    expect(document.querySelectorAll('.tl-drop-line').length).toBe(0);
+    pointer(window, 'pointerup', 100, 101);
+  });
+
+  it('sideways: the refusal tag, the ghost marked refused, no lane or line; the release saves nothing', async () => {
+    pointer(bar('A-1'), 'pointerdown', 100, 100);
+    pointer(window, 'pointermove', 140, 101);
+    pointer(window, 'pointermove', 190, 102);
+    expect(document.querySelector('.tl-drag-tag.refused text')?.textContent).toBe('Time is calculated: drag up or down');
+    expect(document.querySelector('.tl-ghost')?.classList.contains('refused')).toBe(true);
+    expect(frame().classList.contains('refused')).toBe(true);
+    expect(document.querySelectorAll('.tl-drop-lane, .tl-drop-line').length).toBe(0);
+    // As visible as a landing: the bar's own row is lit in the error tone.
+    expect(document.querySelectorAll('.tl-refuse-lane').length).toBe(1);
+    pointer(window, 'pointerup', 190, 102);
+    await flush();
+    expect(posts).toEqual([]);
+    expect(frame().classList.contains('refused')).toBe(false);
+  });
+
+  it('Escape mid-drag cancels: the marks go, later moves and the release do nothing', async () => {
+    pointer(bar('A-1'), 'pointerdown', 100, 100);
+    pointer(window, 'pointermove', 100, 120);
+    expect(document.querySelectorAll('.tl-ghost').length).toBe(1);
+    const esc = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    document.body.dispatchEvent(esc);
+    expect(esc.defaultPrevented).toBe(true);
+    expect(live()).toBe('Move cancelled: A-1 stays where it was.');
+    expect(document.querySelectorAll('.tl-ghost, .tl-drop-lane, .tl-drop-line, .tl-drag-tag, .lifted').length).toBe(0);
+    expect(frame().classList.contains('dragging')).toBe(false);
+    pointer(window, 'pointermove', 100, 140);
+    expect(document.querySelectorAll('.tl-ghost').length).toBe(0);
+    pointer(window, 'pointerup', 100, 140);
+    await flush();
+    expect(posts).toEqual([]);
+  });
+
+  it('pointercancel and leaving the window (blur) clean up the same way', async () => {
+    for (const end of [() => pointer(window, 'pointercancel', 100, 120), () => window.dispatchEvent(new Event('blur'))]) {
+      pointer(bar('A-1'), 'pointerdown', 100, 100);
+      pointer(window, 'pointermove', 100, 120);
+      expect(frame().classList.contains('dragging')).toBe(true);
+      end();
+      expect(document.querySelectorAll('.tl-ghost, .tl-drop-lane, .lifted').length).toBe(0);
+      expect(frame().classList.contains('dragging')).toBe(false);
+      pointer(window, 'pointerup', 100, 120);
+    }
+    await flush();
+    expect(posts).toEqual([]);
+  });
+
+  it('the hover words: a movable bar says how it moves; with projects as rows a bar says why it cannot', async () => {
+    expect(bar('A-1').querySelector('title')?.textContent).toContain('Drag up or down to change its place in the step.');
+    const sw = [...document.querySelectorAll('.tl-switch .toggles-button')].find((b) => b.textContent === 'Projects') as HTMLElement;
+    sw.click();
+    await flush();
+    expect(bar('A-1').dataset.movable).toBeUndefined();
+    expect(bar('A-1').querySelector('title')?.textContent).toContain('Cannot move here: show the rows as Focus steps');
+    // A press on a bar that cannot move is left alone (text and click work as before).
+    expect(pointer(bar('A-1'), 'pointerdown', 100, 100).defaultPrevented).toBe(false);
+    pointer(window, 'pointerup', 100, 100);
+    const back = [...document.querySelectorAll('.tl-switch .toggles-button')].find((b) => b.textContent === 'Focus steps') as HTMLElement;
+    back.click();
+    await flush();
+  });
+});
+
 describe('the settings', () => {
   it('board.timelineDragPreview off: a drop saves at once, with Undo in the toast', async () => {
     timeline = { dragPreview: false };
@@ -290,5 +428,11 @@ describe('the CSS', () => {
     expect(part).toContain('.tl-drop-line');
     expect(part).toContain('.tl-bar.lifted');
     expect(part).not.toMatch(/#[0-9a-f]{3,8}\b/i);
+  });
+  it('tbx: the chart is unselectable only while dragging (text stays selectable otherwise), with the ghost and lane styled', () => {
+    expect(part).toMatch(/\.tl-frame\.dragging\s*\{[^}]*user-select:\s*none/);
+    expect(part).toContain('.tl-ghost');
+    expect(part).toContain('.tl-drop-lane');
+    expect(part).not.toMatch(/\.tl-frame\s*\{[^}]*user-select/);
   });
 });

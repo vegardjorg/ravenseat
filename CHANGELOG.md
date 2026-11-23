@@ -124,6 +124,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **Settings in lite puts `planReview.*` and `plans.checkpoint` under Full mode only, since they do nothing there.**
 - **Settings marks the command palette (`board.palette`) as having no effect while `board.shortcuts` is off.**
 ### Fixed
+- **Dragging a Timeline bar with the mouse no longer selects text: a ghost follows the pointer and the landing row, insertion mark and place are shown.** Rides on `board.timelineDrag`, no new setting.
 - **The owner-question examples in the add-to-queue, review and plans skills carry the card fields, so a copied example is no longer refused.** No setting: they are examples.
 - Board settings: the "How to use the board" and "Keyboard shortcuts" buttons have a gap between them.
 - **Moving a card on the board counts as your edit and stamps `edited_at`, also with its dependencies.** No setting: it is a recorded timestamp.
