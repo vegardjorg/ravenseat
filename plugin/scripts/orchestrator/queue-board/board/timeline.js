@@ -572,9 +572,16 @@ function drawTimeline() {
     const chart = timelineChart(d, rows, horizon);
     const whiskers = !tlDrawnLay || tlDrawnLay.bars.some((b) => b.bandX0 != null && b.bandX1 > b.bandX0);
     view.append(chart, timelineLegend(banded, whiskers));
+    // T-C follow-up: a band that starts after its step's last bar looks wrong without a word on why, so one line
+    // right under the legend says it (chart only; the table view is unchanged).
+    if (tlDrawnLay?.groups.some((g) => g.bandAfterBars))
+      view.append(
+        el('p', {
+          class: 'tl-note tl-band-help',
+          text: 'The band can start after the last bar: the bars use typical task lengths, some tasks take longer, so the step as a whole usually finishes later.',
+        }),
+      );
   }
-  // T-C follow-up: a band that starts after its step's last bar looks wrong without a word on why (chart only).
-  const bandAfter = prefs.display !== 'table' && !!tlDrawnLay?.groups.some((g) => g.bandAfterBars);
   if (prefs.display !== 'table') {
     const cannot = timelineCannot(d);
     if (cannot) view.append(cannot);
@@ -589,13 +596,6 @@ function drawTimeline() {
   if (d.uncertainty?.enough && d.backtest?.text) notes.push(d.backtest.text);
   if (d.uncertainty?.agree?.text) notes.push(d.uncertainty.agree.text);
   for (const n of notes) view.append(el('p', { class: 'tl-note', text: n }));
-  if (bandAfter && rows.length)
-    view.append(
-      el('p', {
-        class: 'tl-note tl-band-help',
-        text: 'The band can start after the last bar: the bars use typical task lengths, some tasks take longer, so the step as a whole usually finishes later.',
-      }),
-    );
   restoreTimelineFocus(view);
 }
 
