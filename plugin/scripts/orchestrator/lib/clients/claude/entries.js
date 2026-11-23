@@ -27,6 +27,8 @@
 //     meta        isMeta is true (a system reminder, no real prompt)
 //     notification  a background task notification (origin.kind, turnOrigin, or the text when they are missing)
 //     version, cwd  the Claude Code version and the working directory, or null when not a non-empty string
+//     toolsUsed   a result row's toolUseResult.toolsUsed (the tools a REPL call's code used, C3), or null (assumed field,
+//                 see toolsUsedOf)
 // usage(raw)  { input, output, cacheRead, cacheWritten, cache5m, cache1h, raw }, or null for a falsy value
 // resultText(content)  the text of a tool_result's content (a string, or text blocks; other blocks add nothing)
 // parse(line) JSON.parse, or undefined for a line that is not JSON (a half line at the cut, a line being written)
@@ -202,8 +204,21 @@ function entry(raw) {
     notification: r ? isNotification(r, text) : false,
     version: nonEmpty(r?.version),
     cwd: nonEmpty(r?.cwd),
+    toolsUsed: toolsUsedOf(r),
     raw,
   };
+}
+
+/**
+ * The tool names a REPL call's code used (C3, Code Mode): toolUseResult.toolsUsed on the result row, as strings, or
+ * null when the row has none or it is not a list. The field is documented for the REPL tool_response a PostToolUse hook
+ * gets (code.claude.com/docs/en/code-mode); that Claude Code writes the same object as the row's toolUseResult is
+ * ASSUMED (the field holds a tool's structured result for other tools), so absence is the normal case.
+ */
+function toolsUsedOf(r) {
+  const tu = r?.toolUseResult;
+  if (!tu || typeof tu !== 'object' || !Array.isArray(tu.toolsUsed)) return null;
+  return tu.toolsUsed.filter((x) => typeof x === 'string' && x);
 }
 
 module.exports = { SYNTHETIC_MODEL, HANDBACK_TOOL, MARK, parse, usage, resultText, entry };

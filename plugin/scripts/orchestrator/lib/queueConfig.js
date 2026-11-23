@@ -779,6 +779,10 @@ const STANDARD = Object.freeze({
   // the newer system form to <dataFolder>/client-shapes.jsonl, so the form can be confirmed for the fixtures. Off by
   // default: it writes a file nobody reads unless they report a form.
   client: { canary: true, shapeLog: false },
+  // Code Mode (lib/codeMode.js, C3): "warn" = one doctor INFO row while CLAUDE_CODE_EXPERIMENTAL_CODE_MODE is on (read
+  // from the environment and ~/.claude/settings.json, never set), "off" = no row. No deny: Ravenseat supports the
+  // official feature. The REPL counts in `ravenseat cost` are measurement and have no setting.
+  codeMode: { policy: 'warn' },
   // Rolling copies of queue.json at a few ages (lib/stateSnapshots.js), in <dataFolder>/snapshots: on each write a tier
   // whose copy is at least as old as the tier takes the next younger copy, and the youngest takes the current state.
   // tiers: 2 to 8 ages such as "30m", "5h", "7d". enabled false turns it off.

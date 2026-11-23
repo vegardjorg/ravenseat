@@ -1516,6 +1516,15 @@ const SETTINGS = Object.freeze([
   row('client.shapeLog', 'board', 'onoff', 'Log new API error forms',
     '`ravenseat checks` writes the shape of each new API error form (keys and value types, short codes, no text) to ' +
     'client-shapes.jsonl in the data folder, so the form can be confirmed and reported. Off by default.'),
+  // Friction: none. One INFO row in doctor while Code Mode is on; it never stops anything and costs no tokens, so warn
+  // is the default (C3, owner 23.11; not the 16.11 deny). No deny value: the stance is to support the official feature.
+  // The REPL counts in `ravenseat cost` (lib/turnTools.js) get no row: pure measurement, like the other turn figures.
+  row('codeMode.policy', 'board', 'choice', 'Say when Claude Code\'s Code Mode is on',
+    'Doctor shows one INFO row while Code Mode is on (CLAUDE_CODE_EXPERIMENTAL_CODE_MODE in the environment or in ' +
+    '~/.claude/settings.json; Ravenseat only reads it, never sets it): what it means for the guards and the cost ' +
+    'figures. warn shows the row, off hides it.', {
+      choices: ['warn', 'off'],
+    }),
 
   // ---- 13. Cloud ----
   row('features.cloud', 'cloud', 'onoff', 'Cloud sessions',

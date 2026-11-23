@@ -390,3 +390,88 @@ describe('queue.mjs cost: the Turns and tools block from real files', () => {
     }
   });
 });
+
+// ---- C3 (Code Mode, owner 23.11): REPL calls and their toolsUsed, measurement only ----
+// The documented shape is the PostToolUse tool_response of REPL: { code, result, stdout, stderr, toolsUsed }
+// (code.claude.com/docs/en/code-mode). Where Claude Code writes it in the transcript is NOT documented: this reads the
+// result row's toolUseResult (the field Claude Code uses for a tool's structured result) and counts nothing when it is
+// missing. Inner calls by id (repl_ / toolu_cc_, the documented OpenTelemetry prefixes) are counted only when such a
+// tool_use row appears; that is undocumented too.
+describe('C3: REPL calls (Code Mode) in the Turns and tools block', () => {
+  const repl = (id: string, code: string) => use(id, 'REPL', { code });
+  /** A tool result row with Claude Code's structured result next to it. */
+  const replResult = (sec: number, id: string, toolUseResult: unknown) =>
+    JSON.stringify({
+      type: 'user',
+      timestamp: ts(sec),
+      cwd: ROOT,
+      message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content: [{ type: 'text', text: 'done' }] }] },
+      toolUseResult,
+    });
+  function codeSession(): string {
+    const lines: string[] = [];
+    lines.push(prompt(0, 'Rename the helper everywhere.'));
+    // A REPL call whose result lists the tools the code used.
+    lines.push(...turn('c1', 1, [repl('r1', 'await $`rg -l helper`')]));
+    lines.push(replResult(2, 'r1', { code: 'x', result: 'ok', stdout: '', stderr: '', toolsUsed: ['Bash', 'Read', 'Bash'] }));
+    // A REPL call next to a Read, with no toolsUsed in the transcript (absent: counted as a call, nothing inner).
+    lines.push(...turn('c2', 3, [repl('r2', '1 + 1'), read('u1', `${ROOT}/a.js`)]));
+    lines.push(results(4, [['r2', '2'], ['u1', 'abc']]));
+    // A call that carries the documented id prefix of a call from code.
+    lines.push(...turn('c3', 5, [use('toolu_cc_1', 'Bash', { command: 'ls' })]));
+    lines.push(results(6, [['toolu_cc_1', 'a.js']]));
+    // A malformed toolUseResult on a non-REPL call is ignored.
+    lines.push(...turn('c4', 7, [read('u2', `${ROOT}/b.js`)]));
+    lines.push(replResult(8, 'u2', { toolsUsed: 'Bash' }));
+    lines.push(...turn('c5', 9, [text('Renamed.')]));
+    return lines.join('\n') + '\n';
+  }
+
+  it('the detail keeps toolsUsed per REPL call, only when it is a list of names', () => {
+    expect(detailOf(codeSession()).replTools).toEqual({ r1: ['Bash', 'Read', 'Bash'] });
+    expect(detailOf(session()).replTools).toEqual({});
+  });
+
+  it('counts REPL calls, their turns and cost, the inner calls toolsUsed lists, and calls by code id', () => {
+    const s = summaryOf(codeSession());
+    expect(s.repl).toMatchObject({
+      calls: 2,
+      turns: 2,
+      listed: 1,
+      inner_calls: 3,
+      inner_tools: { Bash: 2, Read: 1 },
+      by_id: 1,
+    });
+    expect(s.repl.usd).toBeGreaterThan(0);
+    expect(s.repl.pct).toBeGreaterThan(0);
+    expect(s.repl.pct).toBeLessThan(100);
+    // The REPL call is still one call in its turn, as before: the existing figures do not change meaning.
+    expect(s.calls_per_turn).toEqual({ median: 1, p90: 2 });
+  });
+
+  it('a session without REPL has no repl figures and no REPL line', () => {
+    expect(summaryOf(session()).repl).toBeUndefined();
+    const rep = TT.turnsAndTools({ transcripts: [{ group: 'track', session: null, main: false, detail: detailOf(session()) }], roots: [ROOT] });
+    expect(TT.turnsToolsLines(rep, 'x').join('\n')).not.toMatch(/REPL/);
+  });
+
+  it('merges across transcripts and shows one REPL line for the group', () => {
+    const rep = TT.turnsAndTools({
+      transcripts: [
+        { group: 'track', session: null, main: false, detail: detailOf(codeSession()) },
+        { group: 'track', session: null, main: false, detail: detailOf(codeSession()) },
+        { group: 'reviewer', session: null, main: false, detail: detailOf(session()) },
+      ],
+      roots: [ROOT],
+    });
+    const track = rep.groups.find((g: { group: string }) => g.group === 'track');
+    expect(track.repl).toMatchObject({ calls: 4, turns: 4, listed: 2, inner_calls: 6, inner_tools: { Bash: 4, Read: 2 }, by_id: 2 });
+    // The output line may name REPL among the top tools by size; the Code Mode line is the one with the counts.
+    const lines = TT.turnsToolsLines(rep, 'x').filter((l: string) => /REPL \(Code Mode\)/.test(l));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/REPL \(Code Mode\) 4 call\(s\) in 4 turn\(s\)/);
+    expect(lines[0]).toMatch(/toolsUsed in 2 of 4: 6 inner call\(s\) \(Bash 4, Read 2\)/);
+    expect(lines[0]).toMatch(/2 call\(s\) with a code id/);
+    expect(lines[0]).not.toMatch(/[–—]/);
+  });
+});

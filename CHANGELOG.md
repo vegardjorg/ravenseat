@@ -6,6 +6,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 ## Unreleased
 
 ### Added
+- **Doctor says when Claude Code's Code Mode is on, and `ravenseat cost` counts REPL calls and the tools inside them on one line.** `codeMode.policy` `warn`; read only, never sets the flag.
 - **An empty board offers a made-up demo board, locked down in its own folder.** `board.demoOffer` `true`.
 - **A Timeline tab on the board shows what ran, what runs and the rough plan ahead, as a chart or a table.** Read only;
   `board.timeline` (on in full, off in lite), `board.timelineHorizonDays` `3`, `board.timelineRows` `step`.
