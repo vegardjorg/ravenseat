@@ -550,5 +550,7 @@ describe('the wiring in the board (read as text)', () => {
     ])
       expect(mjs).toContain(r);
     expect(mjs).toContain('T.readDocument(SOURCE_ROOT');
+    // GET /api/doc itself lives in queue-board/api/plans.mjs since SPLIT-1 (the live root through ctx).
+    expect(readFileSync(join(CLIENT, 'api', 'plans.mjs'), 'utf8')).toContain('T.readDocument(ctx.SOURCE_ROOT');
   });
 });

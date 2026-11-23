@@ -31,6 +31,8 @@ const roadmapJs = readFileSync(join(CLIENT, 'plans', 'roadmap.js'), 'utf8');
 const css = readFileSync(join(CLIENT, 'plans', 'plans.css'), 'utf8');
 const html = readFileSync(join(CLIENT, 'index.html'), 'utf8');
 const server = readFileSync(join(CLIENT, '..', 'queue-board.mjs'), 'utf8');
+// The Plans row edits live in queue-board/api/planEdits.mjs since SPLIT-1; the route line stays in queue-board.mjs.
+const planEdits = readFileSync(join(CLIENT, 'api', 'planEdits.mjs'), 'utf8');
 const plansJs = readFileSync(join(CLIENT, 'plans', 'plans.js'), 'utf8');
 const workJs = readFileSync(join(CLIENT, 'plans', 'work.js'), 'utf8');
 
@@ -268,7 +270,7 @@ describe('the wiring', () => {
   });
   it('the server: the route, the module switch, the text in a file, and the write via queue.mjs plan capture', () => {
     expect(server).toMatch(/filePath === '\/api\/plan-capture'\) return planCapture\(b\)/);
-    const fn = server.slice(server.indexOf('async function planCapture'), server.indexOf('// ---- Multi select'));
+    const fn = planEdits.slice(planEdits.indexOf('async function planCapture'), planEdits.indexOf('// ---- Multi select'));
     expect(fn).toMatch(/FEATURES\['plans\.inbox'\]/);
     expect(fn).toMatch(/INBOX\.captureInput\(b\)/);
     expect(fn).toMatch(/'plan', 'capture', '--file', tmp/);
