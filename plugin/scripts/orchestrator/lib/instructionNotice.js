@@ -20,7 +20,6 @@
 'use strict';
 
 const fs = require('node:fs');
-const { renameWithRetry } = require('./stateFile.js');
 const path = require('node:path');
 
 const CACHE_FILE = 'instruction-size.json';
@@ -52,7 +51,9 @@ function writeCache(file, data) {
   try {
     const tmp = `${file}.${process.pid}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(data));
-    renameWithRetry(tmp, file);
+    // Loaded here, not at the top: the read path runs on every prompt and stays free of our other modules
+    // (lib/__tests__/hookWeight.test.ts); only a changed instruction set writes the cache.
+    require('./stateFile.js').renameWithRetry(tmp, file);
   } catch {
     // error-ignored: the cache only saves work; without it the next prompt measures again
   }
