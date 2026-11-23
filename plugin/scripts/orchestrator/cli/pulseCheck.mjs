@@ -15,6 +15,8 @@
 //   START <n>      free slots and tasks that can start now (selectNext, after the start guards: budget, night pause,
 //                  wind-down, load, usage limit; tasks waiting on an intake triage verdict count when its step is due)
 //   RUN <id>       a wait-mode run (lib/waitMode.js) that finished while nobody waited for it
+//   PROCESS <pid>  a process Ravenseat started that outlived its starter or its time budget (lib/processGuard.js,
+//                  processGuard.sweep), with the command that stops it and what it started
 //   WIRING <id>    open wiring items on a task whose merge ran (done, or a merge state with the merge step done)
 // And what only `orchestrator pulse` acts on, so a loop that runs only this command loses none of it:
 //   CLOUD <id>     a cloud track that finished (collect auto or off), stopped, or has a tip this repo has not read
@@ -43,7 +45,7 @@ import path from 'node:path';
 import { cloudPulseItems } from './cloud.mjs';
 import { logQueueSession } from './events.mjs';
 import { conflictPulseItems } from './conflicts.mjs';
-import { a, autoAcceptIn, CLI, FOLDER, L, pulseCursor, read, readCursor, require, uncommittedPaths } from './context.mjs';
+import { a, autoAcceptIn, CLI, CONFIG, FOLDER, L, pulseCursor, read, readCursor, require, uncommittedPaths } from './context.mjs';
 import { inspectionDue } from './inspection.mjs';
 import { dailyUsageFor, findDeliveries, findSilent, findSpinning, findWithoutAgent, measureLoad } from './tracks.mjs';
 import { triageState } from './triage.mjs';
@@ -179,6 +181,19 @@ function runItems() {
   return out;
 }
 
+/**
+ * Processes Ravenseat started that outlived their starter or their time budget (lib/processGuard.js, processGuard.sweep):
+ * one PROCESS line each with the stop command. Removes register files of dead pids; stops nothing unless
+ * processGuard.autoKill is on. An error never hides the other items.
+ */
+function processItems() {
+  try {
+    return require('./lib/processGuard.js').pulseFor({ folder: FOLDER, cfg: CONFIG });
+  } catch {
+    return []; // error-ignored: the rest of the pulse
+  }
+}
+
 /** Open wiring items on tasks whose merge ran: one line per task with the commands that close them. */
 function wiringItems(queue) {
   const WI = require('./lib/wiringItems.js');
@@ -251,6 +266,7 @@ export function cmdPulseCheck() {
     ...hungItems(queue, scratch),
     ...cloud.action,
     ...runItems(),
+    ...processItems(),
     ...wiringItems(queue),
     ...conflictPulseItems(),
     ...autoAcceptItems(queue),

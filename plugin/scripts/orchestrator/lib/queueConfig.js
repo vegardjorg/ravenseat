@@ -769,6 +769,15 @@ const STANDARD = Object.freeze({
   // A temp folder of its own for each gate run, removed afterwards (lib/gateTemp.js): what a project's tests leave goes with
   // it. enabled false gives the gate commands the normal temp folder.
   gateTemp: { enabled: true },
+  // The process guard (lib/processGuard.js, roadmap 0s, owner 16.11). register: every guarded run (gate commands, done
+  // commands, the base gate, wait runs) writes <dataFolder>/processes/<pid>.json while it runs. sweep: doctor, the pulse
+  // check and the Checks tab name the ones that outlived their starter or their time budget, with the stop command.
+  // autoKill: doctor and the pulse check also end those (only after confirming each is a Ravenseat guard); off, since it
+  // can stop work. lowerPriority: the guard of a gate, done or base run lowers it to BELOW_NORMAL (never IDLE).
+  processGuard: { register: true, sweep: true, autoKill: false, lowerPriority: true },
+  // overtimeFactor: a running track over this many times its estimate gets a doctor WARN and a Checks card, never a
+  // stop (roadmap 0s V4, 2 by owner decision 16.11). 0 = off.
+  tracks: { overtimeFactor: 2 },
   // The pause at the subscription's usage limit (lib/usageLimit.js): the StopFailure hook saves the reset time, and no new
   // tracks or fix rounds start until then (exit 12). pause false turns it off.
   usageLimit: { pause: true },

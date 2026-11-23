@@ -206,17 +206,17 @@ function skipEvidence({ newTip, trackTip, treeOf, rows, commands }) {
  * Runs the base gate commands in `cwd` one after the other, stopping at the first red one. One time budget for the whole
  * list: each command gets what is left. The tail is the red command's (or, when all are green, the last command's).
  * `guard(command)`: a line that refuses the command (lib/dbGuard.js, dbGuard.localOnly), or null. A refused command is
- * not run and is red with that line as its tail.
+ * not run and is red with that line as its tail. `processGuard`: passed on to runDoneWhen (lib/processGuard.js).
  * @returns {{ ok: boolean, failed: string|null, exit: number|null, timedOut: boolean, durationSec: number, tail: string[] }}
  */
-function runBaseGate({ commands, cwd, timeoutSec = DEFAULT_TIMEOUT_SEC, tailLines = DC.DEFAULT_TAIL_LINES, spawn = null, guard = null }) {
+function runBaseGate({ commands, cwd, timeoutSec = DEFAULT_TIMEOUT_SEC, tailLines = DC.DEFAULT_TAIL_LINES, spawn = null, guard = null, processGuard = null }) {
   const t0 = Date.now();
   let last = { ok: true, exit: 0, timedOut: false, tail: [] };
   for (const command of commands) {
     const refused = guard ? guard(command) : null;
     if (refused) return { ok: false, failed: command, exit: 1, timedOut: false, durationSec: secSince(t0), tail: [refused], refused: true };
     const left = Math.max(1, Math.round(timeoutSec - (Date.now() - t0) / 1000));
-    last = DC.runDoneWhen({ command, cwd, timeoutSec: left, tailLines, spawn });
+    last = DC.runDoneWhen({ command, cwd, timeoutSec: left, tailLines, spawn, processGuard });
     if (!last.ok) {
       const tail = last.tail.map((l) => l.replace('config().doneCheck.timeoutSec', 'config().baseGate.timeoutSec'));
       return { ok: false, failed: command, exit: last.exit, timedOut: last.timedOut, durationSec: secSince(t0), tail };

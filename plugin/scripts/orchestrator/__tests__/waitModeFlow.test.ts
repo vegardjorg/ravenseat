@@ -136,7 +136,9 @@ describe('wait mode for long calls', () => {
   }, 60_000);
 
   it('a run over the hard cap is ended and reported red as timed out', () => {
-    const p = project([fakeGate('ran.txt', 30_000)]);
+    // Normal priority here: the 3 s cap must leave room for the gate to start, and on a busy machine a below-normal gate
+    // (processGuard.lowerPriority, covered in lib/__tests__/processGuard.test.ts) may not get the CPU for that in time.
+    const p = project([fakeGate('ran.txt', 30_000)], { processGuard: { lowerPriority: false } });
     const first = p.run(['gates', '--quick'], { QUEUE_WAIT_BLOCK_SEC: '1', QUEUE_WAIT_HARD_SEC: '3' });
     const { next } = runningLine(first.out);
     const second = p.run(next, { QUEUE_WAIT_BLOCK_SEC: '20' });
