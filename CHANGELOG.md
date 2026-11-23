@@ -88,6 +88,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **Door and blast radius has a setting, so a project can turn it off everywhere.** `mergeDanger.show`, on by default.
 - **The Timeline shows a P50 to P85 band per focus step and a backtest line on how often past steps finished inside it.** `board.timelineUncertainty`, on by default.
 ### Changed
+- **The reviewers and the researcher put independent calls in the same turn, as the tracks already did.** Text only, no setting; `ravenseat cost` "parallel" is the before and after.
 - **On the Timeline a step's band replaces the per-task likely range of its planned bars, and one line explains a band that starts after the last bar.** Rides on `board.timelineUncertainty`, no new setting.
 - **A Timeline drop's preview puts the plan sentence first with the raw field changes behind Details, and the drag tag no longer covers the step label.** Display only, no setting.
 - **The board's Dependencies view leads with titles: each node shows its title, a sentence names the question that unlocks the most and the longest chain, and Review shows as in review.** Display only, no setting.

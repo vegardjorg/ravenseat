@@ -49,6 +49,12 @@ describe('the agent files', () => {
     expect(omit).toEqual(['ask.md']);
   });
 
+  // C1 (NAV-1 step 2, owner 23.11): the agents that read the repo batch independent calls in one turn (the official
+  // parallel tool calls). The tracks have had the line since NAV-1; the reviewers and the researcher get the same one.
+  it.each(['track.md', 'track-d.md', 'researcher.md', ...reviewers])('%s puts independent calls in the same turn', (f) => {
+    expect(read(f).replace(/\r?\n\s*/g, ' ')).toContain('Independent calls go in the same turn.');
+  });
+
   it.each(reviewers)('%s is read-only, answers with FINDINGS first and disproves before HIGH/MEDIUM', (f) => {
     const s = read(f);
     expect(s).toMatch(/^tools: Read, Grep, Glob, Bash\s*$/m);
