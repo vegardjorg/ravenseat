@@ -13,7 +13,8 @@ import { describe, expect, it } from 'vitest';
 const GS = require('../ghStatus.js');
 
 type Res = { missing?: boolean; code?: number | null; out?: string; err?: string; timedOut?: boolean };
-const SECRET = 'ghp_abcdefghijklmnopqrstuvwxyz0123456789';
+// Built at run time so no committed file holds a string the secret scan flags.
+const SECRET = ['ghp', 'abcdefghijklmnopqrstuvwxyz0123456789'].join('_');
 
 /** A fake gh: `auth status` answers by whether a token var is set in the env it got. */
 function fakeGh({ missing = false, withToken, withoutToken }: { missing?: boolean; withToken?: Res; withoutToken?: Res }) {

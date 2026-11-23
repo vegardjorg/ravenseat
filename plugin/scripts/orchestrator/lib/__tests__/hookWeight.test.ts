@@ -19,7 +19,7 @@ function loaded(modules: string[]): string[] {
   const code =
     `for (const m of ${JSON.stringify(modules)}) require(require('node:path').join(${JSON.stringify(ROOT)}, m));` +
     `process.stdout.write(JSON.stringify(Object.keys(require.cache)));`;
-  const r = spawnSync(process.execPath, ['-e', code], { encoding: 'utf8' });
+  const r = spawnSync(process.execPath, ['-e', code], { encoding: 'utf8', env: { ...process.env, NODE_OPTIONS: '' } });
   expect(r.status, r.stderr).toBe(0);
   return (JSON.parse(r.stdout) as string[]).map((f) => path.relative(ROOT, f).replace(/\\/g, '/'));
 }
@@ -59,7 +59,7 @@ describe('a hot track hook stays light', () => {
     const code =
       `require(require('node:path').join(${JSON.stringify(ROOT)}, 'lib/clients/index.js')).clientFor().hooks.read({});` +
       `process.stdout.write(JSON.stringify(Object.keys(require.cache)));`;
-    const r = spawnSync(process.execPath, ['-e', code], { encoding: 'utf8' });
+    const r = spawnSync(process.execPath, ['-e', code], { encoding: 'utf8', env: { ...process.env, NODE_OPTIONS: '' } });
     expect(r.status, r.stderr).toBe(0);
     const mods = (JSON.parse(r.stdout) as string[]).map((f) => path.relative(ROOT, f).replace(/\\/g, '/')).sort();
     expect(mods).toEqual(['lib/clients/claude/hookInput.js', 'lib/clients/claude/index.js', 'lib/clients/index.js']);
@@ -69,7 +69,7 @@ describe('a hot track hook stays light', () => {
     const code =
       `require(require('node:path').join(${JSON.stringify(ROOT)}, 'lib/clients/index.js')).clientFor().entries.entry({});` +
       `process.stdout.write(JSON.stringify(Object.keys(require.cache)));`;
-    const r = spawnSync(process.execPath, ['-e', code], { encoding: 'utf8' });
+    const r = spawnSync(process.execPath, ['-e', code], { encoding: 'utf8', env: { ...process.env, NODE_OPTIONS: '' } });
     expect(r.status, r.stderr).toBe(0);
     const mods = (JSON.parse(r.stdout) as string[]).map((f) => path.relative(ROOT, f).replace(/\\/g, '/')).sort();
     expect(mods).toEqual(['lib/clients/claude/entries.js', 'lib/clients/claude/index.js', 'lib/clients/index.js']);
