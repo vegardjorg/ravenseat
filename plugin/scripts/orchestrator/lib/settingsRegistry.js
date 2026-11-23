@@ -1465,6 +1465,9 @@ const SETTINGS = Object.freeze([
       whyNot: 'The key is in the output Claude reads when it starts the board, and the board takes a script call as yours.',
       changes: 'The start line prints the link with the key, and a write with the key but no Origin is let through.',
     }),
+  // Friction: none. It never stops or slows work (show only reads the cache, the refresh runs detached, doctor waits
+  // at most 3 s) and costs zero tokens; agents, CI, hooks and --json never see the line. So on by default. The same in
+  // lite and full (both modes, no defaultByMode): a new user is the one who most needs to hear about a fix (roadmap 0u3).
   row('updates.check', 'board', 'onoff', 'Update check',
     'Ravenseat looks for a newer version on GitHub at most once a day (a plain GET that sends nothing about you): the ' +
     'board shows a banner, and ravenseat show and doctor one line. It never stops any work. The old name ' +

@@ -73,9 +73,9 @@ function project() {
     return { code: r.status, out: r.stdout ?? '', error: r.stderr ?? '' };
   };
   /** Async run, so the local server can answer while the command waits on it (doctor). */
-  const runAsync = (args: string[], extra: NodeJS.ProcessEnv = {}) =>
+  const runAsync = (args: string[], extra: NodeJS.ProcessEnv = {}, timeout = 0) =>
     new Promise<{ code: number; out: string }>((resolve) => {
-      execFile(process.execPath, [QUEUE, ...args], { encoding: 'utf8', env: { ...env, ...extra }, cwd: root }, (e, out) =>
+      execFile(process.execPath, [QUEUE, ...args], { encoding: 'utf8', env: { ...env, ...extra }, cwd: root, timeout }, (e, out) =>
         resolve({ code: e ? Number((e as { code?: number }).code ?? 1) : 0, out: String(out ?? '') }),
       );
     });
@@ -139,6 +139,64 @@ describe('ravenseat show', () => {
     p.writeCache({ checkedAt: Date.now(), latest: NEWER });
     expect(p.run(['next']).out).not.toContain('is out (you have');
     expect(p.run(['state']).out).not.toContain('is out (you have');
+  });
+
+  // The rule "show never waits on the network" proven from the outside: a --require preload wraps globalThis.fetch in
+  // every node process of the run and logs which command called it. show with an old cache must leave the fetch to
+  // the detached `update refresh` child; a show that fetched (awaited or not) logs itself and fails here. doctor with
+  // an old cache does fetch, so it is the positive control that the recorder works.
+  it('never calls fetch itself, also with an old cache (the detached refresh does)', async () => {
+    const p = project();
+    const log = path.join(p.data, 'fetch-calls.jsonl');
+    const preload = path.join(p.root, 'record-fetch.cjs');
+    fs.writeFileSync(
+      preload,
+      [
+        "const fs = require('node:fs');",
+        'const real = globalThis.fetch;',
+        'globalThis.fetch = function (...args) {',
+        '  fs.appendFileSync(process.env.RAVENSEAT_TEST_FETCH_LOG, JSON.stringify({ argv: process.argv.slice(2) }) + "\\n");',
+        '  return real.apply(this, args);',
+        '};',
+        '',
+      ].join('\n'),
+    );
+    const extra = {
+      NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --require "${preload.replace(/\\/g, '/')}"`.trim(),
+      RAVENSEAT_TEST_FETCH_LOG: log,
+    };
+    const calls = () =>
+      fs.existsSync(log)
+        ? fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l).argv as string[])
+        : [];
+    p.writeCache({ checkedAt: Date.now() - 25 * 3_600_000, latest: INSTALLED });
+    // Async, so the local server in this process can answer a show that fetched (a sync spawn would block it and hang
+    // such a show instead of failing it); the 20 s kill is a backstop that turns any hang into a failure too.
+    const r = await p.runAsync(['show'], extra, 20_000);
+    expect(r.code).toBe(0);
+    expect(calls().filter((argv) => argv[0] === 'show')).toEqual([]);
+    // The refresh was handed to the background (recorded before the child started), and that child is the one that
+    // fetched: wait until it has written the cache (it also leaves the temporary folder free for the cleanup).
+    expect(typeof p.readCache().refreshStartedAt).toBe('number');
+    const until = Date.now() + 15_000;
+    while (Date.now() < until && p.readCache().latest !== NEWER) await new Promise((ok) => setTimeout(ok, 100));
+    expect(p.readCache().latest).toBe(NEWER);
+    expect(calls().some((argv) => argv[0] === 'update' && argv[1] === 'refresh')).toBe(true);
+    // Positive control: doctor with an old cache checks directly, through the same recorder.
+    const q = project();
+    const doctor = await q.runAsync(['doctor'], extra);
+    expect(doctor.out).toContain(LINE);
+    expect(calls().some((argv) => argv[0] === 'doctor')).toBe(true);
+    expect(calls().filter((argv) => argv[0] === 'show')).toEqual([]);
+  }, 30_000);
+
+  // Lite mode (lib/settingsRegistry.js: modes both, no defaultByMode): the check is on in lite as in full. A new user is
+  // the one who most needs to hear about a fix, and the line never stops any work.
+  it('prints the line in lite mode as in full', () => {
+    const p = project();
+    fs.writeFileSync(p.configFile, JSON.stringify({ mode: 'lite' }));
+    p.writeCache({ checkedAt: Date.now(), latest: NEWER });
+    expect(p.run(['show']).out).toContain(LINE);
   });
 });
 

@@ -47,6 +47,18 @@ describe('updates.check and the old name board.updateCheck', () => {
     expect(notice({ env: { DISABLE_UPDATES: '1' } }).line).toBeNull();
     expect(notice({ env: { CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: 'true' } }).refresh).toBe(false);
   });
+  it('the registry row: Board, Advanced, on in lite and full alike; the old name is internal, not a row', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const R = require('../settingsRegistry.js');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const C = require('../queueConfig.js');
+    const r = R.rowFor('updates.check');
+    expect(r).toMatchObject({ category: 'board', level: 'advanced', type: 'onoff', defaultByMode: null });
+    expect(r.modes).toEqual(['lite', 'full']);
+    expect(C.STANDARD.updates.check).toBe(true);
+    expect(R.rowFor('board.updateCheck')).toBeNull();
+    expect(R.INTERNAL).toContain('board.updateCheck');
+  });
 });
 
 describe('cliNotice: the cache only, never the network', () => {
