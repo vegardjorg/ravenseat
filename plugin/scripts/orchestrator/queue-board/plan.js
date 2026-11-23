@@ -1934,5 +1934,18 @@
       s.ctx = ctx;
       openPicker({ fixed: [...steps] });
     },
+    /** T-B: the saved focus order (the steps, now and next), for the Timeline's step move. */
+    focusOrder: (ctx) => {
+      s.ctx = ctx;
+      return savedSteps();
+    },
+    /**
+     * T-B: the saved focus as POST /api/focus takes it, with only the order changed (the Timeline's step move). The
+     * same plan Save focus sends, so the rest, the date, the name and the pauses stay as they are.
+     */
+    planWithOrder: (ctx, order) => {
+      s.ctx = ctx;
+      return planForServer({ ...serverPlan(), steps: [...order] });
+    },
   };
 })();

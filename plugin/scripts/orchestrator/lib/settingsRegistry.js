@@ -231,6 +231,9 @@ const REQUIRES = Object.freeze({
   // board/timeline.js: with the Timeline tab off nothing is fetched or drawn, so its horizon and rows are not read.
   'board.timelineHorizonDays': ['board.timeline'],
   'board.timelineRows': ['board.timeline'],
+  // board/timeline.js (T-B): the drag lives on the Timeline, and the preview is a step of the drag.
+  'board.timelineDrag': ['board.timeline'],
+  'board.timelineDragPreview': ['board.timeline', 'board.timelineDrag'],
   // board/palette.js paletteOn: Ctrl+K opens the palette only while the shortcuts are on as well.
   'board.palette': ['board.shortcuts'],
   // cli/checks.mjs canaryFacts: with the canary off no transcript is read, so no shape is logged.
@@ -1411,6 +1414,20 @@ const SETTINGS = Object.freeze([
     'step: one row per focus step, in the focus order (what decides what runs first). project: one row per project. ' +
     'The ran and running part is always first. Each browser can switch on the tab itself; this is the default.',
     { choices: ['step', 'project'] }),
+  // Roadmap TIDSLINJE T-B. Friction: none for the work; a drag only changes order (rank in a step, the focus order for a
+  // step row) through the same guarded server paths as the cards and the Focus tab, and every save has Undo. It never
+  // sets a time (sideways and across steps are refused with the reason). On since order is the one thing the owner
+  // steers and the chart is where they see its effect; off leaves the Timeline read only.
+  row('board.timelineDrag', 'board', 'onoff', 'Timeline: drag to change the order',
+    'Drag a task bar up or down within its focus step, or a step row up or down, to change the order (Space, the arrows ' +
+    'and Enter do the same with the keyboard). Time is calculated, so sideways is refused. Off: the Timeline is read only.',
+    { fullWhy: 'the Timeline tab is off in lite' }),
+  // T-B. Friction: one more click per drop (Save). On since a drop can move a whole step's end by hours and the owner
+  // should see that in words before it is written; off saves at once, with Undo in the toast.
+  row('board.timelineDragPreview', 'board', 'onoff', 'Timeline: preview before a drop is saved',
+    'A drop first shows what it does to the plan in words (which step is done how much earlier or later, which task ' +
+    'starts first), then Save or Cancel. Off: the drop is saved at once, with Undo in the toast.',
+    { fullWhy: 'the Timeline tab is off in lite' }),
   // Roadmap 3e AW-2 (owner answers 21.11 as recommended). Friction: display only, it never stops or slows work; it takes
   // some height at the top of Decisions, hidden when nothing happened and closable for the visit. On by default since
   // it answers the first question after a pause. Not a guard.

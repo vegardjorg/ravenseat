@@ -36,6 +36,8 @@
     <script src="/boardSearch.js" defer></script>
     <!-- The Timeline tab's layout (lib/timelineLayout.js, T-A), before board/timeline.js. -->
     <script src="/timelineLayout.js" defer></script>
+    <!-- The Timeline's drop math for the drag (lib/timelineDrag.js, T-B), before board/timeline.js. -->
+    <script src="/timelineDrag.js" defer></script>
     <!-- The board itself: classic scripts in board/ that share one scope, in this order (start.js runs the board).
          Each must come after the scripts whose names it uses while it loads (see docs/board.md). -->
     <script src="/board/core.js" defer></script>
@@ -57,6 +59,7 @@
     <script src="/board/top.js" defer></script>
     <script src="/board/cloud.js" defer></script>
     <script src="/board/timeline.js" defer></script>
+    <script src="/board/timelinemove.js" defer></script>
     <script src="/board/route.js" defer></script>
     <script src="/board/keys.js" defer></script>
     <script src="/board/palette.js" defer></script>
@@ -393,6 +396,10 @@
         aria-labelledby="bulk-title"
         aria-describedby="bulk-explanation"
       ></div>
+    </div>
+    <!-- T-B: the preview before a Timeline drop is saved (board/timelinemove.js). -->
+    <div id="tl-drop-background" class="guard-background" hidden>
+      <div id="tl-drop" class="guard bulk" role="dialog" aria-modal="true" aria-labelledby="tl-drop-title"></div>
     </div>
     <!-- One stack for the message and "Undo" (the order is controlled by the toast queue in a11y.js). -->
     <div id="toaster" class="toaster">

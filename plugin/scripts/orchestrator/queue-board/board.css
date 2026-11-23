@@ -7551,6 +7551,103 @@ body.stale .summary.stuck::before {
   color: var(--color-on-surface-variant);
 }
 
+/* T-B: the drag for order (board/timelinemove.js). A bar or step row that can move, the one that is lifted (a thicker
+   outline, as well as the color, so color is never the only signal), the marked ones of a block, the drop line where
+   it would go, the tag that says the place or the refusal, and the preview dialog's plan sentence. */
+.tl-bar[data-movable] {
+  cursor: grab;
+}
+
+.tl-bar.lifted {
+  cursor: grabbing;
+}
+
+.tl-bar.lifted rect.tl-planned,
+.tl-bar.marked rect.tl-planned {
+  stroke: var(--color-on-surface);
+  stroke-width: 3;
+}
+
+.tl-bar.lifted rect.tl-planned {
+  fill: var(--color-tertiary-container);
+  stroke-dasharray: 4 2;
+}
+
+.tl-drop-line {
+  stroke: var(--color-tertiary);
+  stroke-width: 3;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+
+.tl-drag-tag {
+  pointer-events: none;
+}
+
+.tl-drag-tag rect {
+  fill: var(--color-surface-container-lowest);
+  stroke: var(--color-tertiary);
+  stroke-width: 1;
+}
+
+.tl-drag-tag text {
+  fill: var(--color-on-surface);
+  font-size: var(--text-xs);
+}
+
+.tl-drag-tag.refused rect {
+  fill: var(--color-error-container);
+  stroke: var(--color-error);
+}
+
+.tl-drag-tag.refused text {
+  fill: var(--color-on-error-container);
+}
+
+.tl-title.movable {
+  cursor: grab;
+}
+
+.tl-title.movable:focus-visible {
+  outline: var(--focus);
+  outline-offset: -2px;
+}
+
+.tl-title.lifted {
+  cursor: grabbing;
+  background: var(--color-tertiary-container);
+  outline: 2px dashed var(--color-tertiary);
+  outline-offset: -2px;
+}
+
+.tl-title.lifted .tl-title-text {
+  color: var(--color-on-tertiary-container);
+}
+
+.tl-move-cell {
+  white-space: nowrap;
+}
+
+.tl-move-cell .button + .button {
+  margin-inline-start: var(--distance-xs);
+}
+
+.tl-plan-sentence {
+  margin: var(--distance-sm) 0;
+  padding: var(--distance-sm) var(--distance-md);
+  border-inline-start: 3px solid var(--color-tertiary);
+  background: var(--color-surface-container-low);
+  color: var(--color-on-surface);
+  font-weight: 600;
+}
+
+.tl-drop-lines {
+  max-height: 12em;
+  overflow: auto;
+  font-size: var(--text-xs);
+  color: var(--color-on-surface-variant);
+}
+
 @media (max-width: 640px) {
   .board.timeline {
     padding: var(--distance-md);
@@ -7567,6 +7664,9 @@ body.stale .summary.stuck::before {
   .tl-track,
   .tl-ran-part {
     fill: CanvasText;
+  }
+  .tl-drop-line {
+    stroke: Highlight;
   }
 }
 

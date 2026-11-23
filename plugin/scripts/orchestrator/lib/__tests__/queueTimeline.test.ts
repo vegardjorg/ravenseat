@@ -27,7 +27,7 @@ describe('the settings', () => {
     expect(KK.STANDARD.board.timeline).toBe(true);
     expect(KK.STANDARD.board.timelineHorizonDays).toBe(3);
     expect(KK.STANDARD.board.timelineRows).toBe('step');
-    expect(KK.boardTimeline(resolved({}))).toEqual({ on: true, horizonDays: 3, rows: 'step' });
+    expect(KK.boardTimeline(resolved({}))).toEqual({ on: true, horizonDays: 3, rows: 'step', drag: true, dragPreview: true });
   });
   it('lite turns the tab off unless the file sets it', () => {
     expect(KK.boardTimeline(resolved({ mode: 'lite' })).on).toBe(false);
@@ -39,7 +39,7 @@ describe('the settings', () => {
     expect(KK.boardTimeline(resolved({ board: { timelineHorizonDays: 'x' } })).horizonDays).toBe(3);
     expect(KK.boardTimeline(resolved({ board: { timelineRows: 'project' } })).rows).toBe('project');
     expect(KK.boardTimeline(resolved({ board: { timelineRows: 'area' } })).rows).toBe('step');
-    expect(KK.boardTimeline(null)).toEqual({ on: true, horizonDays: 3, rows: 'step' });
+    expect(KK.boardTimeline(null)).toEqual({ on: true, horizonDays: 3, rows: 'step', drag: true, dragPreview: true });
   });
   it('each has a registry row in Board that weakens nothing', () => {
     const tab = R.rowFor('board.timeline');
