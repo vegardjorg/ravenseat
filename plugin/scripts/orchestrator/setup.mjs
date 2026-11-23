@@ -518,6 +518,17 @@ export function mergeSettings(target, o = {}) {
         changes.push(`hook ${event}: ${added.map(hookKey).join(', ')}`);
       }
     }
+    // C2 (lib/hookFailure.js, guards.onHookFailure): the push and write guard's onFailure follows the project's setting,
+    // also on an older install whose guard hooks have none. A config that does not read gives the default (block).
+    const HF = require('./lib/hookFailure.js');
+    let setting = HF.DEFAULT;
+    try {
+      setting = HF.settingOf(require('./lib/queueConfig.js').config({ root: target }));
+    } catch {
+      // error-ignored: an unreadable queue.config.json keeps the safe default; doctor names the config itself
+    }
+    const failing = HF.applyOnFailure(existing.hooks, setting);
+    if (failing.length) changes.push(`hook onFailure ${HF.onFailureFor(setting)}: ${failing.join(', ')}`);
   }
   const touched = (o.keys && wanted.length) || changes.some((c) => c.startsWith('hook'));
   if (touched && !o.dry) {

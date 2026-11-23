@@ -908,6 +908,22 @@ const SETTINGS = Object.freeze([
       whyNot: 'Off leaves no trace when an agent prints a .env file or the environment into its transcript.',
       changes: 'Agents can print secrets into their transcripts and nothing is logged.',
     }),
+  // Friction: low. It stops work only when the push or write guard itself is broken (node missing, a crash before its
+  // own catch, the 10 s timeout): Bash, PowerShell, Monitor, Write, Edit and NotebookEdit are then refused until it is
+  // fixed. Default block by owner exception to "can stop work = off" (23.11, C2): since Claude Code v2.1.329 a call
+  // from Code Mode runs after a hook failure, and a guard that fails open guards nothing (lib/hookFailure.js).
+  row('guards.onHookFailure', 'guards', 'choice', 'When a guard itself fails',
+    'What Claude Code does when the push guard or the write guard process fails (cannot start, crashes, times out, ' +
+    'prints invalid output): block refuses the call ("onFailure": "block" on those two hooks), allow lets it run. ' +
+    'The guards\' own decisions are unchanged. A vendored install gets the value from setup; the plugin\'s ' +
+    'hooks/hooks.json always blocks. The read guard and the measurement hooks never block on failure.', {
+      level: 'advanced',
+      choices: ['block', 'allow'],
+      weakens: rankWeakens(['block', 'allow']),
+      protects: 'A push or protected write getting through when the guard itself fails.',
+      whyNot: 'With allow, a guard that crashes or does not start lets every push and protected write through unchecked.',
+      changes: 'A call the push or write guard could not check runs anyway. Doctor will report it.',
+    }),
   // Friction: a false hit replaces harmless text with [REDACTED:env-value] in a stored log; values under 6 characters
   // and plain ones (true, localhost, numbers) are skipped to keep that rare. It stops nothing, so it is on (SP-1).
   row('redact.envValues', 'guards', 'onoff', 'Redact the project\'s own .env values',

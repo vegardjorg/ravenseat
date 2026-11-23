@@ -5,7 +5,9 @@
 //   node        the Node version (>= 20, package.json engines), and that `node` is found on PATH the way the hooks
 //               start it (exec form: command "node" spawned without a shell)
 //   hooks       the hooks file (plugin: <plugin>/hooks/hooks.json, vendored: .claude/settings.json) parses, lists every
-//               queue hook under its events (queueBoard.hooksCoverage) and every hook script it names exists
+//               queue hook under its events (queueBoard.hooksCoverage) and every hook script it names exists; the push
+//               and write guard's onFailure against guards.onHookFailure (lib/hookFailure.js: WARN on a mismatch, INFO
+//               for allow in a plugin install, whose hooks.json always blocks)
 //   config      queue.config.json parses, has no unknown keys (WARN) and no value of the wrong type (FAIL)
 //   issues      only when issues.labelMap is set and wrong: one WARN with the expected shape (never FAIL)
 //   queue       queue.json (and plans.json, follow.json when they exist) parse
@@ -243,6 +245,10 @@ function checkHooks() {
       ),
     );
   if (!out.length) out.push(ok('hooks', `${BOARD.QUEUE_HOOKS.length} queue hooks listed in ${file}, all scripts exist`));
+  // C2 (lib/hookFailure.js): the push and write guard's onFailure against guards.onHookFailure; no row when they match.
+  const HF = require('./lib/hookFailure.js');
+  const fl = HF.doctorLine({ hooks: settings.hooks, setting: HF.settingOf(CONFIG), mode: src.mode === 'plugin' ? 'plugin' : 'vendored' });
+  if (fl) out.push((fl.status === 'WARN' ? warn : info)('hooks', fl.message, fl.fix));
   return out;
 }
 

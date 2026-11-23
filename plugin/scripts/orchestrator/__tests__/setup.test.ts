@@ -63,6 +63,42 @@ describe('setup.mjs mergeSettings', () => {
     }
   });
 
+  // C2 (guards.onHookFailure, lib/hookFailure.js): the vendored install writes the push and write guard's onFailure from
+  // the project's setting, on a new install and on an older one whose guard hooks have none. Never the read guard.
+  it.each([
+    [undefined, 'block'],
+    ['block', 'block'],
+    ['allow', 'continue'],
+  ])('guards.onHookFailure %s writes onFailure "%s" on the two guards', (setting, want) => {
+    if (setting) writeFileSync(join(target, 'queue.config.json'), JSON.stringify({ guards: { onHookFailure: setting } }));
+    mkdirSync(join(target, '.claude'));
+    const file = join(target, '.claude', 'settings.json');
+    // An older install: the push guard is there without onFailure.
+    writeFileSync(
+      file,
+      JSON.stringify({
+        hooks: {
+          PreToolUse: [
+            { matcher: 'Bash|PowerShell|Monitor', hooks: [{ type: 'command', command: 'node', args: ['${CLAUDE_PROJECT_DIR}/scripts/orchestrator/hook-push-guard.mjs'], timeout: 10 }] },
+          ],
+        },
+      }),
+    );
+    const notes = mergeSettings(target, { hooks: true }).join('\n');
+    expect(notes).toContain(`onFailure ${want}: hook-push-guard.mjs`);
+    const after: Settings = JSON.parse(readFileSync(file, 'utf8'));
+    const by: Record<string, unknown> = {};
+    for (const g of after.hooks.PreToolUse)
+      for (const h of g.hooks) by[/(hook-[\w-]+\.mjs)/.exec(line(h))?.[1] ?? line(h)] = (h as Hook & { onFailure?: string }).onFailure;
+    expect(by['hook-push-guard.mjs']).toBe(want);
+    expect(by['hook-write-guard.mjs']).toBe(want);
+    expect(by['hook-read-guard.mjs']).toBeUndefined();
+    // A second run changes nothing.
+    const before = readFileSync(file, 'utf8');
+    expect(mergeSettings(target, { hooks: true }).join('\n')).not.toContain('onFailure');
+    expect(readFileSync(file, 'utf8')).toBe(before);
+  });
+
   it('shell-form queue hooks of an older install are rewritten to exec form, never added twice', () => {
     mkdirSync(join(target, '.claude'));
     const file = join(target, '.claude', 'settings.json');

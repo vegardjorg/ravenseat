@@ -288,7 +288,11 @@ const STANDARD = Object.freeze({
   // head/tail/less of .env* or *.pem/*.key, printenv, env or set with no arguments, Get-ChildItem env:. "log" = allowed,
   // one row in the time log (rule only, never the command), shown on the Checks tab. "block" = denied, with the hint to
   // reference the variable instead. "off" = nothing. Block is not the default because it can stop work.
-  guards: { secretReads: 'log' },
+  // onHookFailure (lib/hookFailure.js, C2): "block" = Claude Code refuses the call when the push or write guard process
+  // itself fails (onFailure "block" on those two hooks); "allow" = the call runs ("continue"). Block is the default by
+  // owner exception (23.11): since v2.1.329 a call from Code Mode runs after a hook failure, so a broken guard would
+  // guard nothing. Setup writes it into a vendored install; the plugin's hooks.json always blocks.
+  guards: { secretReads: 'log', onHookFailure: 'block' },
   // The values of the project's own .env files (main tree; never .env.example and the like) removed as literals from
   // everything Ravenseat stores from transcripts and commands (lib/secretLiterals.js, SP-1): held in memory only. It
   // only removes text, stops nothing, so it is on. false = the pattern redaction alone (a weakened setting).
