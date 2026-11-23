@@ -262,7 +262,8 @@ function timelineChart(d, rows, horizon) {
         openPanel(b.id);
       },
     });
-    g.append(svgEl('title', { text: b.label }));
+    // tbx: the tooltip also says how the bar moves, or why it cannot (ran, running, projects as rows).
+    g.append(svgEl('title', { text: tlBarTitle(b) }));
     const rect = (cls, x0, x1, yy = y, hh = b.h) =>
       svgEl('rect', { class: cls, x: x0, y: yy, width: Math.max(2, x1 - x0), height: hh, rx: 3 });
     if (b.kind === 'ran') {

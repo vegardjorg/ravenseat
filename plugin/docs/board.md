@@ -696,7 +696,10 @@ full only.
 Drag a planned bar up or down within its focus step to give it a new place (`ravenseat rank`), or a step row up or
 down to change the focus order. With the keyboard: Space lifts, the arrows move, Enter drops, Escape cancels; the
 table has **Move up** and **Move down**. Time is calculated, so a sideways drag, or a task dragged into another
-step, is refused with the reason. Marked tasks (Ctrl-click) in one step move as a block. A drop first shows the dry
+step, is refused with the reason. While you drag with the mouse, a ghost of the bar follows the pointer, the step row
+it lands in is lit with a thick mark at its new place and a tag such as "Place 2 of 3, below UI-4"; a refusal lights
+the row in red. Escape, or leaving the window, cancels the drag. Hover a bar to see whether it moves: one that ran or
+is running says why it cannot. Marked tasks (Ctrl-click) in one step move as a block. A drop first shows the dry
 run and what it does to the plan in words, then **Save order** or **Cancel**; every save has **Undo**.
 `board.timelineDrag` (`true`) and `board.timelineDragPreview` (`true`; off saves at once with Undo), full only.
 

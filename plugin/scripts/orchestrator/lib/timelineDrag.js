@@ -187,7 +187,35 @@
     return { x: at.x, y: avoid.y1 + TAG.pad };
   }
 
+  /**
+   * tbx: how far the lifted bar's ghost moves with the pointer: dy, held so the bar stays inside its step row (2 pixels
+   * in from each edge). It never leaves the row, since a task never leaves its step. All in the rows' coordinates.
+   * @param {{ dy: number, top: number, bottom: number, barTop: number, barBottom: number }} p
+   */
+  function ghostShift({ dy, top, bottom, barTop, barBottom }) {
+    const up = top + 2 - barTop;
+    const down = bottom - 2 - barBottom;
+    if (down < up) return 0;
+    return Math.max(up, Math.min(down, dy));
+  }
+
+  /**
+   * tbx: the hover words added to a bar's tooltip, so a bar says whether and how it moves instead of only looking
+   * draggable or not. null: nothing to add (the drag is off, or the bar is neither movable nor a known kind).
+   * @param {{ kind: string, movable: boolean, drag: boolean, by: string }} p
+   */
+  function barHint({ kind, movable, drag, by }) {
+    if (!drag) return null;
+    if (movable) return 'Drag up or down to change its place in the step.';
+    if (kind === 'ran') return 'Cannot move: it already ran.';
+    if (kind === 'running') return 'Cannot move: it is running now.';
+    if (kind === 'planned' && by !== 'step') return 'Cannot move here: show the rows as Focus steps to change the order.';
+    return null;
+  }
+
   return {
+    ghostShift,
+    barHint,
     TAG,
     tagSpot,
     DRAG,
