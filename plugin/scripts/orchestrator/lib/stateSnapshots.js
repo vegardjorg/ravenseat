@@ -21,6 +21,7 @@
 // =============================================================
 
 const nodeFs = require('node:fs');
+const { renameWithRetry } = require('./stateFile.js');
 const path = require('node:path');
 
 const DEFAULT_TIERS = ['1h', '5h', '1d', '2d', '7d'];
@@ -98,7 +99,7 @@ function roll(file, tiers, o = {}) {
       const ya = age(younger);
       if (ya == null || ya < tiers[i - 1].ms) continue;
       ensureFolder();
-      f.renameSync(younger, copyPath(file, tiers[i].name));
+      renameWithRetry(younger, copyPath(file, tiers[i].name), { fs: f });
       changed.push(tiers[i].name);
     }
     if (due(0)) {
@@ -108,7 +109,7 @@ function roll(file, tiers, o = {}) {
       const target = copyPath(file, tiers[0].name);
       const tmp = `${target}.${process.pid}.tmp`;
       f.writeFileSync(tmp, text);
-      f.renameSync(tmp, target);
+      renameWithRetry(tmp, target, { fs: f });
       changed.push(tiers[0].name);
     }
   } catch {

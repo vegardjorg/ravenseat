@@ -23,6 +23,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const { renameWithRetry } = require('./stateFile.js');
 const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
@@ -123,7 +124,7 @@ function writeJson(file, value) {
   const tmp = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(value));
   try {
-    fs.renameSync(tmp, file);
+    renameWithRetry(tmp, file);
   } catch {
     fs.writeFileSync(file, JSON.stringify(value)); // Windows: a reader holding the file blocks the rename
     fs.rmSync(tmp, { force: true });

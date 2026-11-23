@@ -49,6 +49,9 @@ on Windows, two processes renaming the same file to different names can both suc
 over the old one. Before that, `keepPrevious` copies the current file to `queue.json.prev`, but only when it parses, so a
 broken file never overwrites the last good copy. On Windows a rename over a file someone has open can fail for a moment
 with `EPERM`, `EBUSY` or `EACCES`; `renameWithRetry` retries those with a growing wait and throws anything else.
+Every other atomic write in the plugin (caches, ledgers, cursors, hook state) renames through `renameWithRetry` too;
+`lib/__tests__/renameGuard.test.ts` fails on a new raw `renameSync`. Only the stale-lock takeovers in `lib/mergeLock.js`
+and `lib/gateQueue.js` rename once on purpose: the rename aside is the atomic claim, and a retry would widen the race.
 
 **Corrupt state.** When `queue.json` does not parse, `read()` in `cli/context.mjs` stops the command with the parse error
 and, when `queue.json.prev` parses, the way to restore it (`recoveryHint`). The queue never restores the copy by itself:

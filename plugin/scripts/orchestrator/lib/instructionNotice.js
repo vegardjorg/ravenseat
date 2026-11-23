@@ -51,7 +51,9 @@ function writeCache(file, data) {
   try {
     const tmp = `${file}.${process.pid}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(data));
-    fs.renameSync(tmp, file);
+    // Loaded here, not at the top: the read path runs on every prompt and stays free of our other modules
+    // (lib/__tests__/hookWeight.test.ts); only a changed instruction set writes the cache.
+    require('./stateFile.js').renameWithRetry(tmp, file);
   } catch {
     // error-ignored: the cache only saves work; without it the next prompt measures again
   }

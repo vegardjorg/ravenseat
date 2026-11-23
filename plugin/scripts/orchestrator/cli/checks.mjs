@@ -403,7 +403,7 @@ function saveReport(report) {
   const file = path.join(KK.dataFolder(), REPORT_FILE);
   const tmp = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, `${JSON.stringify(report, null, 2)}\n`);
-  fs.renameSync(tmp, file);
+  require('./lib/stateFile.js').renameWithRetry(tmp, file);
 }
 
 const WHERE = { ci: 'CI', gate: 'gate', script: 'script', hook: 'git hook', config: 'config' };

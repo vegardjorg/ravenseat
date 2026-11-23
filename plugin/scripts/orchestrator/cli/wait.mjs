@@ -137,7 +137,7 @@ export function cmdWait() {
     try {
       const tmp = `${HEARTBEAT}.${process.pid}.tmp`;
       fs.writeFileSync(tmp, JSON.stringify({ pid: process.pid, startedAt, beatAt: new Date().toISOString() }) + '\n');
-      fs.renameSync(tmp, HEARTBEAT);
+      require('./lib/stateFile.js').renameWithRetry(tmp, HEARTBEAT);
     } catch {
       /* the board then says the answers are picked up later; waiting goes on */
     }

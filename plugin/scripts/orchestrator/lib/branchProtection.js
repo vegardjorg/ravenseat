@@ -25,6 +25,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const { renameWithRetry } = require('./stateFile.js');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
@@ -120,7 +121,7 @@ function current({ folder, remoteUrl, branch, now = Date.now(), gh = null, timeo
       const file = path.join(folder, CACHE_FILE);
       const tmp = `${file}.${process.pid}.tmp`;
       fs.writeFileSync(tmp, `${JSON.stringify({ state, remote: remoteUrl, branch, checkedAt: new Date(now).toISOString() }, null, 2)}\n`);
-      fs.renameSync(tmp, file);
+      renameWithRetry(tmp, file);
     } catch {
       // error-ignored: the answer is still used, it is asked again next time
     }

@@ -25,6 +25,7 @@
 // =============================================================
 
 const fs = require('node:fs');
+const { renameWithRetry } = require('./stateFile.js');
 const os = require('node:os');
 const path = require('node:path');
 
@@ -250,7 +251,7 @@ function writeState(folder, state) {
   try {
     fs.mkdirSync(folder, { recursive: true });
     fs.writeFileSync(tmp, `${JSON.stringify({ ...state, updated: new Date().toISOString() }, null, 2)}\n`);
-    fs.renameSync(tmp, file);
+    renameWithRetry(tmp, file);
     return true;
   } catch {
     try {

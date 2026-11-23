@@ -69,7 +69,7 @@ function writeAtomic(file, text) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, text);
-  fs.renameSync(tmp, file);
+  require('./lib/stateFile.js').renameWithRetry(tmp, file);
 }
 
 const readState = () => readJson(STATE_FILE);

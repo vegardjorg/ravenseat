@@ -190,7 +190,7 @@ export function cmdInstructions() {
     const target = path.join(KK.dataFolder(), PLAN_FILE);
     const tmp = `${target}.${process.pid}.tmp`;
     fs.writeFileSync(tmp, planText(p, target));
-    fs.renameSync(tmp, target);
+    require('./lib/stateFile.js').renameWithRetry(tmp, target);
     console.log(`Plan saved: ${target} (in the queue's data folder, ignored by git). Your instruction files were not changed.`);
     console.log('Read it, change it as you like, and give its last section to Claude in your own session.');
     return;

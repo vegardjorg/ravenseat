@@ -30,6 +30,7 @@
 // =============================================================
 
 const fs = require('node:fs');
+const { renameWithRetry } = require('./stateFile.js');
 const path = require('node:path');
 
 /**
@@ -256,7 +257,7 @@ function cachedCompactions(cacheFile, transcriptPath, o = {}) {
     try {
       const tmp = `${cacheFile}.${process.pid}.tmp`;
       f.writeFileSync(tmp, JSON.stringify(Object.fromEntries(keep)) + '\n');
-      f.renameSync(tmp, cacheFile);
+      renameWithRetry(tmp, cacheFile, { fs: f });
     } catch {
       // error-ignored: without the cache the next call counts from the start (slower, same result)
     }

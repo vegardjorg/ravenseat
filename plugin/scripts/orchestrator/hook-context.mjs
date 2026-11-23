@@ -134,7 +134,7 @@ function writeCursor(m) {
   try {
     const tmp = `${CURSOR}.${process.pid}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(m, null, 2) + '\n');
-    fs.renameSync(tmp, CURSOR);
+    require('./lib/stateFile.js').renameWithRetry(tmp, CURSOR);
   } catch {
     // error-ignored: the hook must never block a message; the wind-down is set on the next message
   }
@@ -236,7 +236,7 @@ function costGuard(now) {
       JSON.stringify({ last_measured: new Date(now).toISOString(), notified: v.notified }, null, 2) +
         '\n',
     );
-    fs.renameSync(tmp, COST_GUARD_FILE);
+    require('./lib/stateFile.js').renameWithRetry(tmp, COST_GUARD_FILE);
   } catch {
     // error-ignored: without saved state it is measured again on the next message
   }

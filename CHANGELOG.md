@@ -149,6 +149,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 ### Hardened
 - **Gate, done and base runs register themselves while they run and carry `RAVENSEAT_TRACK`, and can run at below normal priority.** `processGuard.register` on, `processGuard.lowerPriority` off.
 - **The key scan's hash is salted per data folder, so a short password cannot be guessed back from `secret-scan.json`, and a false alarm stays set aside by that hash.**
+- **Every atomic write retries a rename Windows refuses for a moment, not only queue.json.** A guard test keeps new raw renames out.
 - **A push or write guard that crashes, does not start or times out now refuses the call instead of letting it through, also from Code Mode.** `guards.onHookFailure` `block`.
 - **The shell reader treats a backslash-escaped space as part of the word, so `C:/Program\ Files/GitHub\ CLI/gh.exe` is checked as `gh`.**
 - **Queue agents may only read with the GitHub CLI: `gh api`, `gh auth`, `gh gist` and every write are denied (rule `gh-cli`).**

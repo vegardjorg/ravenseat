@@ -14,6 +14,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const { renameWithRetry } = require('./stateFile.js');
 const { spawn, spawnSync } = require('node:child_process');
 
 const argv = process.argv.slice(2);
@@ -26,7 +27,7 @@ function writeDone(value) {
   const tmp = `${doneFile}.${process.pid}.tmp`;
   try {
     fs.writeFileSync(tmp, JSON.stringify({ ...value, endedAt: new Date().toISOString() }));
-    fs.renameSync(tmp, doneFile);
+    renameWithRetry(tmp, doneFile);
   } catch {
     try {
       fs.writeFileSync(doneFile, JSON.stringify({ ...value, endedAt: new Date().toISOString() }));
