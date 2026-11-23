@@ -771,9 +771,6 @@ const STANDARD = Object.freeze({
   // staleMin: a holder touches its slot every 30 s; a slot whose heartbeat stopped this many minutes ago is taken over
   // (0 = no heartbeat, the old 3 h rule). A 6 h ceiling always holds (roadmap 0s V11).
   gateQueue: { enabled: true, slots: 1, heavyAfterSec: 120, agingMin: 10, staleMin: 5 },
-  // A track agent's heavy command (npm test, vitest, playwright, redteam) outside `ravenseat heavy --` (lib/heavyCommand.js,
-  // roadmap 0s V10): warn adds a note, deny stops it with the wrapped command, off says nothing. Tracks only.
-  processGuard: { heavyQueue: 'warn' },
   // A temp folder of its own for each gate run, removed afterwards (lib/gateTemp.js): what a project's tests leave goes with
   // it. enabled false gives the gate commands the normal temp folder.
   gateTemp: { enabled: true },
@@ -783,7 +780,9 @@ const STANDARD = Object.freeze({
   // autoKill: doctor and the pulse check also end those (only after confirming each is a Ravenseat guard); off, since it
   // can stop work. lowerPriority: the guard of a gate, done or base run lowers it to BELOW_NORMAL (never IDLE); off,
   // since a lowered run starves when other work fills every core and then runs out of its time budget.
-  processGuard: { register: true, sweep: true, autoKill: false, lowerPriority: false },
+  // heavyQueue: a track agent's heavy command (npm test, vitest, playwright, redteam) outside `ravenseat heavy --`
+  // (lib/heavyCommand.js, V10): warn adds a note, deny stops it with the wrapped command, off says nothing. Tracks only.
+  processGuard: { register: true, sweep: true, autoKill: false, lowerPriority: false, heavyQueue: 'warn' },
   // overtimeFactor: a running track over this many times its estimate gets a doctor WARN and a Checks card, never a
   // stop (roadmap 0s V4, 2 by owner decision 16.11). 0 = off.
   tracks: { overtimeFactor: 2 },
