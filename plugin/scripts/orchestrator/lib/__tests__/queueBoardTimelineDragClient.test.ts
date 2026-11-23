@@ -182,7 +182,17 @@ describe('a planned bar with the keyboard', () => {
     const d = dialog()!;
     expect((d.closest('.guard-background') as HTMLElement).hidden).toBe(false);
     expect(d.querySelector('.tl-plan-sentence')?.textContent).toBe(SENTENCE);
-    expect(d.textContent).toContain('priority_bonus');
+    // T-C 0a: the plan sentence comes first (right after the title), then the move in words; the raw field lines
+    // ("A-2 priority_bonus: ...") are only behind a closed Details.
+    expect(d.querySelector('h2 + p')?.className).toBe('tl-plan-sentence');
+    expect(d.querySelector('.tl-plan-sentence + p')?.textContent).toBe('A-2: place 1 of 2 in step 1 (Alpha), right above A-1.');
+    const details = d.querySelector('details.tl-drop-details') as HTMLDetailsElement;
+    expect(details).toBeTruthy();
+    expect(details.open).toBe(false);
+    expect(details.querySelector('summary')?.textContent).toBe('Details');
+    expect(details.textContent).toContain('priority_bonus');
+    const outside = [...d.children].filter((c) => c !== details).map((c) => c.textContent).join(' ');
+    expect(outside).not.toContain('priority_bonus');
     // A part the dry run does not have (the focus line for a rank) is left out, never written as "null".
     expect(d.textContent).not.toContain('null');
     button(d, 'Save order').click();

@@ -71,11 +71,11 @@ function spread(xs, minSample) {
 }
 
 /**
- * The measured ratio actual cycle time / estimateWall per class and per class + size bucket ("K/S"), from the done tasks
- * in the calibration window (costEstimate.samples: the same window and size buckets as the cost estimate).
- * @returns {{ windowDays: number, minSample: number, classes: Record<string, object>, buckets: Record<string, object> }}
+ * The measured ratios themselves (actual cycle time / estimateWall), as lists per class and per class + size bucket
+ * ("K/S"). ratioModel sums them up; lib/scheduleUncertainty.js draws from them (T-C), so both read the same samples.
+ * @returns {{ perClass: Map<string, number[]>, perBucket: Map<string, number[]> }}
  */
-function ratioModel(queue, { now = Date.now(), windowDays = CE.WINDOW_DAYS, minSample = CE.MIN_SAMPLE } = {}) {
+function ratioSamples(queue, { now = Date.now(), windowDays = CE.WINDOW_DAYS } = {}) {
   const byId = new Map((queue?.tasks ?? []).map((o) => [o.id, o]));
   const perClass = new Map();
   const perBucket = new Map();
@@ -89,6 +89,16 @@ function ratioModel(queue, { now = Date.now(), windowDays = CE.WINDOW_DAYS, minS
     if (!perBucket.has(key)) perBucket.set(key, []);
     perBucket.get(key).push(r);
   }
+  return { perClass, perBucket };
+}
+
+/**
+ * The measured ratio actual cycle time / estimateWall per class and per class + size bucket ("K/S"), from the done tasks
+ * in the calibration window (costEstimate.samples: the same window and size buckets as the cost estimate).
+ * @returns {{ windowDays: number, minSample: number, classes: Record<string, object>, buckets: Record<string, object> }}
+ */
+function ratioModel(queue, { now = Date.now(), windowDays = CE.WINDOW_DAYS, minSample = CE.MIN_SAMPLE } = {}) {
+  const { perClass, perBucket } = ratioSamples(queue, { now, windowDays });
   const classes = {};
   for (const [k, xs] of perClass) classes[k] = spread(xs, minSample);
   const buckets = {};
@@ -157,7 +167,9 @@ const iso = (ms) => new Date(ms).toISOString();
  * @param {object} queue the queue (queue.json); not changed
  * @param {{ now?: number, tz?: string, quotaSlots?: number|null, loadSlots?: number|null, model?: object }} [option]
  *   tz: the time zone of the night window (the machine's by default); quotaSlots: quotaSlotsFrom; loadSlots: the
- *   load-aware slot count (loadSlotsFor(...).slots when active); model: ratioModel (computed from the queue by default)
+ *   load-aware slot count (loadSlotsFor(...).slots when active); model: ratioModel (computed from the queue by default);
+ *   minutesOf(o, d, elapsedMin): the whole length in minutes of one task (d = durationFor), for one run of the
+ *   uncertainty band (lib/scheduleUncertainty.js draws it); d.minutes, the median, by default
  * @returns {object} see the test for the shape: now, rough, slots, answer, tasks, unscheduled, proposed, steps, end,
  *   night, precision
  */
@@ -165,6 +177,7 @@ function schedule(queue, option = {}) {
   const now = option.now ?? Date.now();
   const tz = option.tz ?? L.NIGHT_TZ;
   const model = option.model ?? ratioModel(queue, { now });
+  const lengthOf = typeof option.minutesOf === 'function' ? option.minutesOf : (_o, d) => d.minutes;
   const q = JSON.parse(JSON.stringify(queue ?? {}));
   q.tasks = Array.isArray(q.tasks) ? q.tasks : [];
   q.resolved = Array.isArray(q.resolved) ? q.resolved : [];
@@ -206,7 +219,7 @@ function schedule(queue, option = {}) {
     const d = durationFor(o, model);
     const started = Date.parse(o.started ?? o.picked_at ?? '');
     const elapsed = Number.isFinite(started) ? Math.max(0, (now - started) / MIN) : 0;
-    const remaining = Math.max(0, Math.round(d.minutes - elapsed));
+    const remaining = Math.max(0, Math.round(lengthOf(o, d, elapsed) - elapsed));
     const end = now + remaining * MIN;
     finishes.set(o.id, end);
     rows.set(o.id, {
@@ -265,7 +278,7 @@ function schedule(queue, option = {}) {
         const d = durationFor(o, model);
         o.status = 'running';
         o.started = iso(t);
-        const end = t + d.minutes * MIN;
+        const end = t + lengthOf(o, d, 0) * MIN;
         finishes.set(o.id, end);
         rows.set(o.id, {
           ...base({ ...o, status: 'waiting' }),
@@ -370,7 +383,12 @@ function aroundText(ms, tz) {
  * The schedule as text lines for `ravenseat schedule`: the steps with the expected end, the next `next` tasks relative to
  * now (never a clock time per task), what cannot start, and the precision line.
  */
-function scheduleLines(s, { tz = L.NIGHT_TZ, next = 5 } = {}) {
+function scheduleLines(s, { tz = L.NIGHT_TZ, next = 5, band = null, backtest = null } = {}) {
+  // T-C: the band per step (lib/scheduleUncertainty.js uncertainty) adds "likely by" (its P85) to the step's line.
+  const bandFor = (st) =>
+    band?.enough
+      ? ((band.steps ?? []).find((b) => (st.step != null ? b.step === st.step : b.step == null && b.title === st.title)) ?? null)
+      : null;
   const now = Date.parse(s.now);
   const inText = (ms) => (ms - now < 5 * MIN ? 'now' : `in about ${roughDuration((ms - now) / MIN)}`);
   const sl = s.slots;
@@ -387,7 +405,9 @@ function scheduleLines(s, { tz = L.NIGHT_TZ, next = 5 } = {}) {
     const notIn = st.unscheduled ? `, ${st.unscheduled} cannot start` : '';
     if (st.p50_end == null) return `${label}: ${n}${notIn}, no expected end`;
     const end = Date.parse(st.p50_end);
-    return `${label}: ${n}${notIn}, expected done ${inText(end)} (${aroundText(end, tz)})`;
+    const b = bandFor(st);
+    const likely = b ? `, likely by ${aroundText(Date.parse(b.p85_end), tz)} (P85)` : '';
+    return `${label}: ${n}${notIn}, expected done ${inText(end)} (${aroundText(end, tz)})${likely}`;
   };
   if (s.steps.length === 1 && s.steps[0].stage == null && s.steps[0].title === 'the whole queue') {
     out.push(stepLine(s.steps[0], 'The whole queue'));
@@ -428,6 +448,9 @@ function scheduleLines(s, { tz = L.NIGHT_TZ, next = 5 } = {}) {
   if (s.answer.basis === 'default')
     out.push(`Owner questions: an answer is assumed after ${roughDuration(s.answer.minutes)} (fewer than 5 measured answers).`);
   out.push(s.precision);
+  if (band && !band.enough && band.reason) out.push(band.reason);
+  if (band?.agree?.text) out.push(band.agree.text);
+  if (backtest?.text) out.push(backtest.text);
   return out;
 }
 
@@ -435,6 +458,7 @@ module.exports = {
   DEFAULT_ANSWER_MIN,
   BAND,
   quantile,
+  ratioSamples,
   ratioModel,
   roughDuration,
   durationFor,

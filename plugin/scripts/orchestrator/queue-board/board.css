@@ -7361,6 +7361,30 @@ body.stale .summary.stuck::before {
   fill: var(--color-tertiary);
 }
 
+/* T-C: a focus step's band from P50 to P85, shaded behind its bars, with a dashed edge so it is not color alone. */
+.tl-step-band {
+  fill: var(--color-tertiary-container);
+  fill-opacity: 0.55;
+  stroke: var(--color-tertiary);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+}
+
+.tl-legend-mark .tl-step-band {
+  fill-opacity: 1;
+}
+
+/* T-C 0a: the raw field changes of a Timeline drop, behind a closed Details. */
+.tl-drop-details summary {
+  cursor: pointer;
+  font-size: var(--text-xs);
+  color: var(--color-on-surface-variant);
+}
+
+.tl-step-table {
+  margin-bottom: var(--distance-md);
+}
+
 .tl-bar {
   cursor: pointer;
 }
@@ -7667,6 +7691,9 @@ body.stale .summary.stuck::before {
   }
   .tl-drop-line {
     stroke: Highlight;
+  }
+  .tl-step-band {
+    stroke: CanvasText;
   }
 }
 

@@ -7,6 +7,8 @@
 //     ran part left of the now line,
 //   - projects / projectTitles / titles: the project of each task (queueLogic.projectFor with the register) and the
 //     register's titles, for the rows per project and the table.
+//   - uncertainty / backtest (T-C, board.timelineUncertainty): lib/scheduleUncertainty.js's P50 to P85 band per focus
+//     step and its backtest line; null when the setting is off. The server may pass cached ones in.
 // cacheKey: the board server keeps one payload per key (the queue's bytes, the settings and the minute), so a poll does
 // not play the queue again while nothing changed; the minute keeps the running tasks' remaining time fresh.
 //
@@ -17,6 +19,7 @@
 
 const L = require('./queueLogic.js');
 const SC = require('./queueSchedule.js');
+const UN = require('./scheduleUncertainty.js');
 
 /** How far back the ran part reaches: a day. */
 const RAN_WINDOW = 24 * 3_600_000;
@@ -29,7 +32,9 @@ const ms = (v) => {
 /**
  * The payload.
  * @param {object} queue queue.json (not changed)
- * @param {{ now?: number, quotaSlots?: number|null, loadSlots?: number|null, tz?: string }} [option]
+ * @param {{ now?: number, quotaSlots?: number|null, loadSlots?: number|null, tz?: string, uncertainty?: boolean,
+ *   band?: object, backtest?: object }} [option] uncertainty: add the band and the backtest (T-C); band, backtest:
+ *   ones the caller has cached
  */
 function timelineData(queue, option = {}) {
   const now = option.now ?? Date.now();
@@ -62,7 +67,18 @@ function timelineData(queue, option = {}) {
   }
   const projectTitles = {};
   for (const [pid, p] of Object.entries(register)) projectTitles[pid] = typeof p?.title === 'string' && p.title ? p.title : pid;
-  return { schedule, ran, projects, projectTitles, titles };
+  // T-C (board.timelineUncertainty): the band per focus step and the backtest (lib/scheduleUncertainty.js), with the
+  // same moment, caps and time zone as the schedule. The caller may pass the band or the backtest it has cached (the
+  // board server keeps the band a few minutes and the backtest a day).
+  let uncertainty = null;
+  let backtest = null;
+  if (option.uncertainty === true) {
+    const tz = option.tz ? { tz: option.tz } : {};
+    uncertainty =
+      option.band ?? UN.uncertainty(queue, { now, quotaSlots: option.quotaSlots ?? null, loadSlots: option.loadSlots ?? null, ...tz });
+    backtest = option.backtest ?? UN.backtest(queue, { now, ...tz });
+  }
+  return { schedule, ran, projects, projectTitles, titles, uncertainty, backtest };
 }
 
 /** The cache key: the queue's stamp (mtime and size), the settings and the minute. */

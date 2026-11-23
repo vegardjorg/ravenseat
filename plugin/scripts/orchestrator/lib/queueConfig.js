@@ -902,6 +902,9 @@ const STANDARD = Object.freeze({
     // T-B: a drop first shows the dry run and what it does to the plan, then Save or Cancel. false saves at once, with
     // Undo in the toast.
     timelineDragPreview: true,
+    // T-C: a band per focus step on the Timeline (P50 to P85 from a Monte Carlo over the measured ratios) and the
+    // backtest's precision line. Read only; false shows the plan's bars and step ends without them.
+    timelineUncertainty: true,
     // Demo mode (owner decision 22.11, lib/demoMode.js): an empty board that never had a task offers a made-up demo board
     // in its own folder, locked down on the server. On in lite and full; false hides the offer (Settings still opens it).
     demoOffer: true,
@@ -1173,7 +1176,9 @@ const TIMELINE_HORIZON = Object.freeze({ min: 1, max: 14 });
  * already resolved by resolveOwn). Read fresh by the board server, so `settings set` reaches an open board on its next
  * poll.
  * @param {object|null} [cfg] the configuration (default: config())
- * @returns {{ on: boolean, horizonDays: number, rows: 'step'|'project', drag: boolean, dragPreview: boolean }}
+ * T-C adds .timelineUncertainty (uncertainty).
+ * @returns {{ on: boolean, horizonDays: number, rows: 'step'|'project', drag: boolean, dragPreview: boolean,
+ *   uncertainty: boolean }}
  */
 function boardTimeline(cfg = config()) {
   const b = isObject(cfg?.board) ? cfg.board : {};
@@ -1188,6 +1193,8 @@ function boardTimeline(cfg = config()) {
     // T-B: the drag for order and its preview (both on by default; a value that is not a boolean is the default).
     drag: typeof b.timelineDrag === 'boolean' ? b.timelineDrag : STANDARD.board.timelineDrag,
     dragPreview: typeof b.timelineDragPreview === 'boolean' ? b.timelineDragPreview : STANDARD.board.timelineDragPreview,
+    // T-C: the band per focus step (P50 to P85) and the backtest's precision line (on by default).
+    uncertainty: typeof b.timelineUncertainty === 'boolean' ? b.timelineUncertainty : STANDARD.board.timelineUncertainty,
   };
 }
 

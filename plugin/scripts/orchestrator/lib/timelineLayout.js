@@ -13,6 +13,8 @@
 //   - layout: the y of each row and the geometry of each bar (lanes packed in pixels, labels counted): the band of a planned bar (start + low to start + high),
 //     a wait on the owner as its own segment, the phases of a ran bar (track, review).
 //   - tableRows: the same tasks as a table, with relative times only.
+//   - bandOf, stepTable (T-C): a focus step's P50 to P85 band from the payload's `uncertainty` (a step row's end is
+//     then the band's P50 and it gets `likelyBy`), and the step table with the same numbers. A task never gets one.
 // HONESTY: no text here gives a clock time for one task (the measured spread per task is a factor 2.5 to 3); a step's
 // end is the only time the renderer may show as "around".
 //
@@ -106,8 +108,29 @@
       const e = ms(st.p50_end);
       if (e != null && e <= horizonEnd) reachEnd = Math.max(reachEnd, e);
     }
+    // T-C: a step's band reaches to its P85 (up to the horizon, where it is cut).
+    for (const b of bandSteps(d)) {
+      const e = ms(b.p85_end);
+      if (e != null) reachEnd = Math.max(reachEnd, Math.min(e, horizonEnd));
+    }
     const to = Math.min(horizonEnd, Math.max(now + AHEAD_MIN, Math.ceil((reachEnd + MARGIN) / HOUR) * HOUR));
     return { from, to, now, horizonEnd };
+  }
+
+  /**
+   * T-C: the band per focus step (lib/scheduleUncertainty.js, in the payload as `uncertainty`), or [] when it is off or
+   * there was too little data. Only steps have a band; a task never gets one (owner question 6).
+   */
+  function bandSteps(d) {
+    const u = d?.uncertainty;
+    return u && u.enough === true && Array.isArray(u.steps) ? u.steps : [];
+  }
+
+  /** The band of one schedule step: matched by its number, or by its title for the rest and the whole queue. */
+  function bandOf(d, st) {
+    return (
+      bandSteps(d).find((b) => (st.step != null ? b.step === st.step : b.step == null && b.title === st.title)) ?? null
+    );
   }
 
   /** The linear scale from the window to 0..width pixels, clamped (one decimal, so the SVG stays small). */
@@ -261,7 +284,10 @@
       for (const st of steps) {
         const mine = planned.filter((it) => (it.step ?? null) === (st.step ?? null));
         if (!mine.length && !st.unscheduled) continue;
-        const end = ms(st.p50_end);
+        // T-C: with a band, the step's end is the band's P50 (the plan played many times) and likelyBy its P85;
+        // without one, the plan's own end and no likelyBy.
+        const band = bandOf(d, st);
+        const end = band ? ms(band.p50_end) : ms(st.p50_end);
         rows.push({
           key: `step:${st.step ?? 'rest'}`,
           kind: 'step',
@@ -273,7 +299,9 @@
           ...split(mine),
           later: mine.filter((it) => it.s >= w.horizonEnd).length,
           unscheduled: st.unscheduled ?? 0,
+          tasks: st.tasks ?? mine.length,
           end: end != null && end <= w.horizonEnd ? end : null,
+          likelyBy: band ? ms(band.p85_end) : null,
         });
       }
     } else {
@@ -382,6 +410,12 @@
         lanes: packed.lanes,
         end: r.end,
         endX: r.end == null ? null : sc.x(r.end),
+        // T-C: the band from P50 to P85 in pixels (cut at the axis end: clipped), or null.
+        likelyBy: r.likelyBy ?? null,
+        band:
+          r.end != null && r.likelyBy != null
+            ? { x0: sc.x(r.end), x1: sc.x(Math.min(r.likelyBy, sc.to)), clipped: r.likelyBy > sc.to }
+            : null,
         later: r.later,
         unscheduled: r.unscheduled,
       });
@@ -479,6 +513,17 @@
     return { columns: ['Task', 'Row', 'State', 'Starts', 'Takes', 'Note'], rows: out };
   }
 
+  /**
+   * T-C: the steps as a table, the same numbers as the chart's rows: { columns, rows: [{ key, title, tasks, end,
+   * likelyBy }] } (end and likelyBy in ms or null; the renderer words them as "around ...").
+   */
+  function stepTable(rows) {
+    const out = (rows ?? [])
+      .filter((r) => r.kind === 'step')
+      .map((r) => ({ key: r.key, title: r.title, tasks: r.tasks ?? 0, end: r.end ?? null, likelyBy: r.likelyBy ?? null }));
+    return { columns: ['Step', 'Tasks', 'Done around', 'Likely by'], rows: out };
+  }
+
   return {
     MIN_TICK_PX,
     HORIZON,
@@ -494,5 +539,6 @@
     layout,
     textWidth,
     tableRows,
+    stepTable,
   };
 });
