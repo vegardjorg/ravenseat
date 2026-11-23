@@ -31,6 +31,7 @@
 
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const { renameWithRetry } = require('./stateFile.js');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { isTestFile } = require('./testWeakening.js');
@@ -578,7 +579,7 @@ function refresh(root, { dataFolder, fsLike = fs, git, fresh = false } = {}) {
         const file = path.join(dataFolder, FILE);
         const tmp = `${file}.${process.pid}.tmp`;
         fsLike.writeFileSync(tmp, `${JSON.stringify(value.index)}\n`);
-        fsLike.renameSync(tmp, file);
+        renameWithRetry(tmp, file, { fs: fsLike });
       } catch {
         // error-ignored: the cache only saves work; the index in hand is complete
       }

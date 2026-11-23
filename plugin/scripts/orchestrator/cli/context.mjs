@@ -255,7 +255,7 @@ export function pulseCursor(event) {
     const m = L.newCursor(readCursor(), { session: val('--session') ?? process.env.QUEUE_SESSION, event });
     const tmp = `${CURSOR}.${process.pid}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(m, null, 2) + '\n');
-    fs.renameSync(tmp, CURSOR);
+    require('./lib/stateFile.js').renameWithRetry(tmp, CURSOR);
     return m;
   } catch {
     return null;

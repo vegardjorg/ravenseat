@@ -200,7 +200,7 @@ function writeLedger(ledger) {
   fs.mkdirSync(FOLDER, { recursive: true });
   const tmp = `${LEDGER}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, `${JSON.stringify(ledger, null, 2)}\n`);
-  fs.renameSync(tmp, LEDGER);
+  require('./lib/stateFile.js').renameWithRetry(tmp, LEDGER);
 }
 
 /** `ravenseat issues report [--post]`. */

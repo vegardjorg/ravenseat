@@ -28,6 +28,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const { renameWithRetry } = require('./stateFile.js');
 const path = require('node:path');
 
 const SNAPSHOT_FILE = path.join(__dirname, '..', 'demo-data', 'pebble.json');
@@ -67,7 +68,7 @@ function writeDismissed(dataFolder, { now = Date.now() } = {}) {
   try {
     const tmp = `${file}.${process.pid}.tmp`;
     fs.writeFileSync(tmp, `${JSON.stringify({ dismissed: true, at: new Date(now).toISOString() }, null, 2)}\n`);
-    fs.renameSync(tmp, file);
+    renameWithRetry(tmp, file);
     return { ok: true };
   } catch (e) {
     return { ok: false, error: String(e?.code ?? 'write failed') };

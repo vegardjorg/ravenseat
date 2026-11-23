@@ -42,6 +42,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const { renameWithRetry } = require('./stateFile.js');
 const path = require('node:path');
 
 /** The event names written here (readers that keep only some rows, such as the board, filter on this set). */
@@ -317,7 +318,7 @@ function writeSessionState(file, state) {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     const tmp = `${file}.${process.pid}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(state) + '\n');
-    fs.renameSync(tmp, file);
+    renameWithRetry(tmp, file);
     return true;
   } catch {
     return false; // error-ignored: the state only throttles the rows

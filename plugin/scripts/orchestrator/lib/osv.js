@@ -32,6 +32,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const { renameWithRetry } = require('./stateFile.js');
 const path = require('node:path');
 const L = require('./lockfiles.js');
 
@@ -354,7 +355,7 @@ function writeCache(folder, report) {
   const file = path.join(folder, CACHE_FILE);
   const tmp = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, `${JSON.stringify({ ...report, version: CACHE_VERSION }, null, 2)}\n`);
-  fs.renameSync(tmp, file);
+  renameWithRetry(tmp, file);
 }
 
 // ---- summary -----------------------------------------------------------------------------------------------------

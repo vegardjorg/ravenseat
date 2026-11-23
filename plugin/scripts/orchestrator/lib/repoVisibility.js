@@ -33,6 +33,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const { renameWithRetry } = require('./stateFile.js');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 
@@ -163,7 +164,7 @@ function writeCache(folder, entry) {
   const file = path.join(folder, CACHE_FILE);
   const tmp = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, `${JSON.stringify(entry, null, 2)}\n`);
-  fs.renameSync(tmp, file);
+  renameWithRetry(tmp, file);
 }
 
 /**

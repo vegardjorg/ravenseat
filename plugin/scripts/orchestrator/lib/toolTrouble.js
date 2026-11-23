@@ -18,6 +18,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const { renameWithRetry } = require('./stateFile.js');
 const path = require('node:path');
 
 const FILE = 'tool-trouble.json';
@@ -79,7 +80,7 @@ function write(folder, state) {
   fs.mkdirSync(folder, { recursive: true });
   const tmp = path.join(folder, `${FILE}.${process.pid}.tmp`);
   fs.writeFileSync(tmp, JSON.stringify(state, null, 2) + '\n');
-  fs.renameSync(tmp, path.join(folder, FILE));
+  renameWithRetry(tmp, path.join(folder, FILE));
 }
 
 /**

@@ -2805,7 +2805,7 @@ function lawyerPackageWrite(b) {
   fs.mkdirSync(folder, { recursive: true });
   const tmp = `${file}.${process.pid}.${crypto.randomUUID()}.tmp`;
   fs.writeFileSync(tmp, pk.text);
-  fs.renameSync(tmp, file);
+  require('./lib/stateFile.js').renameWithRetry(tmp, file);
   const n = pk.points.length;
   console.log(`${new Date().toLocaleTimeString('en-GB')} lawyerPackage ${pk.path}: ${n} points`);
   return {

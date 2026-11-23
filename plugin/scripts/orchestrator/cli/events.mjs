@@ -105,7 +105,7 @@ export function detectPushes({ now = Date.now() } = {}) {
     const tmp = `${PUSH_SEEN}.${process.pid}.tmp`;
     fs.mkdirSync(FOLDER, { recursive: true });
     fs.writeFileSync(tmp, JSON.stringify({ last: newest, tips, checked: new Date(now).toISOString() }) + '\n');
-    fs.renameSync(tmp, PUSH_SEEN);
+    require('./lib/stateFile.js').renameWithRetry(tmp, PUSH_SEEN);
     if (!pushes.length) return 0;
     const PB = require('./lib/pushBatch.js');
     const BH = require('./lib/baseHealth.js');

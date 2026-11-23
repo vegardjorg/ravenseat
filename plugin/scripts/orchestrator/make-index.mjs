@@ -113,5 +113,5 @@ if (check || dry) {
 // Atomic write: temporary file in the same folder, then rename.
 const tmp = `${INDEX}.${process.pid}.tmp`;
 fs.writeFileSync(tmp, r.text, 'utf8');
-fs.renameSync(tmp, INDEX);
+require('./lib/stateFile.js').renameWithRetry(tmp, INDEX);
 console.log(`make-index: wrote ${path.relative(DOC_ROOT, INDEX)} (${sections}).${newText}`);

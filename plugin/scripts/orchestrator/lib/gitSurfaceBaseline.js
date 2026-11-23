@@ -37,6 +37,7 @@
 
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const { renameWithRetry } = require('./stateFile.js');
 const path = require('node:path');
 
 const GX = require('./gitExecSurface.js');
@@ -98,7 +99,7 @@ function writeText(folder, text) {
   fs.mkdirSync(folder, { recursive: true });
   const tmp = `${fileOf(folder)}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, text);
-  fs.renameSync(tmp, fileOf(folder));
+  renameWithRetry(tmp, fileOf(folder));
 }
 
 /**

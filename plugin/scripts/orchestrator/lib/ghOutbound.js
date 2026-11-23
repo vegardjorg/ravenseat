@@ -31,6 +31,7 @@
 
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const { renameWithRetry } = require('./stateFile.js');
 const path = require('node:path');
 
 /** The longest task title in a post (characters, before the code span). */
@@ -272,7 +273,7 @@ function writePreview(folder, { kind, repo, visibility, items, now = Date.now() 
   const file = previewFile(folder);
   const tmp = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, `${JSON.stringify(entry, null, 2)}\n`);
-  fs.renameSync(tmp, file);
+  renameWithRetry(tmp, file);
   return entry;
 }
 

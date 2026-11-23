@@ -33,7 +33,7 @@ try {
     const out = { level, time: new Date().toISOString(), session: h?.session ?? null };
     const tmp = path.join(folder, `effort.json.${process.pid}.tmp`);
     fs.writeFileSync(tmp, JSON.stringify(out, null, 2));
-    fs.renameSync(tmp, path.join(folder, 'effort.json'));
+    require('./lib/stateFile.js').renameWithRetry(tmp, path.join(folder, 'effort.json'));
   }
 } catch {
   /* never stop the message */

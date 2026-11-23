@@ -183,7 +183,7 @@ async function main() {
     try {
       const tmp = `${CURSOR}.${process.pid}.tmp`;
       fs.writeFileSync(tmp, JSON.stringify(revoke.cursor, null, 2) + '\n');
-      fs.renameSync(tmp, CURSOR);
+      require('./lib/stateFile.js').renameWithRetry(tmp, CURSOR);
     } catch {
       // error-ignored: the wind-down then remains; queue.mjs orchestrator pulse --session resets it
     }

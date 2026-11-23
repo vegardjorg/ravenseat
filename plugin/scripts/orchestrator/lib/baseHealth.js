@@ -46,6 +46,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const { renameWithRetry } = require('./stateFile.js');
 const DC = require('./doneCheck.js');
 const GE = require('./gateEvidence.js');
 
@@ -126,7 +127,7 @@ function readState(file) {
 function writeState(file, state) {
   const tmp = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, `${JSON.stringify(state, null, 2)}\n`);
-  fs.renameSync(tmp, file);
+  renameWithRetry(tmp, file);
 }
 
 /** The state with `entry` as the current record and appended to the history (the oldest dropped). Pure. */

@@ -131,7 +131,7 @@ function saveRateLimits(folder, input) {
   const file = path.join(folder, RL.FILE);
   const tmp = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(next) + '\n');
-  fs.renameSync(tmp, file);
+  require('./lib/stateFile.js').renameWithRetry(tmp, file);
 }
 
 /**

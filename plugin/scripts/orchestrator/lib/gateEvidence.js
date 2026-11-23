@@ -73,6 +73,7 @@
 
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const { renameWithRetry } = require('./stateFile.js');
 const path = require('node:path');
 const { CLI_PATTERN } = require('./productNames.js');
 
@@ -157,7 +158,7 @@ function writeStore(file, store) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, `${JSON.stringify(store, null, 2)}\n`);
-  fs.renameSync(tmp, file);
+  renameWithRetry(tmp, file);
 }
 
 /**

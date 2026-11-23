@@ -145,6 +145,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **Plans tree map: the built fill's line no longer runs through a label such as "43 % built", in light and dark.**
 - **Checks: suggestion groups with one card sit side by side and use the width instead of one narrow column.**
 ### Hardened
+- **Every atomic write retries a rename Windows refuses for a moment, not only queue.json.** A guard test keeps new raw renames out.
 - **A push or write guard that crashes, does not start or times out now refuses the call instead of letting it through, also from Code Mode.** `guards.onHookFailure` `block`.
 - **The shell reader treats a backslash-escaped space as part of the word, so `C:/Program\ Files/GitHub\ CLI/gh.exe` is checked as `gh`.**
 - **Queue agents may only read with the GitHub CLI: `gh api`, `gh auth`, `gh gist` and every write are denied (rule `gh-cli`).**

@@ -20,6 +20,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const { renameWithRetry } = require('./stateFile.js');
 const path = require('node:path');
 
 const CACHE_FILE = 'instruction-size.json';
@@ -51,7 +52,7 @@ function writeCache(file, data) {
   try {
     const tmp = `${file}.${process.pid}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(data));
-    fs.renameSync(tmp, file);
+    renameWithRetry(tmp, file);
   } catch {
     // error-ignored: the cache only saves work; without it the next prompt measures again
   }

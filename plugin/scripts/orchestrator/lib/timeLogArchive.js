@@ -41,6 +41,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { renameWithRetry } = require('./stateFile.js');
 
 const MODES = Object.freeze(['monthly', 'off']);
 const DAY_MS = 86_400_000;
@@ -136,16 +137,8 @@ function dueMonth(log, now) {
 
 /** A rename with a few tries for the moment Windows holds the file (another process appending). */
 function renameRetry(from, to) {
-  for (let i = 0; ; i++) {
-    try {
-      fs.renameSync(from, to);
-      return;
-    } catch (e) {
-      if (i >= 5 || !['EPERM', 'EBUSY', 'EACCES'].includes(e?.code)) throw e;
-      // A short blocking pause (the CLI and the hooks are synchronous) gives the other writer time to close the file.
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
-    }
-  }
+  // The shared retry (lib/stateFile.js): six tries on EPERM, EBUSY and EACCES with a short growing pause.
+  renameWithRetry(from, to);
 }
 
 /**

@@ -17,6 +17,7 @@
 // =============================================================
 
 const fs = require('node:fs');
+const { renameWithRetry } = require('./stateFile.js');
 const path = require('node:path');
 
 /** The client adapter (0w W2b1): the transcript rows and the subagent file names are its format, read on first use. */
@@ -178,7 +179,7 @@ function write(folder, waits) {
   fs.mkdirSync(folder, { recursive: true });
   const tmp = path.join(folder, `${FILE}.${process.pid}.tmp`);
   fs.writeFileSync(tmp, JSON.stringify(waits, null, 2) + '\n');
-  fs.renameSync(tmp, path.join(folder, FILE));
+  renameWithRetry(tmp, path.join(folder, FILE));
 }
 
 /**

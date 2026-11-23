@@ -82,7 +82,7 @@ export function handoverCommand() {
       fs.appendFileSync(path.join(archiveFolder, `${m}.md`), HO.archiveAddition(r.archive[m], now));
     const tmp = `${note}.${process.pid}.tmp`;
     fs.writeFileSync(tmp, r.keep);
-    fs.renameSync(tmp, note);
+    require('./lib/stateFile.js').renameWithRetry(tmp, note);
   }
   const before = text.replace(/\r\n/g, '\n').split('\n').length;
   const after = r.keep.split('\n').length;
@@ -104,7 +104,7 @@ function writeFollow(reg) {
   reg.changed = new Date().toISOString();
   const tmp = `${FOLLOW_FILE}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(reg, null, 2) + '\n');
-  fs.renameSync(tmp, FOLLOW_FILE);
+  require('./lib/stateFile.js').renameWithRetry(tmp, FOLLOW_FILE);
 }
 /**
  * Changes the follow-up register under the queue's lock, ALL OR NOTHING: `fn(reg, today)` gives { error, entry }; an error
@@ -139,7 +139,7 @@ function writeFollowReport(p) {
   const file = path.join(FOLLOW_REPORTS, `${p.id}-report.md`);
   const tmp = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, F.reportText(p, { now: new Date().toISOString() }));
-  fs.renameSync(tmp, file);
+  require('./lib/stateFile.js').renameWithRetry(tmp, file);
   return file;
 }
 /** `follow [add|log|show|report|close|extend]`; the rules live in lib/queueFollow.js. */
