@@ -217,10 +217,11 @@ function tlShowTarget(tag) {
     if (ref && g) {
       behind(svgEl('rect', { class: 'tl-drop-lane', x: 0, y: TL_AXIS + g.y + 1, width, height: Math.max(2, g.h - 2) }));
       const x = sp.space === 'over' ? Math.max(4, ref.x0 - 4) : Math.min(width - 4, ref.x1 + 4);
-      const y0 = TL_AXIS + g.y + 4;
+      // The mark starts under the row's head line (its "done around ..." note), where the bars and the band start.
+      const y0 = TL_AXIS + g.y + 20;
       const y1 = TL_AXIS + g.y + g.h - 4;
       path = `M${x - 5} ${y0} H${x + 5} M${x} ${y0} V${y1} M${x - 5} ${y1} H${x + 5}`;
-      tagAt = { x: x + 8, y: y0 + 2 };
+      tagAt = { x: x + 8, y: TL_AXIS + g.y + 6 };
       for (const e of tlBars([ref.id])) e.classList.add('tl-drop-ref');
     }
   } else if (l.kind === 'step' && l.slot !== l.start) {
