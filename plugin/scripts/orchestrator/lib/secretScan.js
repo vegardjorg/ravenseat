@@ -31,7 +31,8 @@
 //
 // Used by: hook-push-guard.mjs (secretQuestion -> scanPush), `ravenseat receive` (scanRange on the track's own commits,
 // <baseBranch>..<branch>; cli/merge.mjs receiveSecretScan, secretScan.atReceive) and the doctor row for approved commands
-// (matchLine; lib/allowlistSecrets.js). Tested in: lib/__tests__/secretScan.test.ts.
+// (matchLine; lib/allowlistSecrets.js), and `ravenseat secrets scan` (matchValue, the tracked files and the history;
+// lib/repoSecretScan.js). Tested in: lib/__tests__/secretScan.test.ts.
 // =============================================================
 
 const { spawnSync } = require('node:child_process');
@@ -202,16 +203,30 @@ function scanLines(lines) {
  * @returns {string|null}
  */
 function matchLine(text, file = '') {
+  return matchValue(text, file)?.rule ?? null;
+}
+
+/**
+ * matchLine with the matched value: { rule, value } or null. The same rules in the same order (matchLine is this
+ * function's rule id). For the repo scan (lib/repoSecretScan.js) only, which HASHES the value so the same key is known
+ * again across runs, and never stores, prints or logs it. Every other caller uses matchLine.
+ * @param {string} text  the line
+ * @param {string} [file]  the file it is in
+ * @returns {{ rule: string, value: string }|null}
+ */
+function matchValue(text, file = '') {
   const s = String(text ?? '');
   if (s.length > 4000) return null; // a minified bundle or a data blob: not a place a key is typed in
-  const p = PATTERNS.find((x) => x.re.test(s));
-  if (p) return p.id;
+  for (const x of PATTERNS) {
+    const m = x.re.exec(s);
+    if (m) return { rule: x.id, value: m[0] };
+  }
   if (isQuietFile(file)) return null;
-  if (uriSecret(s)) return 'uri-credentials';
-  if (isEnvFile(file) && envValue(s)) return 'env-file';
+  if (uriSecret(s)) return { rule: 'uri-credentials', value: URI_CREDENTIALS.exec(s)[2] };
+  if (isEnvFile(file) && envValue(s)) return { rule: 'env-file', value: ENV_LINE.exec(s)[1].replace(/^(["'])(.*)\1$/, '$2').trim() };
   const m = GENERIC.exec(s);
   const v = m?.[1] ?? '';
-  if (m && !PLACEHOLDER.test(v) && /\d/.test(v) && /[A-Za-z]/.test(v)) return 'generic-secret';
+  if (m && !PLACEHOLDER.test(v) && /\d/.test(v) && /[A-Za-z]/.test(v)) return { rule: 'generic-secret', value: v };
   return null;
 }
 
@@ -345,4 +360,4 @@ function question(result) {
   );
 }
 
-module.exports = { DEADLINE_MS, PATTERNS, addedLines, scanLines, matchLine, isQuietFile, isEnvFile, scanPush, scanRange, question };
+module.exports = { DEADLINE_MS, PATTERNS, addedLines, scanLines, matchLine, matchValue, isQuietFile, isEnvFile, scanPush, scanRange, question };

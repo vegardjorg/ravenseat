@@ -76,6 +76,8 @@ export const PHRASES = {
   'guard-not-in-quick': 'a gate guard in the registry has a command that is not in `gates.quick` (`learning.quickGateCard`)',
   'audit-findings': 'the last [dependency audit](catalog.md#the-dependency-audit) (`catalog deps --audit`, read from its cache) found holes that no accepted catalog entry covers',
   'audit-high-prod': 'one of those holes is critical or high in a package that is not only for development',
+  'keyscan-open': 'the last `ravenseat secrets scan` (read from `secret-scan.json`) has a finding that is not set aside as a false alarm',
+  'keyscan-due': 'no `ravenseat secrets scan` has run yet, or the last one is older than `secretScan.rescanDays` (not 0), and nothing is open',
 };
 
 /**

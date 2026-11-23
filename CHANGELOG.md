@@ -6,6 +6,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 ## Unreleased
 
 ### Added
+- **`ravenseat secrets scan [--history]` finds keys already in tracked files or old commits, names file, line, rule and a hash, never the value, and changes nothing.** `secretScan.historyDepth` `200`, `secretScan.rescanDays` `14`.
 - **Doctor says when Claude Code's Code Mode is on, and `ravenseat cost` counts REPL calls and the tools inside them on one line.** `codeMode.policy` `warn`; read only, never sets the flag.
 - **An empty board offers a made-up demo board, locked down in its own folder.** `board.demoOffer` `true`.
 - **A Timeline tab on the board shows what ran, what runs and the rough plan ahead, as a chart or a table.** Read only;
@@ -145,6 +146,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **Plans tree map: the built fill's line no longer runs through a label such as "43 % built", in light and dark.**
 - **Checks: suggestion groups with one card sit side by side and use the width instead of one narrow column.**
 ### Hardened
+- **The key scan's hash is salted per data folder, so a short password cannot be guessed back from `secret-scan.json`, and a false alarm stays set aside by that hash.**
 - **A push or write guard that crashes, does not start or times out now refuses the call instead of letting it through, also from Code Mode.** `guards.onHookFailure` `block`.
 - **The shell reader treats a backslash-escaped space as part of the word, so `C:/Program\ Files/GitHub\ CLI/gh.exe` is checked as `gh`.**
 - **Queue agents may only read with the GitHub CLI: `gh api`, `gh auth`, `gh gist` and every write are denied (rule `gh-cli`).**
