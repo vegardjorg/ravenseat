@@ -577,8 +577,8 @@ the Focus toolbar, last in the Plans breadcrumb line, and in the **In queue** co
 24 px with a 36 px hit area (44 px on touch), so no header and not the fixed top grows. Settings itself has the
 **How to use the board** button instead.
 
-**Every setting by category.** The tabs list every row of the settings registry (`lib/settingsRegistry.js`, the same
-list as `ravenseat settings`) in its category: Project and git, Limits and cost, Machine load, Gates, Tests and
+**Every setting by category.** The tabs list every row of the settings registry (`lib/settingsRegistry.js`,
+one file per area under `lib/settings/`, the same list as `ravenseat settings`) in its category: Project and git, Limits and cost, Machine load, Gates, Tests and
 evidence, Checks tab and learning, File and read guards, Command and secret guards, Merge and push, Private and
 sharing, Review and agents, Scope and catalog, Board and advice, Cloud, Plans and focus, History and storage; the
 table above says which tab holds which. A category can have

@@ -1140,7 +1140,8 @@ reviewer agents per class. Missing values fall back to safe defaults. `ravenseat
 category with its value and default, and `ravenseat settings set <key> <value>` changes one (see Everyday commands).
 
 The tables below follow the same sixteen categories as `ravenseat settings` and the board's gear (one row per setting in
-`lib/settingsRegistry.js`; a test keeps them in step). The last column marks a row **Advanced** (shown by `ravenseat
+the settings registry, `lib/settingsRegistry.js`, which puts together one file per area under `lib/settings/`, where a
+new row goes; a test keeps them in step). The last column marks a row **Advanced** (shown by `ravenseat
 settings --advanced`), **Full mode only** (not used in lite; `ravenseat settings --all` says why) and **queue.json**
 (saved only for you in the queue data, not in the project's `queue.config.json`; set it with `ravenseat settings set`,
 `limit` or the board). A row without a mark is a basic setting in `queue.config.json` that both modes use. A value that
