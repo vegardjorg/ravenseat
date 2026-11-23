@@ -7,8 +7,8 @@
 
 <h1 align="center">Ravenseat</h1>
 <p align="center"><a href="https://github.com/vegardjorg/ravenseat/actions/workflows/ci.yml"><img src="https://github.com/vegardjorg/ravenseat/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI: tests on Linux and Windows"></a></p>
-<p align="center"><b>Run your whole project from one Claude Code conversation.</b></p>
-<p align="center">Every task gets a fresh agent with fresh context.</p>
+<p align="center"><b>Engineering discipline for Claude Code agents. Evidence over trust.</b></p>
+<p align="center">Run your whole project from one conversation. Every task gets a fresh agent, and nothing is merged until its checks pass.</p>
 <p align="center">Ravenseat keeps your plan and task queue in files that survive compaction and restarts. Parallel agents work in separate Git worktrees, and Ravenseat runs your checks on each delivered commit before merging passing changes locally. When a task needs your judgment, only that task and its dependents wait. Everything else continues.</p>
 <p align="center"><sub>Open source · Local-first · Runs inside Claude Code · Your Git repository</sub></p>
 
