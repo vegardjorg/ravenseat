@@ -13,6 +13,9 @@
 // this browser can switch, remembered in localStorage). Colors only from the theme tokens (board.css .tl-*).
 // T-B: with board.timelineDrag on, order can be changed here (never time): board/timelinemove.js has the drag, the
 // keyboard moves, the preview and the save; this file marks what can move and calls it.
+// T-C: with board.timelineUncertainty on, each focus step row has a shaded band from P50 to P85 (the payload's
+// `uncertainty`, lib/scheduleUncertainty.js), its label says "done around X (likely by Y)", the table view has a step
+// table with the same numbers, and the notes carry the backtest line (or why there is no band). Tasks get no band.
 //
 // One of the board's classic scripts in queue-board/board/ (see docs/board.md): top-level names are shared with the
 // other scripts. Called from draw() (board/draw.js) and the polling (api.js, start.js). Tested in
@@ -137,7 +140,8 @@ function aroundStepEnd(ms) {
 /** The words under a row title: the step's end, the later ones and the ones that cannot start. */
 function rowNotes(g) {
   const out = [];
-  if (g.end != null) out.push(`done ${aroundStepEnd(g.end)}`);
+  // T-C: with a band the step says both ends of it: "done around X (likely by Y)".
+  if (g.end != null) out.push(`done ${aroundStepEnd(g.end)}${g.likelyBy != null ? ` (likely by ${aroundStepEnd(g.likelyBy).replace(/^around /, '')})` : ''}`);
   if (g.later) out.push(`${g.later} after the horizon`);
   if (g.unscheduled) out.push(`${g.unscheduled} cannot start`);
   return out.join(', ');
@@ -209,7 +213,14 @@ function timelineChart(d, rows, horizon) {
     const y = TL_AXIS + g.y;
     if (g.y > 0) heads.append(svgEl('line', { class: 'tl-row-line', x1: 0, x2: width, y1: y + 0.5, y2: y + 0.5 }));
     const note = rowNotes(g);
-    if (note) heads.append(svgEl('text', { class: 'tl-row-note', x: Math.min(width - 4, nowX + 6), y: y + 15, text: note }));
+    if (note) heads.append(svgEl('text', { class: 'tl-row-note', 'data-row': g.key, x: Math.min(width - 4, nowX + 6), y: y + 15, text: note }));
+    // T-C: the step's band from P50 to P85, shaded behind its bars (cut at the axis end, with the more mark).
+    if (g.band && g.band.x1 > g.band.x0) {
+      const top = y + 20;
+      const bottom = y + g.h - 6;
+      heads.append(svgEl('rect', { class: 'tl-step-band', x: g.band.x0, y: top, width: g.band.x1 - g.band.x0, height: Math.max(4, bottom - top), rx: 3 }));
+      if (g.band.clipped) heads.append(svgEl('path', { class: 'tl-more', d: `M${width - 7} ${top + 2} l5 5 l-5 5` }));
+    }
     if (g.endX != null) {
       const top = y + 20;
       const bottom = y + g.h - 6;
@@ -325,7 +336,7 @@ function timelineChart(d, rows, horizon) {
 }
 
 /** The legend: each mark with its word (shapes and patterns as well as colors). */
-function timelineLegend() {
+function timelineLegend(withBand = false) {
   const item = (cls, text) =>
     el(
       'li',
@@ -354,7 +365,41 @@ function timelineLegend() {
     item('tl-band', 'Likely range'),
     item('tl-wait', 'Waits on you'),
     item('tl-step-end', 'Step done, around'),
+    withBand ? item('tl-step-band', 'Step likely done in here (P50 to P85)') : null,
     item('tl-now', 'Now'),
+  );
+}
+
+/** T-C: "around Mon 14:30" or a dash, for the step table. */
+const tlAround = (ms) => (ms == null ? '-' : aroundStepEnd(ms));
+
+/** T-C: the steps as a table (the same numbers as the chart's step rows): done around (P50) and likely by (P85). */
+function timelineStepTable(rows) {
+  const tb = window.QueueTimelineLayout.stepTable(rows);
+  if (!tb.rows.length) return null;
+  return el(
+    'div',
+    { class: 'tl-table-wrap', tabindex: '0', role: 'region', 'aria-label': 'Focus steps table' },
+    el(
+      'table',
+      { class: 'tl-table tl-step-table' },
+      el('caption', { text: 'The focus steps: done around the middle of the band (P50), likely by its end (P85)' }),
+      el('thead', {}, el('tr', {}, ...tb.columns.map((c) => el('th', { scope: 'col', text: c })))),
+      el(
+        'tbody',
+        {},
+        ...tb.rows.map((r) =>
+          el(
+            'tr',
+            {},
+            el('th', { scope: 'row', text: r.title }),
+            el('td', { text: String(r.tasks) }),
+            el('td', { class: 'tl-nowrap', text: tlAround(r.end) }),
+            el('td', { class: 'tl-nowrap', text: r.likelyBy == null ? '-' : tlAround(r.likelyBy).replace(/^around /, '') }),
+          ),
+        ),
+      ),
+    ),
   );
 }
 
@@ -509,9 +554,14 @@ function drawTimeline() {
         }),
       );
   }
+  // T-C: a step with a band (board.timelineUncertainty and enough measured tasks).
+  const banded = rows.some((r) => r.likelyBy != null);
   if (!rows.length) view.append(el('p', { class: 'empty', text: 'Nothing ran in the last day and nothing is planned.' }));
-  else if (prefs.display === 'table') view.append(timelineTable(d, rows));
-  else view.append(timelineChart(d, rows, horizon), timelineLegend());
+  else if (prefs.display === 'table') {
+    const steps = banded ? timelineStepTable(rows) : null;
+    if (steps) view.append(steps);
+    view.append(timelineTable(d, rows));
+  } else view.append(timelineChart(d, rows, horizon), timelineLegend(banded));
   if (prefs.display !== 'table') {
     const cannot = timelineCannot(d);
     if (cannot) view.append(cannot);
@@ -521,6 +571,10 @@ function drawTimeline() {
   if (s.answer?.basis === 'default')
     notes.push(`An owner question is assumed answered after ${TL.roughDuration(s.answer.minutes)} (fewer than 5 measured answers).`);
   if (s.precision) notes.push(s.precision);
+  // T-C: why there is no band, the backtest's precision line, and the Focus forecast when it says something else.
+  if (d.uncertainty && !d.uncertainty.enough && d.uncertainty.reason) notes.push(d.uncertainty.reason);
+  if (d.uncertainty?.enough && d.backtest?.text) notes.push(d.backtest.text);
+  if (d.uncertainty?.agree?.text) notes.push(d.uncertainty.agree.text);
   for (const n of notes) view.append(el('p', { class: 'tl-note', text: n }));
   restoreTimelineFocus(view);
 }

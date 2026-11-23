@@ -163,7 +163,33 @@
     return (full ?? []).map((k) => (seen.has(k) ? queue.shift() : k));
   }
 
+  /** The drag tag's height and the space kept around the step label (pixels). */
+  const TAG = Object.freeze({ h: 20, pad: 4, gap: 8 });
+
+  /**
+   * Where the drag tag goes so it never covers the step's label ("done around ...", T-C 0b): the wanted place `at`
+   * when it does not touch `avoid` (the label's box), else right after the label, else right before it, else just
+   * below it at the wanted x. `w` is the tag's width, `width` the chart's.
+   * @returns {{ x: number, y: number }}
+   */
+  function tagSpot({ at, w, width, avoid }) {
+    const hits = (x, y) =>
+      avoid != null &&
+      x < avoid.x1 + TAG.pad &&
+      x + w > avoid.x0 - TAG.pad &&
+      y < avoid.y1 + TAG.pad &&
+      y + TAG.h > avoid.y0 - TAG.pad;
+    if (!hits(at.x, at.y)) return { x: at.x, y: at.y };
+    const after = avoid.x1 + TAG.gap;
+    if (after + w <= width - 2) return { x: after, y: at.y };
+    const before = avoid.x0 - TAG.gap - w;
+    if (before >= 2) return { x: before, y: at.y };
+    return { x: at.x, y: avoid.y1 + TAG.pad };
+  }
+
   return {
+    TAG,
+    tagSpot,
     DRAG,
     REFUSAL,
     stepOrder,

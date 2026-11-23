@@ -171,3 +171,24 @@ describe('the rest row and the hidden steps', () => {
     ]);
   });
 });
+
+describe('tagSpot: the drag tag never covers the step label (T-C 0b)', () => {
+  // The step's label "done around ..." sits in the row's head line from x 300 to 520, y 64 to 80.
+  const avoid = { x0: 300, x1: 520, y0: 64, y1: 80 };
+  it('keeps the wanted place when it does not touch the label', () => {
+    expect(D.tagSpot({ at: { x: 40, y: 66 }, w: 150, width: 1200, avoid })).toEqual({ x: 40, y: 66 });
+    expect(D.tagSpot({ at: { x: 400, y: 66 }, w: 150, width: 1200, avoid: null })).toEqual({ x: 400, y: 66 });
+  });
+  it('moves right after the label when the wanted place covers it', () => {
+    expect(D.tagSpot({ at: { x: 330, y: 66 }, w: 150, width: 1200, avoid })).toEqual({ x: 528, y: 66 });
+  });
+  it('moves left before the label when there is no room after it', () => {
+    expect(D.tagSpot({ at: { x: 330, y: 66 }, w: 150, width: 600, avoid })).toEqual({ x: 142, y: 66 });
+  });
+  it('drops below the label when neither side has room', () => {
+    expect(D.tagSpot({ at: { x: 330, y: 66 }, w: 150, width: 560, avoid: { x0: 100, x1: 520, y0: 64, y1: 80 } })).toEqual({
+      x: 330,
+      y: 84,
+    });
+  });
+});

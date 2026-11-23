@@ -234,6 +234,8 @@ const REQUIRES = Object.freeze({
   // board/timeline.js (T-B): the drag lives on the Timeline, and the preview is a step of the drag.
   'board.timelineDrag': ['board.timeline'],
   'board.timelineDragPreview': ['board.timeline', 'board.timelineDrag'],
+  // T-C: the band is drawn on the Timeline only.
+  'board.timelineUncertainty': ['board.timeline'],
   // board/palette.js paletteOn: Ctrl+K opens the palette only while the shortcuts are on as well.
   'board.palette': ['board.shortcuts'],
   // cli/checks.mjs canaryFacts: with the canary off no transcript is read, so no shape is logged.
@@ -1427,6 +1429,15 @@ const SETTINGS = Object.freeze([
   row('board.timelineDragPreview', 'board', 'onoff', 'Timeline: preview before a drop is saved',
     'A drop first shows what it does to the plan in words (which step is done how much earlier or later, which task ' +
     'starts first), then Save or Cancel. Off: the drop is saved at once, with Undo in the toast.',
+    { fullWhy: 'the Timeline tab is off in lite' }),
+  // Roadmap TIDSLINJE T-C. Friction: none for the work; read only, it can never stop or slow a track and costs no
+  // tokens. Compute: the plan is played up to 200 times (fewer for a big queue, capped by runs x open tasks), about a
+  // quarter of a second on the demo queue, cached on the server; the backtest once a day. On since without a band the
+  // bars look surer than they are; off shows the plan's step ends alone.
+  row('board.timelineUncertainty', 'board', 'onoff', 'Timeline: uncertainty band per step',
+    'Each focus step gets a band from P50 to P85 (the plan played many times with the measured actual-to-estimate ' +
+    'spread), "done around X (likely by Y)", and a line on how often past steps were done by the end of their band. ' +
+    'Tasks keep one rough bar each. Off: the step ends alone, without the band.',
     { fullWhy: 'the Timeline tab is off in lite' }),
   // Roadmap 3e AW-2 (owner answers 21.11 as recommended). Friction: display only, it never stops or slows work; it takes
   // some height at the top of Decisions, hidden when nothing happened and closable for the visit. On by default since

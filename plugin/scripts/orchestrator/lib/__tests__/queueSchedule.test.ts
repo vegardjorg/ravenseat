@@ -361,6 +361,20 @@ describe('queueSchedule: the quota cap', () => {
   });
 });
 
+describe('scheduleLines with the band (T-C)', () => {
+  it('adds "likely by" to a step that has a band, and the backtest line', () => {
+    const s = run(queueOf([task('A'), task('B')]));
+    const end = s.steps[0].p50_end as string;
+    const p85 = new Date(Date.parse(end) + 90 * MIN).toISOString();
+    const band = { enough: true, steps: [{ step: null, stage: null, title: 'the whole queue', p50_end: end, p85_end: p85 }] };
+    const lines = S.scheduleLines(s, { tz: 'UTC', band, backtest: { text: 'Backtest: about 7 of 10 steps were done by the end of their band (9 past days checked).' } });
+    expect(lines[1]).toMatch(/expected done in about .* \(around Mon 10:30\), likely by around Mon 12:00 \(P85\)$/);
+    expect(lines).toContain('Backtest: about 7 of 10 steps were done by the end of their band (9 past days checked).');
+    const none = S.scheduleLines(s, { tz: 'UTC', band: { enough: false, reason: 'No band yet: 2 finished tasks.' } });
+    expect(none).toContain('No band yet: 2 finished tasks.');
+  });
+});
+
 describe('ravenseat schedule (CLI)', () => {
   const folders: string[] = [];
   afterAll(() => {
@@ -399,6 +413,12 @@ describe('ravenseat schedule (CLI)', () => {
     const json = JSON.parse(cli('schedule', '--json').out) as Schedule;
     expect(json.tasks.map((r) => r.id).sort()).toEqual(['A', 'B', 'C']);
     expect(json.tasks.every((r) => r.rough)).toBe(true);
+    // T-C: the band and the backtest ride along (too little history here: no band, and the line why).
+    const extra = json as unknown as { uncertainty: { enough: boolean; reason: string }; backtest: { text: string } };
+    expect(extra.uncertainty.enough).toBe(false);
+    expect(extra.uncertainty.reason).toMatch(/^No band yet/);
+    expect(extra.backtest.text).toMatch(/^No backtest yet/);
+    expect(text.out).toMatch(/No band yet/);
     expect(cli('schedule', '--bogus').code).toBe(2);
     expect(cli('schedule', 'extra').code).toBe(2);
     expect(cli('schedule', '--next', '0').code).toBe(2);

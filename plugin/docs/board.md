@@ -684,6 +684,12 @@ a wait on you is hatched, a review is the thin end of a bar, and tasks that cann
 **Table** shows the same tasks with headers; the chart scrolls sideways inside its box. A click on a bar opens the card.
 `board.timeline` (on in full, off in lite), `board.timelineHorizonDays` (`3`) and `board.timelineRows` (`step`).
 
+Each focus step has a shaded band from P50 to P85: the plan is played many times with lengths drawn from the measured
+actual-to-estimate ratios (the last 28 days, at least 5 measured tasks), so the row says "done around X (likely by Y)".
+Under the chart a backtest line says how often past steps were done by the end of their band. Tasks get no band of
+their own, only their one rough bar. The table view has a step table with the same numbers. With too little data the
+row says why there is no band. `board.timelineUncertainty` (`true`), full only.
+
 Drag a planned bar up or down within its focus step to give it a new place (`ravenseat rank`), or a step row up or
 down to change the focus order. With the keyboard: Space lifts, the arrows move, Enter drops, Escape cancels; the
 table has **Move up** and **Move down**. Time is calculated, so a sideways drag, or a task dragged into another

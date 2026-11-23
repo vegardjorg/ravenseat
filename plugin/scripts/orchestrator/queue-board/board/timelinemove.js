@@ -199,10 +199,12 @@ function tlShowTarget(tag) {
   }
   if (line) svg.append(svgEl('line', { class: 'tl-drop-line', ...line }));
   if (tag) {
-    const at = tag.at ?? tagAt;
-    if (!at) return;
+    const want = tag.at ?? tagAt;
+    if (!want) return;
     const w = Math.min(width - 4, tag.text.length * 6.4 + 12);
-    const x = Math.max(2, Math.min(at.x, width - w - 2));
+    // T-C 0b: the tag never covers the step's own label ("done around ..."): it moves beside it or below it.
+    const at = tlDragLib().tagSpot({ at: { x: Math.max(2, Math.min(want.x, width - w - 2)), y: want.y }, w, width, avoid: tlNoteBox(svg, lay, want.y) });
+    const x = at.x;
     svg.append(
       svgEl(
         'g',
@@ -212,6 +214,26 @@ function tlShowTarget(tag) {
       ),
     );
   }
+}
+
+/**
+ * The box of the step label ("done around ...") in the row under y (the chart's coordinates), or null. Measured with
+ * getBBox where the browser has it, else estimated from the text (about 6.2 pixels per character).
+ */
+function tlNoteBox(svg, lay, y) {
+  const g = lay.groups.find((x) => y >= TL_AXIS + x.y && y < TL_AXIS + x.y + x.h);
+  if (!g) return null;
+  const note = svg.querySelector(`.tl-row-note[data-row="${CSS.escape(g.key)}"]`);
+  if (!note) return null;
+  try {
+    const b = note.getBBox();
+    if (b && b.width > 0) return { x0: b.x, x1: b.x + b.width, y0: b.y, y1: b.y + b.height };
+  } catch {
+    /* no layout (a test without a renderer): estimated below */
+  }
+  const x0 = Number(note.getAttribute('x')) || 0;
+  const base = Number(note.getAttribute('y')) || 0;
+  return { x0, x1: x0 + (note.textContent ?? '').length * 6.2, y0: base - 12, y1: base + 4 };
 }
 
 // ---- The keyboard ----------------------------------------------------------------------------------------------------
@@ -510,20 +532,29 @@ function tlOpenDialog(job, dry) {
   });
   const cancelButton = el('button', { type: 'button', class: 'button button-muted', text: 'Cancel', onclick: cancel });
   // replaceChildren would write a null as the text "null": the parts that are not there are left out first.
+  // T-C 0a: the plan sentence first, then the move in words; the raw field changes ("A-2 priority_bonus: (none) -> 20")
+  // are metadata, so they sit behind a closed Details.
   const parts = [
     el('h2', { id: 'tl-drop-title', class: 'guard-title', text: job.title }),
-    el('p', { text: job.what }),
     el('p', {
       class: 'tl-plan-sentence',
-      text: dry.plan?.sentence ?? 'What this does to the plan could not be worked out now; the change itself is below.',
+      text: dry.plan?.sentence ?? 'What this does to the plan could not be worked out now; the move itself is below.',
     }),
+    el('p', { text: job.what }),
     el('p', {
       class: 'tl-note',
       text: 'Times are calculated: the bars move when the plan is played again. Rough, never a promise. Nothing is saved yet.',
     }),
-    lines.length ? el('ul', { class: 'tl-drop-lines', 'aria-label': 'What changes' }, ...lines.slice(0, 20).map((x) => el('li', { text: x }))) : null,
-    dry.before_text != null && dry.after_text != null
-      ? el('p', { class: 'tl-drop-lines', text: `Focus: ${dry.before_text} to ${dry.after_text}` })
+    lines.length || (dry.before_text != null && dry.after_text != null)
+      ? el(
+          'details',
+          { class: 'tl-drop-details' },
+          el('summary', { text: 'Details' }),
+          lines.length ? el('ul', { class: 'tl-drop-lines', 'aria-label': 'What changes' }, ...lines.slice(0, 20).map((x) => el('li', { text: x }))) : null,
+          dry.before_text != null && dry.after_text != null
+            ? el('p', { class: 'tl-drop-lines', text: `Focus: ${dry.before_text} to ${dry.after_text}` })
+            : null,
+        )
       : null,
     warned.length ? el('ul', {}, ...warned.map((x) => el('li', { class: 'guard-info', text: x }))) : null,
     blocked.length ? el('ul', {}, ...blocked.map((x) => el('li', { class: 'error', text: x }))) : null,

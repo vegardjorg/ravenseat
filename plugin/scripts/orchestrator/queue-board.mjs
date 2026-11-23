@@ -241,6 +241,8 @@ const HIST = require('./lib/taskHistory.js');
 // the quota cap the way `ravenseat schedule` takes it, and the load-aware slots (memory only, no CPU sampling here).
 const QT = require('./lib/queueTimeline.js');
 const SCHED = require('./lib/queueSchedule.js');
+// T-C: the uncertainty band per focus step and the backtest (board.timelineUncertainty).
+const UNC = require('./lib/scheduleUncertainty.js');
 const LOADS = require('./lib/loadSlots.js');
 
 /**
@@ -1451,10 +1453,27 @@ function scheduleData() {
   const key = QT.cacheKey({ queueStamp: stamp, settings, now });
   if (scheduleCache.key === key) return scheduleCache.data;
   const queue = JSON.parse(fs.readFileSync(FILE, 'utf8'));
-  const data = { enabled: true, settings, version: key, ...QT.timelineData(queue, { now, ...scheduleCaps(queue) }) };
+  const caps = scheduleCaps(queue);
+  // T-C (board.timelineUncertainty): the band is played up to 200 times (lib/scheduleUncertainty.js runsFor caps it by
+  // the open tasks), so it is kept per queue stamp and BAND_MINUTES instead of per minute; the backtest only reads the
+  // past, so it is kept per UTC day and the number of done tasks.
+  let extra = {};
+  if (settings.uncertainty) {
+    const bandKey = JSON.stringify([stamp, caps, Math.floor(now / (BAND_MINUTES * 60_000))]);
+    if (bandCache.key !== bandKey) bandCache = { key: bandKey, data: UNC.uncertainty(queue, { now, ...caps }) };
+    const doneCount = (queue.tasks ?? []).filter((o) => o?.status === 'done').length;
+    const backtestKey = JSON.stringify([Math.floor(now / 86_400_000), doneCount, (queue.tasks ?? []).length]);
+    if (backtestCache.key !== backtestKey) backtestCache = { key: backtestKey, data: UNC.backtest(queue, { now }) };
+    extra = { uncertainty: true, band: bandCache.data, backtest: backtestCache.data };
+  }
+  const data = { enabled: true, settings, version: key, ...QT.timelineData(queue, { now, ...caps, ...extra }) };
   scheduleCache = { key, data };
   return data;
 }
+/** T-C: how long the band is kept (minutes), and the band and backtest caches. */
+const BAND_MINUTES = 5;
+let bandCache = { key: null, data: null };
+let backtestCache = { key: null, data: null };
 
 /**
  * The caps the plan is played with: the same as cli/schedule.mjs. A forecast or a measurement that fails never stops
@@ -3601,6 +3620,8 @@ function resetCaches() {
   revertedCache = { time: 0, commits: new Set() };
   statCache = null;
   scheduleCache = { key: null, data: null };
+  bandCache = { key: null, data: null };
+  backtestCache = { key: null, data: null };
   planCache = null;
   tidyCache = null;
   checkCache = null;

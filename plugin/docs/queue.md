@@ -437,7 +437,9 @@ roughly right to 25 to 40 %. What they do not mean: one task's start and end are
 outcomes spans a factor 2.5 to 3), so they are shown relative to now and never as a promised time, and the plan holds only for the queue as
 it is now (new tasks that rank in ahead, fix rounds and changes in quota or load are not in it). For when the work is
 done with a spread, use `forecast`. `--json` gives every task with `rough: true` and a band. The logic is
-`lib/queueSchedule.js`.
+`lib/queueSchedule.js`. With 5 or more measured tasks in the last 28 days each focus step also gets "likely by" (P85
+of a seeded replay over the measured ratios) and a backtest line ("about N of 10 steps were done by the end of their
+band"); `--json` has them as `uncertainty` and `backtest` (`lib/scheduleUncertainty.js`).
 
 ### Cost estimates and calibration
 
@@ -1360,6 +1362,7 @@ opt-in checks. The main switch is `agentGuard.enabled`.
 | `board.timeline` | `true` (full), `false` (lite) | The Timeline tab: what ran in the last day and runs now, then the schedule (`ravenseat schedule`) as rough bars per focus step or project, with a now line, a table view and the tasks that cannot start; read only (see board.md, Timeline) | Advanced |
 | `board.timelineHorizonDays`, `board.timelineRows` | `3`, `step` | How many days ahead the Timeline shows (1 to 14, clamped), and its rows: `step` (one per focus step, in the focus order) or `project`; a browser can switch the rows on the tab | Advanced |
 | `board.timelineDrag` | `true` (full only) | Drag a task bar up or down in its focus step (rank) or a step row (focus order) on the Timeline, also with Space, the arrows and Enter; sideways and across steps are refused, since time is calculated. Every save has Undo | Advanced, Full mode only |
+| `board.timelineUncertainty` | `true` (full only) | Each focus step on the Timeline gets a band from P50 to P85 (the plan played up to 200 times with the measured actual-to-estimate spread, 28 days, at least 5 measured tasks), "done around X (likely by Y)", and the backtest's line on how often past steps were done by the end of their band. Tasks keep one rough bar. Read only | Advanced, Full mode only |
 | `board.timelineDragPreview` | `true` (full only) | A Timeline drop first shows the dry run and what it does to the plan in words, then Save or Cancel; off saves at once with Undo in the toast | Advanced, Full mode only |
 | `board.sinceLast` | `true` | "Since you left" at the top of Decisions: merged, recovered without you, blocked, waiting on you, spend and the latest events in the window; hidden when nothing happened (see board.md, Since you left; `ravenseat since` gives the same) | Basic |
 | `board.sinceLastWindow` | `last-seen` | Its window: `last-seen` (the seen mark in `<dataFolder>/seen.json`, the last 24 hours without one), `24h` or `7d`; "Decided" in Decisions follows it | Advanced |
