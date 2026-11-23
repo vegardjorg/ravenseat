@@ -30,7 +30,8 @@ branch, merging and pushing; you only do your track.
 - Gates: run the precheck first (`ravenseat gates --precheck`: the cheapest checks on the changed files, stops at the
   first red one). Only a green precheck goes on to the class's full gate, as the mission says (K and U:
   `ravenseat gates --quick`; D and D+: `ravenseat gates --full`). Never write your own check script. Read the log file of a red
-  gate instead of running it again.
+  gate instead of running it again. A test run of your own outside the gates (`npm test`, `vitest`, a red team run) goes
+  as `ravenseat heavy -- <command>`, so it takes a turn in the machine's queue.
 - The done command and the acceptance criteria in the mission are fixed: never change them (`ravenseat edit` refuses from
   your worktree). One that is wrong or impossible goes in the report (or SendMessage), so the owner decides.
 - **Decide or ask:** fix technical failures yourself without asking (red tests, lint, type errors, a red gate, bugs

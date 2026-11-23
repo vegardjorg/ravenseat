@@ -90,7 +90,7 @@ const LITE_GROUPS = [
 const QUEUE_COMMANDS = [
   'activeOnes', 'add', 'approve', 'area', 'areas', 'ask', 'attempt', 'batch', 'board-setting', 'block', 'blockers', 'calibrate', 'cancel', 'capacity', 'catalog', 'checks', 'classify', 'cloud', 'cloud-bundles',
   'cloud-package', 'compact', 'conflicts', 'continue', 'controls', 'cost', 'decide', 'deliver', 'deliveries', 'diagnose', 'doctor', 'edit', 'edit-many', 'explain', 'external',
-  'fill', 'finding', 'focus', 'follow', 'forecast', 'gate', 'guards', 'guidance', 'handover', 'helpers', 'info', 'init', 'inspection', 'issues', 'instructions', 'kickstart', 'limit', 'machine', 'merge', 'migr', 'mode', 'next', 'next-migr',
+  'fill', 'finding', 'focus', 'follow', 'forecast', 'gate', 'guards', 'guidance', 'handover', 'heavy', 'helpers', 'info', 'init', 'inspection', 'issues', 'instructions', 'kickstart', 'limit', 'machine', 'merge', 'migr', 'mode', 'next', 'next-migr',
   'orchestrator', 'owner-log', 'park', 'pick', 'pickable', 'plan', 'pr', 'private', 'project', 'projects', 'proposals', 'pulse-check', 'qa', 'question', 'rank', 'receive',
   'release', 'release-notes', 'resolutions', 'resolve', 'resume', 'review-item', 'schedule', 'secrets', 'set', 'settings', 'share', 'show', 'since', 'start', 'state', 'surface', 'tidy', 'trackFile', 'triage', 'unblock', 'undo', 'unlock', 'update', 'wait', 'wiring',
 ];

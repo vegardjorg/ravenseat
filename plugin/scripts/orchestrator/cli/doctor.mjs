@@ -696,6 +696,17 @@ function checkMachine() {
 }
 
 /**
+ * The machine queue (lib/gateQueueView.js, roadmap 0s V12): who holds a slot and who waits, as one INFO row. Display
+ * only: nothing when nothing is held or waited for, or with the queue off; it never takes a slot over or removes a ticket.
+ */
+function checkGateQueue() {
+  const setup = require('./lib/gateQueue.js').setupFrom(CONFIG);
+  const V = require('./lib/gateQueueView.js');
+  const snap = setup.enabled ? V.snapshot({ root: setup.root, slots: setup.slots, agingMin: setup.agingMin }) : null;
+  return V.doctorRows(snap, { enabled: setup.enabled, slots: setup.slots }).map((r) => info(r.name, r.message, r.fix));
+}
+
+/**
  * The daily budget (`limits.dailyBudget` in queue.json, logic/guards.js budgetGuard): WARN when none is set, so the
  * queue starts tasks whatever the day costs. A recommendation, never a FAIL: no budget is a valid choice. No
  * readable queue: nothing to say (the queue line reports it).
@@ -962,7 +973,7 @@ export async function cmdDoctor() {
     fixed = gitignoreNote(writeGitignore(CONFIG.root, CONFIG));
     if (!a.includes('--json')) console.log(`doctor --fix: ${fixed}\n`);
   }
-  const every = [checkNode, checkHooks, checkConfig, checkIssues, checkState, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkTidy, checkProjectFiles, checkSettings, checkTaxonomy, checkCatalog, checkNotBuilding, checkDepsAudit, checkLinks, checkGuards, checkGuardDecisions, checkCanary, checkCodeMode, ...REPO_CHECKS, checkCloud, checkMachine, checkBudget, checkTemp, checkCleanCopies, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
+  const every = [checkNode, checkHooks, checkConfig, checkIssues, checkState, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkTidy, checkProjectFiles, checkSettings, checkTaxonomy, checkCatalog, checkNotBuilding, checkDepsAudit, checkLinks, checkGuards, checkGuardDecisions, checkCanary, checkCodeMode, ...REPO_CHECKS, checkCloud, checkMachine, checkGateQueue, checkBudget, checkTemp, checkCleanCopies, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
     try {
       return f();
     } catch (e) {

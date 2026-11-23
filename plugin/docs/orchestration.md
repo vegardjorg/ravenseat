@@ -60,7 +60,8 @@ A scheduled or looped pulse (for example a prompt that runs every 30 minutes ove
   `SILENT` again. A delivery needs no extra item for `report_seen`: `RECEIVE` lists it until it is received.
 - What waits on the owner is never ACTION, since nobody answers at night. `--include-owner` adds one last line,
   `FOR THE OWNER: <n> open question(s), <m> finished cloud track(s) to collect on your yes (...)`, for the morning; it
-  does not change the exit code.
+  does not change the exit code. With a slot of the machine's gate queue held, a `GATE QUEUE:` line before it says who
+  holds it and who waits (also after ACTION items); a plain `SILENT` stays one line.
 - Exit 2 is a usage error (an unknown flag or a flag without its value); nothing is written then.
 
 `pulse-check` writes nothing the pulse keeps (no cloud-check gate, no conflict cache, no inspection state), so a tick
