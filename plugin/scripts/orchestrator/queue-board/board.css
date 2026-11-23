@@ -2249,6 +2249,13 @@ a.issue-link:hover {
   color: var(--color-on-surface-variant);
 }
 
+/* Buttons side by side in a setting (Help): a gap between them, wrapping when the panel is narrow. */
+.setting-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--distance-sm);
+}
+
 .setting-field {
   padding: var(--distance-sm) 0 var(--distance-md);
 }

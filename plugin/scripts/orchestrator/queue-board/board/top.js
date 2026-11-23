@@ -69,27 +69,32 @@ function helpSection() {
     'section',
     { class: 'setting', 'aria-labelledby': 'setting-help' },
     el('h3', { id: 'setting-help', class: 'setting-title', text: 'Help' }),
-    // The id is where "Back to menu" in the help puts focus (B9).
-    el('button', {
-      id: 'settings-open-help',
-      type: 'button',
-      class: 'button button-outline',
-      text: 'How to use the board',
-      onclick: () => {
-        openHelp({ fromSettings: true });
-      },
-    }),
-    // J3: the shortcut overview (board/keys.js), also when the shortcuts are off, so they can be turned on from there.
-    el('button', {
-      type: 'button',
-      class: 'button button-outline',
-      text: 'Keyboard shortcuts',
-      'aria-keyshortcuts': 'Shift+?',
-      onclick: () => {
-        closePanel();
-        window.QueueKeys?.open();
-      },
-    }),
+    // The two buttons sit in a row with a gap (owner 23.11: they were flush against each other).
+    el(
+      'div',
+      { class: 'setting-buttons' },
+      // The id is where "Back to menu" in the help puts focus (B9).
+      el('button', {
+        id: 'settings-open-help',
+        type: 'button',
+        class: 'button button-outline',
+        text: 'How to use the board',
+        onclick: () => {
+          openHelp({ fromSettings: true });
+        },
+      }),
+      // J3: the shortcut overview (board/keys.js), also when the shortcuts are off, so they can be turned on there.
+      el('button', {
+        type: 'button',
+        class: 'button button-outline',
+        text: 'Keyboard shortcuts',
+        'aria-keyshortcuts': 'Shift+?',
+        onclick: () => {
+          closePanel();
+          window.QueueKeys?.open();
+        },
+      }),
+    ),
   );
 }
 
