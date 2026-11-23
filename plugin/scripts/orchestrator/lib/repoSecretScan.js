@@ -261,7 +261,7 @@ function writeJson(file, data) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, `${JSON.stringify(data, null, 2)}\n`);
-  fs.renameSync(tmp, file);
+  require('./stateFile.js').renameWithRetry(tmp, file); // Windows: a reader at the same moment (RNM-1)
 }
 
 /** The ignore file: { salt, ignored: [{ hash, at, note? }] }. A missing or broken file reads as empty. */

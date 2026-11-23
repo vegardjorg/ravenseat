@@ -164,7 +164,7 @@ function register(meta, { pid, parentPid, now = Date.now() }) {
     fs.mkdirSync(meta.dir, { recursive: true });
     const tmp = `${file}.${process.pid}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(row));
-    fs.renameSync(tmp, file);
+    require('./stateFile.js').renameWithRetry(tmp, file); // Windows: a reader at the same moment (RNM-1)
     return file;
   } catch {
     return null; // fail open: the register shows, it never stops a run
