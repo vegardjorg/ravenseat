@@ -26,7 +26,7 @@
 //                 the command, so the command and its children inherit it (nice on POSIX; on Windows a child of a
 //                 BELOW_NORMAL process inherits that class). Never IDLE, which could starve a run on a busy machine.
 //                 The wait runner, dev servers and the main session's own commands are never touched: they do not run
-//                 under a heavy guard. processGuard.lowerPriority (on: it slows, it stops nothing).
+//                 under a heavy guard. processGuard.lowerPriority (off by default: see the friction note in settingsRegistry.js).
 //   V4 overtime   a running track whose time since start is over tracks.overtimeFactor x its estimate (lib/logic/base.js
 //                 estimate, the minutes shown in `ravenseat show`) gets a WARN row and a Checks card. Never a stop. 2 by
 //                 default (owner 16.11); 0 = off.
@@ -61,7 +61,7 @@ const SLACK_MS = 60_000;
 const UNTAGGED_LONG_MS = 30 * 60_000;
 /** A register file of a dead pid younger than this may be one being written: left alone. */
 const FRESH_MS = 60_000;
-const DEFAULTS = Object.freeze({ register: true, sweep: true, autoKill: false, lowerPriority: true, overtimeFactor: 2 });
+const DEFAULTS = Object.freeze({ register: true, sweep: true, autoKill: false, lowerPriority: false, overtimeFactor: 2 });
 
 /** The settings (processGuard.*, tracks.overtimeFactor) with the defaults filled in. */
 function setupOf(cfg = {}) {

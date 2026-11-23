@@ -459,14 +459,15 @@ const SETTINGS = Object.freeze([
     'Doctor and the pulse check also end each leftover the sweep finds (the whole tree), after confirming from its ' +
     'command line that it is a Ravenseat guard; a pid it cannot confirm is only shown. Off by default: it can stop a ' +
     'run that would still have finished. The check is read only, but on Windows it takes a few seconds.'),
-  // Friction: low. The heavy runs take a little longer while the machine is busy; nothing is stopped and nothing
-  // starves (BELOW_NORMAL, never IDLE). A run with a time budget of a few seconds can reach it on a busy machine, so a
-  // command with a very tight budget may need this off. On: the owner's own work and the main session stay responsive.
+  // Friction: high on a saturated Windows machine. A BELOW_NORMAL run gets next to no CPU while normal-priority work
+  // (track agents' own test runs, the owner's tools) fills every core, so gate, done and base runs reach their time
+  // budget and go red: measured 23.11, the base gate tests timed out at 240 s lowered and passed at normal priority.
+  // That can stop work, so it is off by default; on suits a machine with free cores, where it only slows the heavy runs.
   row('processGuard.lowerPriority', 'load', 'onoff', 'Lower priority for heavy runs',
     'Gate commands, done commands and the base gate run at BELOW_NORMAL priority (nice 10 on Linux and macOS), and ' +
     'what they start inherits it. Never IDLE. Dev servers, wait runs and the main session\'s own commands are not ' +
-    'touched. A busy machine makes them slower, so a time budget of only a few seconds can run out. Off: they run at ' +
-    'normal priority.'),
+    'touched. Off by default: when other work fills every core, a lowered run gets almost no CPU and can run out of ' +
+    'its time budget. Off: they run at normal priority.'),
   // Friction: none, a warning only: a doctor WARN row and a Checks card, never a stop. 2 by owner decision 16.11: a
   // track at twice its estimate is worth a look; earlier would warn on the normal spread of estimates.
   row('tracks.overtimeFactor', 'load', 'number', 'Overtime warning (x estimate)',

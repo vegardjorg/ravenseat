@@ -988,9 +988,9 @@ with the command that ends it and what it started (`processGuard.sweep`). They n
 register. `processGuard.autoKill` (off) ends those only after the command line shows a Ravenseat guard.
 A heavy run without a track that has run over 30 minutes gets an INFO row and a low card, and a running track over
 `tracks.overtimeFactor` times its estimate (2) a WARN row and a card. Neither stops anything. A run for a track
-carries `RAVENSEAT_TRACK=<id>` in its environment, and gate, done and base runs start at BELOW_NORMAL priority
-(`processGuard.lowerPriority`), never IDLE. On a busy machine that makes them slower, so a budget of a few seconds
-can run out.
+carries `RAVENSEAT_TRACK=<id>` in its environment. With `processGuard.lowerPriority` on, gate, done and base runs
+start at BELOW_NORMAL priority, never IDLE. It is off by default: when other work fills every core, a lowered run gets
+almost no CPU and can run out of its time budget.
 
 ### The clean copy
 
@@ -1194,7 +1194,7 @@ board ("Protects against: ...") and in that view.
 | `processGuard.register` | `true` | [Processes Ravenseat starts](#processes-ravenseat-starts): every gate, done, base and wait run writes one file in `<data folder>/processes/` while it runs and removes it at the end. It stops nothing | Advanced |
 | `processGuard.sweep` | `true` | Doctor (`processes`), the pulse check (`PROCESS <pid>`) and the Checks tab name registered processes that outlived their starter or their time budget, with pid, owner, age and the stop command; long heavy runs without a track too. Display only | Advanced |
 | `processGuard.autoKill` | `false` | Doctor and the pulse check also end those leftovers, each only after its command line confirms a Ravenseat guard. Off: it can stop a run that would have finished | Advanced |
-| `processGuard.lowerPriority` | `true` | Gate commands, done commands and the base gate run at BELOW_NORMAL priority (never IDLE), inherited by what they start; wait runs, dev servers and the main session are not touched | Advanced |
+| `processGuard.lowerPriority` | `false` | Gate commands, done commands and the base gate run at BELOW_NORMAL priority (never IDLE), inherited by what they start; wait runs, dev servers and the main session are not touched. Off by default: a lowered run starves when other work fills every core | Advanced |
 | `tracks.overtimeFactor` | `2` | A running track over this many times its estimate gets a doctor WARN row and a Checks card, never a stop. `0` = off | Advanced |
 | `limits.parallelThreshold`, `limits.silentMin`, `limits.noAgentMin` | `0.7`, `20`, `15` | The share of concurrent tracks below which fill, receive and pulse write a short diagnosis; minutes without a sign of life before a running track counts as silent; minutes before a track marked running that no agent took counts as NO AGENT (`0` = off for both) | Advanced, queue.json |
 | `limits.spinMin` | `15` | Minutes a busy track may go without real work before it is `SPINNING`: its newest calls are only bookkeeping (to-do lists, tool loading), sleeps or the same reads again, with no write, command or commit. A line in `show`, the pulse and the pulse check; after 60 min also a Decisions card, as SILENT. Never a stop. `0` = off | Advanced, queue.json |

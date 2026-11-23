@@ -1,7 +1,7 @@
 // =============================================================
 // processGuard.test.ts: the process guard (roadmap 0s part A, lib/processGuard.js).
 //
-// Locks: (1) the settings and their defaults (register, sweep, lowerPriority on; autoKill off; overtime factor 2);
+// Locks: (1) the settings and their defaults (register and sweep on; autoKill and lowerPriority off; overtime factor 2);
 // (2) the meta a caller hands the guard (lib/treeRun.js): the registry folder only with register on, a short command
 // label without values, the track tag, lower priority only for heavy kinds; the child environment keeps the track tag
 // and drops the meta; (3) the register: one file per process, read back, removed at the end; (4) the sweep: a dead
@@ -56,7 +56,7 @@ afterAll(() => {
 
 describe('settings', () => {
   it('has the defaults: register, sweep and lower priority on, the automatic stop off, overtime at 2x', () => {
-    expect(PG.setupOf({})).toEqual({ register: true, sweep: true, autoKill: false, lowerPriority: true, overtimeFactor: 2 });
+    expect(PG.setupOf({})).toEqual({ register: true, sweep: true, autoKill: false, lowerPriority: false, overtimeFactor: 2 });
   });
   it('takes the project values, and a bad factor falls back to the default', () => {
     const s = PG.setupOf({ processGuard: { register: false, autoKill: true, lowerPriority: false }, tracks: { overtimeFactor: 0 } });
@@ -69,18 +69,20 @@ describe('meta for the guard', () => {
   it('names the registry folder, the owner and the max time, and a short label without values', () => {
     const m = JSON.parse(PG.metaFor({}, { folder: '/data', kind: 'gate', track: 'T-1', maxMs: 60_000, command: 'API_KEY=abc123 npm run test -- --reporter dot' }) as string);
     expect(m.dir).toBe(path.join('/data', 'processes'));
-    expect(m).toMatchObject({ kind: 'gate', track: 'T-1', owner: 'T-1', maxMs: 60_000, lower: true });
+    expect(m).toMatchObject({ kind: 'gate', track: 'T-1', owner: 'T-1', maxMs: 60_000, lower: false });
     expect(m.label).not.toContain('abc123');
     expect(m.label).toContain('npm run test');
   });
   it('has no folder with register off, and no meta at all when nothing is on', () => {
-    const m = JSON.parse(PG.metaFor({ processGuard: { register: false } }, { folder: '/data', kind: 'gate' }) as string);
+    const m = JSON.parse(PG.metaFor({ processGuard: { register: false, lowerPriority: true } }, { folder: '/data', kind: 'gate' }) as string);
     expect(m.dir).toBeNull();
     expect(PG.metaFor({ processGuard: { register: false, lowerPriority: false } }, { folder: '/data', kind: 'gate' })).toBeNull();
   });
-  it('lowers only heavy kinds (gate, done, base), never the wait runner', () => {
-    expect(JSON.parse(PG.metaFor({}, { folder: '/d', kind: 'wait' }) as string).lower).toBe(false);
-    expect(JSON.parse(PG.metaFor({}, { folder: '/d', kind: 'done' }) as string).lower).toBe(true);
+  it('lowers nothing by default; with lowerPriority on, only heavy kinds (gate, done, base), never the wait runner', () => {
+    expect(JSON.parse(PG.metaFor({}, { folder: '/d', kind: 'done' }) as string).lower).toBe(false);
+    const on = { processGuard: { lowerPriority: true } };
+    expect(JSON.parse(PG.metaFor(on, { folder: '/d', kind: 'wait' }) as string).lower).toBe(false);
+    expect(JSON.parse(PG.metaFor(on, { folder: '/d', kind: 'done' }) as string).lower).toBe(true);
   });
   it('the owner is the command label when there is no track', () => {
     expect(JSON.parse(PG.metaFor({}, { folder: '/d', kind: 'base', command: 'npm test' }) as string).owner).toBe('base: npm test');
@@ -291,7 +293,7 @@ describe('the hook-ins (doctor, pulse, Checks)', () => {
 describe('a real guard run', () => {
   it('registers while it runs, removes the file after, lowers the command and tags it', () => {
     const data = tempDir();
-    const meta = PG.metaFor({}, { folder: data, kind: 'gate', track: 'T-REAL', maxMs: 60_000, command: 'node -e probe' });
+    const meta = PG.metaFor({ processGuard: { lowerPriority: true } }, { folder: data, kind: 'gate', track: 'T-REAL', maxMs: 60_000, command: 'node -e probe' });
     const dir = path.join(data, 'processes');
     // The command: its own priority, its environment's tag and meta, and the register as it sees it while running.
     const script =

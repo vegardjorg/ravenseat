@@ -773,8 +773,9 @@ const STANDARD = Object.freeze({
   // commands, the base gate, wait runs) writes <dataFolder>/processes/<pid>.json while it runs. sweep: doctor, the pulse
   // check and the Checks tab name the ones that outlived their starter or their time budget, with the stop command.
   // autoKill: doctor and the pulse check also end those (only after confirming each is a Ravenseat guard); off, since it
-  // can stop work. lowerPriority: the guard of a gate, done or base run lowers it to BELOW_NORMAL (never IDLE).
-  processGuard: { register: true, sweep: true, autoKill: false, lowerPriority: true },
+  // can stop work. lowerPriority: the guard of a gate, done or base run lowers it to BELOW_NORMAL (never IDLE); off,
+  // since a lowered run starves when other work fills every core and then runs out of its time budget.
+  processGuard: { register: true, sweep: true, autoKill: false, lowerPriority: false },
   // overtimeFactor: a running track over this many times its estimate gets a doctor WARN and a Checks card, never a
   // stop (roadmap 0s V4, 2 by owner decision 16.11). 0 = off.
   tracks: { overtimeFactor: 2 },
