@@ -138,8 +138,12 @@ The hooks are in `plugin/hooks/hooks.json`. They decide only on what Claude Code
 **Where it only helps.** The command guard reads a command string. `plugin/docs/guide.md` ("Guarantees and limits")
 lists what it cannot read: the contents of a script an agent runs (`bash x.sh`, an `npm run` script), and commands built
 from string pieces inside an interpreter. A blocked command can often be written another way. The write guard covers the
-file tools, not a Bash redirect. Every hook fails open on an internal error (the headers of `hook-push-guard.mjs` and
-`hook-write-guard.mjs`), because a bug in a guard must not stop normal work. And a hook only runs while the plugin loads:
+file tools, not a Bash redirect. Failures have two levels. An internal error inside a hook (a module that does not
+load, a rule that throws) fails open, because a bug in a guard must not stop normal work; the push guard still denies a
+forced push, a branch delete and `--mirror` through `lib/pushGuardFallback.js`. When the guard process itself fails
+(cannot start, crashes, times out, invalid output), the push guard and the write guard block the call
+(`"onFailure": "block"` in `hooks/hooks.json`, setting `guards.onHookFailure`); the other hooks let it run. Details:
+`plugin/docs/orchestration.md`. And a hook only runs while the plugin loads:
 the 0.8.24 changelog warns that after the rename an old `cq` install failed to load, and its hooks, the push guard among
 them, were off.
 
