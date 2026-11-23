@@ -268,6 +268,9 @@ const REQUIRES = Object.freeze({
   // lib/silentSnapshot.js: enabled false writes no snapshot, so neither the count nor the cap is read.
   'silentSnapshot.keep': ['silentSnapshot.enabled'],
   'silentSnapshot.maxKB': ['silentSnapshot.enabled'],
+  // lib/processGuard.js: the sweep reads what the register wrote, and the automatic stop acts on the sweep's findings.
+  'processGuard.sweep': ['processGuard.register'],
+  'processGuard.autoKill': ['processGuard.sweep'],
 });
 
 /** One row with the defaults filled in: advanced, both modes, queue.config.json, settable, no warning texts. */
@@ -460,6 +463,39 @@ const SETTINGS = Object.freeze([
     }),
   row('gateTemp.enabled', 'load', 'onoff', 'Temp folder per gate run',
     'Each gate run gets its own temp folder, removed afterwards, so what the tests leave goes with it.'),
+  // The process guard (lib/processGuard.js, roadmap 0s, owner 16.11).
+  // Friction: none. One small file per running gate, done, base or wait run in the data folder, removed when it ends;
+  // it never stops or slows a run. On: the sweep has nothing to read without it.
+  row('processGuard.register', 'load', 'onoff', 'Register the processes Ravenseat starts',
+    'Every gate command, done command, base gate and wait run writes one small file (pid, owner, start, max time) in ' +
+    'the data folder\'s processes/ folder while it runs, and removes it when it ends. It stops nothing. Off: no file, ' +
+    'so doctor and the pulse cannot name leftovers.'),
+  // Friction: none, display only. A doctor row, a pulse line and a Checks card for leftovers; it removes register files
+  // of dead pids. On: a leftover that holds memory and CPU for days is otherwise never seen (0o: 21 for two days).
+  row('processGuard.sweep', 'load', 'onoff', 'Show leftover processes',
+    'Doctor, the pulse check and the Checks tab name each registered process that outlived the process that started ' +
+    'it or ran past its time budget, with its pid, owner, age and the command that ends it and what it started; long ' +
+    'heavy runs without a track are shown too. It never touches a process Ravenseat did not start. Off: no row, line or card.'),
+  // Friction: HIGH when on, it can end work: a run that looks over its time but would have finished. Off by default
+  // (owner 16.11). Even on, a pid is ended only after its command line confirms it is a Ravenseat guard.
+  row('processGuard.autoKill', 'load', 'onoff', 'Stop leftover processes by itself',
+    'Doctor and the pulse check also end each leftover the sweep finds (the whole tree), after confirming from its ' +
+    'command line that it is a Ravenseat guard; a pid it cannot confirm is only shown. Off by default: it can stop a ' +
+    'run that would still have finished. The check is read only, but on Windows it takes a few seconds.'),
+  // Friction: high on a saturated Windows machine. A BELOW_NORMAL run gets next to no CPU while normal-priority work
+  // (track agents' own test runs, the owner's tools) fills every core, so gate, done and base runs reach their time
+  // budget and go red: measured 23.11, the base gate tests timed out at 240 s lowered and passed at normal priority.
+  // That can stop work, so it is off by default; on suits a machine with free cores, where it only slows the heavy runs.
+  row('processGuard.lowerPriority', 'load', 'onoff', 'Lower priority for heavy runs',
+    'Gate commands, done commands and the base gate run at BELOW_NORMAL priority (nice 10 on Linux and macOS), and ' +
+    'what they start inherits it. Never IDLE. Dev servers, wait runs and the main session\'s own commands are not ' +
+    'touched. Off by default: when other work fills every core, a lowered run gets almost no CPU and can run out of ' +
+    'its time budget. Off: they run at normal priority.'),
+  // Friction: none, a warning only: a doctor WARN row and a Checks card, never a stop. 2 by owner decision 16.11: a
+  // track at twice its estimate is worth a look; earlier would warn on the normal spread of estimates.
+  row('tracks.overtimeFactor', 'load', 'number', 'Overtime warning (x estimate)',
+    'A running track that has run longer than this many times its estimate gets a WARN row in doctor and a card on ' +
+    'the Checks tab. It is never stopped. 0 = off.'),
   row('limits.parallelThreshold', 'load', 'number', 'Low parallelism threshold',
     'The share of concurrent tracks below which fill, receive and pulse write a short queue diagnosis. 0 = off.', QUEUE),
   row('limits.silentMin', 'load', 'integer', 'Silent after (minutes)',

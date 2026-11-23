@@ -320,6 +320,29 @@ function option(args, name) {
 }
 
 /**
+ * The runner's environment with the process guard's meta (lib/processGuard.js, roadmap 0s): the run's guard registers
+ * itself in the data folder; a wait run is never lowered in priority (its gate commands are, by gates.mjs). No data
+ * folder or any error: the environment as it is.
+ */
+function guardEnv(o) {
+  try {
+    if (!o.dataFolder) return process.env;
+    const PG = require('./processGuard.js');
+    const cfg = require('./queueConfig.js').config();
+    const meta = PG.metaFor(cfg, {
+      folder: o.dataFolder,
+      kind: 'wait',
+      track: process.env[PG.TRACK_ENV] || null,
+      maxMs: o.setup.hardSec > 0 ? o.setup.hardSec * 1000 : null,
+      command: `ravenseat ${o.command}`,
+    });
+    return PG.withMeta(process.env, meta);
+  } catch {
+    return process.env; // error-ignored: the guard shows, it never stops a run
+  }
+}
+
+/**
  * The whole call: `--wait <id>`, or start (or attach) and wait. Returns the exit code.
  * @param {{ command: string, args: string[], childArgv: string[], setup: { blockSec: number, hardSec: number },
  *   cwd: string, dataFolder: string|null, cli: string }} o
@@ -347,7 +370,7 @@ async function main(o) {
   }
   const runCwd = o.command === 'gates' && option(o.args, '--cwd') ? path.resolve(o.cwd, option(o.args, '--cwd')) : o.cwd;
   const key = runKey({ command: o.command, args: o.args, cwd: runCwd, sha: headOf(runCwd) });
-  const run = startOrAttach({ folder, command: o.command, args: o.args, key, what, childArgv: o.childArgv, cwd: o.cwd, hardSec: o.setup.hardSec });
+  const run = startOrAttach({ folder, command: o.command, args: o.args, key, what, childArgv: o.childArgv, cwd: o.cwd, hardSec: o.setup.hardSec, env: guardEnv(o) });
   if (run.attached)
     await say(
       `ALREADY RUNNING: the same ${run.meta.what} is already running on this commit (run ${run.id}, started ` +

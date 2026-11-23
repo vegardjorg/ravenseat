@@ -22,6 +22,10 @@
 //               (lib/tidy.js). Never WARN or FAIL; off with tidy.doctor false
 //   machine     cores and memory against maxConcurrent (lib/machineAdvice.js, an estimate): OK, or WARN when maxConcurrent
 //               is above the suggestion; never FAIL
+//   processes   the process guard (lib/processGuard.js): WARN per process Ravenseat started that outlived its starter or
+//               its time budget, with the stop command; INFO for long heavy runs without a track; OK otherwise. It
+//               removes the register files of dead pids, and stops processes only with processGuard.autoKill on
+//   overtime    only when there is one: WARN for running tracks over tracks.overtimeFactor x their estimate
 //   budget      WARN when no daily budget is set (`ravenseat limit dailyBudget <usd>`); never FAIL, quiet guidance
 //               hides it
 //   git         FAIL when `git` is not found on PATH at all (red team scenario 14).
@@ -56,7 +60,8 @@
 //   the safety baseline (cli/doctorBaseline.mjs, offline): secrets (a tracked .env or private key is FAIL), gates,
 //               ci, lockfile, prod (productionBranch vs baseBranch), largefile
 // Exit code 1 when any check FAILs, otherwise 0. It never changes anything: no lock, no write, no git command that
-// writes (git runs read-only, as in cli/context.mjs).
+// writes (git runs read-only, as in cli/context.mjs). The exceptions are leftovers only: the clean gate copies past
+// their age, the process register's files of dead pids, and (processGuard.autoKill, off by default) confirmed leftovers.
 // QUEUE_HOOKS overrides the path to the hooks file (tests).
 //
 // Used by: queue.mjs (dispatch).
@@ -96,7 +101,7 @@ const MIN_NODE = 20;
 /** A lock older than this was left by a process that died (the same limit as withLock in cli/context.mjs). */
 const STALE_LOCK_MS = 60_000;
 /** The config objects whose keys are fixed: an unknown key in them is a typo. The others are open maps. */
-const CLOSED = ['identity', 'cloud', 'gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan', 'gitignoreCheck', 'permissionsCheck', 'dbGuard', 'testWeakening', 'focus', 'gateQueue', 'gateTemp', 'usageLimit', 'stateSnapshots', 'reads', 'agentGuard', 'agentPushBlock', 'controlFiles', 'guardLog', 'gateEvidence', 'ownership', 'history', 'share', 'client', 'updates', 'notBuilding', 'deps', 'tidy', 'issues', 'codeMode'];
+const CLOSED = ['identity', 'cloud', 'gates', 'migrations', 'readGuard', 'loadGuard', 'qa', 'capacity', 'board', 'contextGuard', 'features', 'documents', 'proposals', 'push', 'secretScan', 'gitignoreCheck', 'permissionsCheck', 'dbGuard', 'testWeakening', 'focus', 'gateQueue', 'gateTemp', 'usageLimit', 'stateSnapshots', 'reads', 'agentGuard', 'agentPushBlock', 'controlFiles', 'guardLog', 'gateEvidence', 'ownership', 'history', 'share', 'client', 'updates', 'notBuilding', 'deps', 'tidy', 'issues', 'codeMode', 'processGuard', 'tracks'];
 
 const ok = (name, message) => ({ status: 'OK', name, message, fix: null });
 const warn = (name, message, fix) => ({ status: 'WARN', name, message, fix });
@@ -726,6 +731,16 @@ function checkBudget() {
   ];
 }
 
+/**
+ * The process guard (lib/processGuard.js, roadmap 0s): processes Ravenseat started that outlived their starter or their
+ * time budget (WARN with the stop command), long heavy runs without a track (INFO) and running tracks over
+ * tracks.overtimeFactor x their estimate (WARN). Removes the register files of dead pids; stops a process only with
+ * processGuard.autoKill on (off by default). Never FAIL.
+ */
+function checkProcesses() {
+  return require('./lib/processGuard.js').rowsFor({ folder: FOLDER, cfg: CONFIG, tasks: readJson(FILE)?.value?.tasks ?? [] });
+}
+
 /** The temp folder: entries per prefix, without sizes, so it stays fast with tens of thousands. It changes nothing. */
 function checkTemp() {
   const T = require('./lib/gateTemp.js');
@@ -973,7 +988,7 @@ export async function cmdDoctor() {
     fixed = gitignoreNote(writeGitignore(CONFIG.root, CONFIG));
     if (!a.includes('--json')) console.log(`doctor --fix: ${fixed}\n`);
   }
-  const every = [checkNode, checkHooks, checkConfig, checkIssues, checkState, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkTidy, checkProjectFiles, checkSettings, checkTaxonomy, checkCatalog, checkNotBuilding, checkDepsAudit, checkLinks, checkGuards, checkGuardDecisions, checkCanary, checkCodeMode, ...REPO_CHECKS, checkCloud, checkMachine, checkGateQueue, checkBudget, checkTemp, checkCleanCopies, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
+  const every = [checkNode, checkHooks, checkConfig, checkIssues, checkState, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkTidy, checkProjectFiles, checkSettings, checkTaxonomy, checkCatalog, checkNotBuilding, checkDepsAudit, checkLinks, checkGuards, checkGuardDecisions, checkCanary, checkCodeMode, ...REPO_CHECKS, checkCloud, checkMachine, checkGateQueue, checkProcesses, checkBudget, checkTemp, checkCleanCopies, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
     try {
       return f();
     } catch (e) {

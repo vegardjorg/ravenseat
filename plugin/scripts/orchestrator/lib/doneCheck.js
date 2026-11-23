@@ -200,16 +200,22 @@ function tailOf(text, n = DEFAULT_TAIL_LINES) {
  * At the budget the whole tree is ended, the shell and everything it started (lib/treeRun.js): spawnSync's own timeout
  * killed only the shell, and on Windows a hanging command it started lived on with a dead parent.
  * `spawn` is a spawnSync, called as spawn(file, args, options) (lib/gateEnv.js trackCodeSpawn gives one).
+ * `processGuard` ({ cfg, folder, kind, track }, lib/processGuard.js): the run registers itself, is tagged with the track
+ * and runs at a lower priority, as processGuard.* says. null (tests, callers without a data folder): none of that.
  * @returns {{ ok: boolean, exit: number|null, timedOut: boolean, durationSec: number, tail: string[] }}
  */
-function runDoneWhen({ command, cwd, timeoutSec = DEFAULT_TIMEOUT_SEC, tailLines = DEFAULT_TAIL_LINES, spawn = null }) {
+function runDoneWhen({ command, cwd, timeoutSec = DEFAULT_TIMEOUT_SEC, tailLines = DEFAULT_TAIL_LINES, spawn = null, processGuard = null }) {
   const t0 = Date.now();
+  const meta = processGuard
+    ? require('./processGuard.js').metaFor(processGuard.cfg ?? {}, { ...processGuard, maxMs: timeoutSec * 1000, command })
+    : null;
   const s = require('./treeRun.js').runBounded(command, {
     cwd,
     timeoutMs: timeoutSec * 1000,
     // A large buffer: an overflow kills the command, which would read as a red run that is not the code's fault.
     maxBuffer: 1 << 28,
     ...(spawn ? { spawn } : {}),
+    meta,
   });
   const timedOut = s.timedOut;
   // A run ended at the budget has no exit code of its own (the supervisor's is not the command's).

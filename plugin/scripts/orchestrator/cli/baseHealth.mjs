@@ -31,6 +31,8 @@ const GB = require('./lib/gitSurfaceBaseline.js');
 
 /** The base gate commands run the merged tracks' code: the same scrubbed environment as the gates (lib/gateEnv.js). */
 const trackCodeSpawn = () => GV.trackCodeSpawn(process.env, { storeFile: GE.storeFile(FOLDER), root: CONFIG.root });
+/** The process guard for the base gate's commands (lib/processGuard.js): registered, lower priority, no track. */
+const PROCESS_GUARD = { cfg: CONFIG, folder: FOLDER, kind: 'base', track: null };
 /**
  * The database guard for the base gate (lib/dbGuard.js, opt-in: dbGuard.localOnly): a function that gives the refusal
  * line for a probe gate command whose database is not local, or null when the guard is off.
@@ -116,6 +118,7 @@ export function runCheckNow({ tip, folder, cause = null }) {
     tailLines: BASE_SETUP.tailLines,
     spawn: trackCodeSpawn(),
     guard: dbGuard(),
+    processGuard: PROCESS_GUARD,
   });
   // The flaky check: the red command (and the ones after it, which never ran) once more on the same sha.
   if (!run.ok) {
@@ -155,7 +158,7 @@ function rerunFailed({ tip, commands }) {
   if (!BASE_SETUP.flakyRerun || !commands.length) return null;
   if (git(['rev-parse', 'HEAD']) !== tip) return null;
   console.log(`Base gate red: running the failed command(s) once more on the same sha (${short(tip)}): ${commands.join(' ; ')}`);
-  return BH.runBaseGate({ commands, cwd: GIT_ROOT, timeoutSec: BASE_SETUP.timeoutSec, tailLines: BASE_SETUP.tailLines, spawn: trackCodeSpawn(), guard: dbGuard() });
+  return BH.runBaseGate({ commands, cwd: GIT_ROOT, timeoutSec: BASE_SETUP.timeoutSec, tailLines: BASE_SETUP.tailLines, spawn: trackCodeSpawn(), guard: dbGuard(), processGuard: PROCESS_GUARD });
 }
 
 /** The lines after a flaky check, and on green the finding and the flakyGate row (fileFlaky). */

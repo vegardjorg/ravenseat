@@ -43,5 +43,10 @@
     "key": "client",
     "title": "Claude Code",
     "text": "How Ravenseat reads what Claude Code writes. A card here means a newer Claude Code writes something Ravenseat does not know yet."
+  },
+  {
+    "key": "machine",
+    "title": "Processes on this machine",
+    "text": "What Ravenseat started on this machine and is still running, and tracks that run far over their estimate. A card here is a warning; nothing is stopped."
   }
 ]

@@ -278,6 +278,9 @@ function makeReport(queue) {
       ...safeCiParity(readFile),
       // The dependency audit's cache (roadmap 0å KD-4, cli/depsAudit.mjs): the card dep-audit-found. Never the network.
       depAudit: safeDepAudit(),
+      // The process guard (roadmap 0s, lib/processGuard.js): leftover processes, long runs without a track and tracks
+      // over their estimate, for the cards processes-left, processes-untagged and tracks-overtime. Read only.
+      processGuard: require('./lib/processGuard.js').factsFor({ folder: FOLDER, cfg: CONFIG, tasks: queue?.tasks ?? [] }),
     },
     catalog,
     tasks: queue?.tasks ?? [],

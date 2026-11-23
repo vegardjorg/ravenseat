@@ -561,6 +561,24 @@ function killTree(child) {
   TR.killTree(child.pid);
 }
 
+/** The track this gate run is for (RAVENSEAT_TRACK, --track, or the branch), found once. */
+let guardTrackNow;
+/**
+ * The gate command's environment with the process guard's meta (lib/processGuard.js, roadmap 0s): the register in the
+ * data folder, the track tag and the lower priority, as processGuard.* says. Any error: the environment as it was.
+ */
+function guardEnv(env, command, timeoutMs) {
+  try {
+    const PG = require('./lib/processGuard.js');
+    if (guardTrackNow === undefined)
+      guardTrackNow = process.env[PG.TRACK_ENV] || option('--track') || TL.trackFromBranch(headNow().branch, K.branchPrefix) || null;
+    const meta = PG.metaFor(K, { folder: require('./lib/queueConfig.js').dataFolder(), kind: 'gate', track: guardTrackNow, maxMs: timeoutMs, command });
+    return PG.withMeta(env, meta);
+  } catch {
+    return env; // error-ignored: the guard shows, it never stops a gate
+  }
+}
+
 /**
  * Runs one shell command, with a time limit when `timeoutMs` is given. Resolves to { status, out, timedOut }.
  * Async, so the event loop stays free for the memory sampling and the signal handlers.
@@ -581,7 +599,8 @@ function runShell(command, { timeoutMs = null } = {}) {
       cwd: runCwd, // the gate folder, or the clean copy (lib/gateClean.js)
       detached: true,
       // Hidden windows passed on to the gate command and its children (lib/hideWindows.cjs: windowsHide here does not reach what the run starts).
-      env: hiddenWindowsEnv(gateCommandEnv()), // scrubbed (lib/gateEnv.js): the check runs the track's code. With its own temp folder (lib/gateTemp.js)
+      // The process guard's meta (lib/processGuard.js): the guard registers itself, lowers its priority and tags the track.
+      env: hiddenWindowsEnv(guardEnv(gateCommandEnv(), command, timeoutMs)), // scrubbed (lib/gateEnv.js): the check runs the track's code. With its own temp folder (lib/gateTemp.js)
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'], // no stdin: a command that reads it gets end of file instead of hanging
     });

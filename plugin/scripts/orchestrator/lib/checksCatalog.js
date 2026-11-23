@@ -136,6 +136,12 @@ const CONDITIONS = {
   // (not accepted by a catalog entry), and a high or critical one in code that ships (dev not true). No cache: neither.
   'audit-findings': (f) => (f.depAudit?.open ?? 0) > 0,
   'audit-high-prod': (f) => (f.depAudit?.highProd ?? 0) > 0,
+  // The process guard (lib/processGuard.js factsFor, read by cli/checks.mjs into facts.processGuard, roadmap 0s): a
+  // process Ravenseat started outlived its starter or its time budget; a heavy run without a track has run long; a
+  // running track is over tracks.overtimeFactor x its estimate. No facts: none holds.
+  'processes-left': (f) => (f.processGuard?.left?.length ?? 0) > 0,
+  'processes-untagged': (f) => (f.processGuard?.untagged?.length ?? 0) > 0,
+  'tracks-overtime': (f) => (f.processGuard?.overtime?.length ?? 0) > 0,
 };
 
 /** The classes of the finding log entries in `list` (facts.ledger.due or .guardFailed). */
@@ -244,6 +250,8 @@ function detailOf(key, facts) {
     return facts.clientCanary?.lines?.length ? `Seen in the newest transcript: ${facts.clientCanary.lines.join('; ')}.` : null;
   if (key === 'learning-proposals') return ledgerLine(openDue(facts.ledger));
   if (key === QUICK_GATE_CARD) return quickGateLine(facts.quickGate?.items);
+  // The process guard's cards (lib/processGuard.js cardLine): pid, owner, age and the stop command, or the tracks.
+  if (['processes-left', 'processes-untagged', 'tracks-overtime'].includes(key)) return require('./processGuard.js').cardLine(key, facts.processGuard);
   const p = facts.packs;
   if (!p) return null;
   const name = (id) => p.titles?.[id] ?? id;

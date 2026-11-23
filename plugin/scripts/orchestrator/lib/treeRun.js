@@ -115,8 +115,10 @@ function guardExecArgs(args, parentPid = process.pid) {
  * environment); it is called as spawn(file, args, options). Returns spawnSync's result with `timedOut` (true only when
  * the budget ran out).
  */
-function runBounded(command, { cwd, timeoutMs, maxBuffer = 1 << 28, spawn = spawnSync }) {
-  const s = spawn(process.execPath, [__filename, String(Math.max(1, Math.round(timeoutMs))), command, String(process.pid)], {
+function runBounded(command, { cwd, timeoutMs, maxBuffer = 1 << 28, spawn = spawnSync, meta = null }) {
+  // meta (lib/processGuard.js metaFor): handed to the supervisor as its fourth argument, which gives it to its guard.
+  const extra = meta ? [meta] : [];
+  const s = spawn(process.execPath, [__filename, String(Math.max(1, Math.round(timeoutMs))), command, String(process.pid), ...extra], {
     cwd,
     encoding: 'utf8',
     maxBuffer,
@@ -145,12 +147,16 @@ function say(text) {
  * has none). The command runs under a guard for this process, so a supervisor killed with its caller's group (which
  * runs no handler) still takes the command along.
  */
-function supervise(timeoutMs, command, parentPid) {
+function supervise(timeoutMs, command, parentPid, meta = null) {
+  // the module only when there is a meta (passed or in the env to strip), so a run without one starts as before
+  const PG = meta || process.env.RAVENSEAT_GUARD_META ? require('./processGuard.js') : null;
   const child = spawnAsync(process.execPath, guardShellArgs(command), {
     detached: true, // the guard: its own process group (POSIX), outside this process's job (Windows)
     stdio: ['ignore', 'inherit', 'inherit'],
     windowsHide: true,
-    env: hiddenWindowsEnv(process.env), // hidden windows passed on to the command (lib/hideWindows.cjs: windowsHide here does not reach what the run starts)
+    // hidden windows passed on to the command (lib/hideWindows.cjs: windowsHide here does not reach what the run starts),
+    // and the process guard's meta for the guard (lib/processGuard.js), when the caller gave one
+    env: hiddenWindowsEnv(PG ? PG.withMeta(PG.childEnv(process.env), meta) : process.env),
   });
   let ended = false;
   const end = (code) => {
@@ -220,15 +226,24 @@ function endLike(code, signal) {
 function guard(parentPid, how, rest) {
   const posix = process.platform !== 'win32';
   const shell = how === 'shell';
+  // The process guard (lib/processGuard.js, 0s): the caller's meta says whether to lower this run's priority (before the
+  // command starts, so it and its children inherit it) and where to register this guard while it runs. No meta: exactly
+  // as before (not even the module is loaded, since this start is on every gate command's path).
+  const PG = process.env.RAVENSEAT_GUARD_META ? require('./processGuard.js') : null;
+  const meta = PG ? PG.readMeta(process.env) : null;
+  if (meta?.lower) PG.lowerSelf();
+  const registered = meta ? PG.register(meta, { pid: process.pid, parentPid }) : null;
   const child = spawnAsync(rest[0], shell ? [] : rest.slice(1), {
     shell,
     stdio: ['ignore', 'inherit', 'inherit'],
     windowsHide: true,
+    ...(PG ? { env: PG.childEnv(process.env) } : {}), // the track tag (RAVENSEAT_TRACK) stays, the meta goes
   });
   let ended = false;
   const end = (code, signal = null) => {
     if (ended) return;
     ended = true;
+    if (registered) PG.unregister(registered);
     endLike(code, signal);
   };
   const watch = watchParent(parentPid, () => {
@@ -260,7 +275,7 @@ function guard(parentPid, how, rest) {
 if (require.main === module) {
   const argv = process.argv.slice(2);
   if (argv[0] === 'guard') guard(Number(argv[1]), argv[2], argv.slice(3));
-  else supervise(Number(argv[0]), argv[1], Number(argv[2]));
+  else supervise(Number(argv[0]), argv[1], Number(argv[2]), argv[3] || null);
 }
 
 module.exports = { FALLBACK_MS, GRACE_MS, PARENT_POLL_MS, TIMED_OUT, alive, guardExecArgs, guardShellArgs, killTree, parentAlive, runBounded };

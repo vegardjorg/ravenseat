@@ -205,7 +205,8 @@ function runDoneCommand(o, { branch, scratch, step }) {
     storeFile: require('./lib/gateEvidence.js').storeFile(FOLDER),
     root: CONFIG.root,
   });
-  const run = DC.runDoneWhen({ command, cwd, ...setup, spawn });
+  // processGuard (lib/processGuard.js): the run registers itself, carries the track tag and runs at a lower priority.
+  const run = DC.runDoneWhen({ command, cwd, ...setup, spawn, processGuard: { cfg: CONFIG, folder: FOLDER, kind: 'done', track: o.id } });
   const tamperReason = watch.finish();
   if (tamperReason) {
     run.ok = false;
@@ -494,7 +495,10 @@ function brokenGate(o, gateCheck) {
   const baseRuns = {};
   for (const c of found) {
     console.log(`The gate's program \`${c.program}\` was not found; checking the base (${GIT_ROOT}) for the same: ${c.command}`);
-    const r = TR.runBounded(c.command, { cwd: GIT_ROOT, timeoutMs: GBR.BASE_CHECK_SEC * 1000, spawn });
+    const timeoutMs = GBR.BASE_CHECK_SEC * 1000;
+    // The process guard's meta (lib/processGuard.js): register and lower priority; a run in the main checkout has no track.
+    const meta = require('./lib/processGuard.js').metaFor(CONFIG, { folder: FOLDER, kind: 'base', maxMs: timeoutMs, command: c.command });
+    const r = TR.runBounded(c.command, { cwd: GIT_ROOT, timeoutMs, spawn, meta });
     baseRuns[c.command] = { exit: r.status ?? null, output: `${r.stdout ?? ''}${r.stderr ?? ''}`, timedOut: !!r.timedOut };
   }
   const v = GBR.verdict({ id: o.id, found, baseRuns, setupHash: GE.setupHash(CONFIG.gates) });
@@ -569,7 +573,14 @@ function redOnBaseCheck(o, { branch }) {
   const mb = (git(['merge-base', BASE, branch]) ?? '').trim();
   if (!mb) return fail(`no merge base between ${BASE} and ${branch}`);
   const { tests, code, unsafe } = RB.split(gitLarge(['diff', '--name-status', '--no-renames', `${mb}..${branch}`]), CONFIG.testWeakening?.testPaths ?? []);
-  const run = (files) => DC.runDoneWhen({ command: RB.commandFor(set.command, files), cwd, timeoutSec: set.timeoutSec, tailLines: 1 });
+  const run = (files) =>
+    DC.runDoneWhen({
+      command: RB.commandFor(set.command, files),
+      cwd,
+      timeoutSec: set.timeoutSec,
+      tailLines: 1,
+      processGuard: { cfg: CONFIG, folder: FOLDER, kind: 'done', track: o.id }, // register, track tag, priority (lib/processGuard.js)
+    });
   const record = (extra) => ({ command: set.command, tip, at, ...extra });
   if (!tests.length) return record({ verdict: 'no-tests', codeChanged: code.length > 0, files: [], skipped: unsafe });
   const tipRun = run(tests);
