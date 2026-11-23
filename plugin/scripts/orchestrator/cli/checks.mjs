@@ -281,6 +281,8 @@ function makeReport(queue) {
       // The process guard (roadmap 0s, lib/processGuard.js): leftover processes, long runs without a track and tracks
       // over their estimate, for the cards processes-left, processes-untagged and tracks-overtime. Read only.
       processGuard: require('./lib/processGuard.js').factsFor({ folder: FOLDER, cfg: CONFIG, tasks: queue?.tasks ?? [] }),
+      // The last `ravenseat secrets scan` (roadmap 6b, lib/repoSecretScan.js): the cards secret-scan-found and -due.
+      keyScan: safeKeyScan(),
     },
     catalog,
     tasks: queue?.tasks ?? [],
@@ -348,6 +350,21 @@ function packFacts(fsLike) {
   const missing = ['core', ...detected].filter((id) => !applied.includes(id));
   const titles = Object.fromEntries(['core', ...detected].map((id) => [id, data.packs[id]?.title ?? id]));
   return { data, problems: data.problems, facts: { detected, applied, missing, unpacked, titles } };
+}
+
+/**
+ * The last key scan in numbers (lib/repoSecretScan.js summary, from its file; never a scan): { never: true, due } before
+ * the first one, else the summary. Counts only, never a finding. Null on an error.
+ */
+function safeKeyScan() {
+  try {
+    const RS = require('./lib/repoSecretScan.js');
+    const { rescanDays } = RS.setupOf(CONFIG);
+    const s = RS.summary(RS.readResult(FOLDER), { ignored: RS.ignoredSet(FOLDER), rescanDays });
+    return s ?? { never: true, due: rescanDays > 0 };
+  } catch {
+    return null; // error-ignored: no card rather than no Checks tab
+  }
 }
 
 /** The dependency audit's summary from the cache, or null (no cache, deps.audit off, or it cannot be read). */

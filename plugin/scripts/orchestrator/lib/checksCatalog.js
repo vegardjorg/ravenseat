@@ -142,6 +142,10 @@ const CONDITIONS = {
   'processes-left': (f) => (f.processGuard?.left?.length ?? 0) > 0,
   'processes-untagged': (f) => (f.processGuard?.untagged?.length ?? 0) > 0,
   'tracks-overtime': (f) => (f.processGuard?.overtime?.length ?? 0) > 0,
+  // The last `ravenseat secrets scan` (roadmap 6b, lib/repoSecretScan.js summary via cli/checks.mjs facts.keyScan): a key
+  // open in the tracked files or the history; or no scan yet, or one older than secretScan.rescanDays, with nothing open.
+  'keyscan-open': (f) => (f.keyScan?.open ?? 0) > 0,
+  'keyscan-due': (f) => f.keyScan?.due === true && !((f.keyScan?.open ?? 0) > 0),
 };
 
 /** The classes of the finding log entries in `list` (facts.ledger.due or .guardFailed). */
@@ -235,6 +239,16 @@ function depAuditLine(d) {
   return parts.join(' ');
 }
 
+/** The key scan cards' line: the age and the counts of the last `ravenseat secrets scan`, never a finding. */
+function keyScanLine(k) {
+  if (!isPlainObject(k)) return null;
+  if (k.never) return 'No key scan has run in this project yet.';
+  const age = k.ageDays == null ? 'at an unknown time' : k.ageDays === 0 ? 'today' : k.ageDays === 1 ? '1 day ago' : `${k.ageDays} days ago`;
+  const scope = k.history ? `tracked files and ${k.history.depth === 'all' ? 'all' : 'the last'} ${k.history.commits} commits` : 'tracked files only';
+  const aside = k.ignored ? `, ${k.ignored} set aside as false alarms` : '';
+  return `Last key scan ${age} (${scope}): ${k.tree ?? 0} open in tracked files, ${k.historyOnly ?? 0} only in the history${aside}.`;
+}
+
 /** The line a suggestion adds from the facts, so the card names the stacks. Null when it has none. */
 function detailOf(key, facts) {
   // The command for the project's test runner (lib/fixTests.js suggestCommand); none is made up for an unknown stack.
@@ -245,6 +259,7 @@ function detailOf(key, facts) {
   if (key === 'guard-failed') return ledgerLine(facts.ledger?.guardFailed, { guard: true });
   if (key === 'dep-audit') return joinDetail(auditLine(facts.declaredStacks), AUDIT_DRY);
   if (key === DEP_AUDIT_CARD) return depAuditLine(facts.depAudit);
+  if (key === 'secret-scan-found' || key === 'secret-scan-due') return keyScanLine(facts.keyScan);
   // The canary's own lines: the version and the row types with counts, never content (lib/clients/claude/canary.js news).
   if (key === 'client-format')
     return facts.clientCanary?.lines?.length ? `Seen in the newest transcript: ${facts.clientCanary.lines.join('; ')}.` : null;

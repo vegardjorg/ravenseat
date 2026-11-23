@@ -79,6 +79,8 @@ export const PHRASES = {
   'processes-left': 'a process Ravenseat started is still running after its starter ended or past its time budget (`processGuard.sweep`)',
   'processes-untagged': 'a gate, done or base run without a track has run over 30 minutes',
   'tracks-overtime': 'a running track is over `tracks.overtimeFactor` times its estimate',
+  'keyscan-open': 'the last `ravenseat secrets scan` (read from `secret-scan.json`) has a finding that is not set aside as a false alarm',
+  'keyscan-due': 'no `ravenseat secrets scan` has run yet, or the last one is older than `secretScan.rescanDays` (not 0), and nothing is open',
 };
 
 /**

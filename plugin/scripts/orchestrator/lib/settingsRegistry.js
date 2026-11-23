@@ -919,6 +919,17 @@ const SETTINGS = Object.freeze([
   row('secretScan.timeoutMs', 'guards', 'integer', 'Secret scan time limit (ms)',
     'The time limit per git or gitleaks call in the secret scan. A scan that does not finish in time makes the push ' +
     'ask you first; it is never let through unchecked.'),
+  // Friction: none, it stops nothing and costs no tokens: `ravenseat secrets scan --history` runs only on the owner's
+  // command, and reads this many commits (about 2 s for 200 on Ravenseat's own repo). 200 covers months of work in most
+  // projects; --all-history reads everything when the owner wants it (roadmap 6b, lib/repoSecretScan.js).
+  row('secretScan.historyDepth', 'guards', 'integer', 'Key scan: commits read with --history',
+    'How many of the newest commits `ravenseat secrets scan --history` reads for keys that were added and maybe deleted ' +
+    'again. --all-history reads every commit. Only on your command; doctor never reads the history.'),
+  // Friction: one INFO line in doctor, never WARN or a stop. On (14 days) because a key can land in any commit and the
+  // scan is free; 0 turns the reminder off. Findings from the last scan show as WARN whatever this says.
+  row('secretScan.rescanDays', 'guards', 'integer', 'Key scan reminder (days)',
+    'Doctor suggests `ravenseat secrets scan --history` when it has never run, or when the last scan is older than this ' +
+    'many days. 0 = no reminder. Doctor never runs the scan itself.'),
   row('deployCommands', 'guards', 'list', 'Deploy commands',
     'The push guard asks before any command that starts with one of these. Empty = off.',
     { protects: 'An agent that starts a deploy without asking you first.' }),

@@ -1074,6 +1074,17 @@ already tracks in the data folder, or a tracked `.claude/settings.local.json`, F
 `ravenseat secrets clean` removes the rules that hold a key: `--dry-run` names `<file>: permissions.allow[3]`, `--yes`
 first copies each file to `<dataFolder>/secrets-backup/<time>/` and then writes it back with its own indentation and
 line endings. The rule text is never printed or logged (the time log row has counts only).
+**Keys already in the repo or its history.** The push check reads only what a push sends, so a key in a tracked file, or
+added in an old commit and deleted since, is never seen by it. `ravenseat secrets scan` reads every file git tracks
+(HEAD; binaries and files over `secretScan.maxBytes` are skipped and counted) with the push check's rules, and with
+`--history` the added lines of the last `secretScan.historyDepth` (200) commits, or every commit with `--all-history`.
+A finding is file:line (and the commit in the history), the rule, at most the first and last two characters, and a
+hash salted per data folder, so the same key is known again across runs: never the value, also not in
+`<dataFolder>/secret-scan.json` or the time log. It reports and never rewrites: rotate a real key where it was issued;
+one only in the history stays in every clone, and purging it is a step you take by hand (git filter-repo, see
+GitHub's "Removing sensitive data from a repository"). `ravenseat secrets ignore <hash>` sets a false alarm aside
+(`secret-scan-ignore.json`). `doctor` (row `keyscan`) shows the last scan (WARN while one is open) and suggests a new one
+after `secretScan.rescanDays` (14); it never scans itself. Refused from a track worktree, and denied to queue agents.
 **The queue's files in git, and private paths.** The data folder is ignored as a whole by default. `share.queueData`
 (off) keeps `share.include` (default `queue.json`, `plans.json`) in git as a backup; only `ravenseat share on`
 turns it on, after it says who can read them, with `--yes`, and with `--public-ok` as well when the repo is not known

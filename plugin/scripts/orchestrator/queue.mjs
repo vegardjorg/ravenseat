@@ -558,6 +558,11 @@
 //                                                                  .claude/settings*.json that hold a key, after a copy in
 //                                                                  <dataFolder>/secrets-backup/; --dry-run names file and
 //                                                                  index only; never prints the rule. cli/secrets.mjs)
+//   node scripts/orchestrator/queue.mjs secrets scan [--history [N] | --all-history] [--json]   (keys in every tracked
+//                                                                  file and, with --history, the last N commits' added
+//                                                                  lines; file:line, rule and a hash, never the value; saved
+//                                                                  in <dataFolder>/secret-scan.json; exit 1 while one is open)
+//   node scripts/orchestrator/queue.mjs secrets ignore|unignore <hash> [--note <text>]   (a false alarm by its hash)
 //   node scripts/orchestrator/queue.mjs blockers [--days 7] [--json]   (per code: count and blocked time in the period,
 //                                                                  top first)
 //
@@ -1028,7 +1033,7 @@ if (command === 'init') {
 } else if (command === 'private') {
   (await import('./cli/private.mjs')).cmdPrivate();
 } else if (command === 'secrets') {
-  (await import('./cli/secrets.mjs')).cmdSecrets();
+  await (await import('./cli/secrets.mjs')).cmdSecrets();
 } else if (command === 'unblock') {
   (await import('./cli/merge.mjs')).cmdUnblock();
 } else if (command === 'blockers') {

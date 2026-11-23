@@ -61,6 +61,8 @@ ravenseat share off                # the whole data folder is private again
 ravenseat private add <path> [--no-read]   # a folder or file of yours that stays out of git (and, with --no-read, out of the agents' reads)
 ravenseat private list|remove <path>       # the private paths, or take one out
 ravenseat secrets clean [--dry-run] --yes  # removes approved commands that hold a key, after a copy in the data folder; never shows the rule
+ravenseat secrets scan [--history [N] | --all-history] [--json]   # keys in every tracked file and the last N commits; file:line, rule and a hash, never the value; changes nothing
+ravenseat secrets ignore|unignore <hash>   # sets a false alarm from the scan aside by its hash, or brings it back
 ravenseat instructions [--plan]     # what Claude loads at start, and where each section could go; changes none of your files (--json)
 ravenseat machine [--measure]       # cores, memory, free memory and a suggested maxConcurrent (an estimate); --measure times one quick and one full check when no track runs
 ravenseat heavy -- <command>        # runs a heavy command (npm test, vitest, a red team run) in a slot of the machine's gate queue; exits with its code

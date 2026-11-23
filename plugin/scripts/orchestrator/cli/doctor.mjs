@@ -84,6 +84,8 @@ import { doctorDepsAudit } from './depsAudit.mjs';
 import { doctorUpdateRows } from './update.mjs';
 import { checkLinks } from './taskLinksCheck.mjs';
 import { tidyOptions } from './tidy.mjs';
+// keyscan: the last `secrets scan` from its file (roadmap 6b); never a scan here.
+import { doctorKeyScan } from './secrets.mjs';
 
 const BOARD = require('./lib/queueBoard.js');
 const QL = require('./lib/queueLock.js');
@@ -124,6 +126,7 @@ export function baselineProblems(own) {
   if (s && typeof s === 'object' && !Array.isArray(s))
     for (const k of ['maxBytes', 'timeoutMs'])
       if (s[k] !== undefined && !(Number.isInteger(s[k]) && s[k] > 0)) out.push(`secretScan.${k} must be a whole number > 0`);
+  out.push(...require('./lib/repoSecretScan.js').setupProblems(s)); // historyDepth, rescanDays (roadmap 6b)
   const rm = own.reads?.mode;
   if (rm !== undefined && !['wait', 'warn'].includes(rm)) out.push('reads.mode must be "wait" or "warn"');
   out.push(...RB.setupProblems(own.gates?.redOnBase));
@@ -988,7 +991,7 @@ export async function cmdDoctor() {
     fixed = gitignoreNote(writeGitignore(CONFIG.root, CONFIG));
     if (!a.includes('--json')) console.log(`doctor --fix: ${fixed}\n`);
   }
-  const every = [checkNode, checkHooks, checkConfig, checkIssues, checkState, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkTidy, checkProjectFiles, checkSettings, checkTaxonomy, checkCatalog, checkNotBuilding, checkDepsAudit, checkLinks, checkGuards, checkGuardDecisions, checkCanary, checkCodeMode, ...REPO_CHECKS, checkCloud, checkMachine, checkGateQueue, checkProcesses, checkBudget, checkTemp, checkCleanCopies, checkGit, checkCiCost, ...BASELINE_CHECKS].flatMap((f) => {
+  const every = [checkNode, checkHooks, checkConfig, checkIssues, checkState, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkTidy, checkProjectFiles, checkSettings, checkTaxonomy, checkCatalog, checkNotBuilding, checkDepsAudit, checkLinks, checkGuards, checkGuardDecisions, checkCanary, checkCodeMode, ...REPO_CHECKS, checkCloud, checkMachine, checkGateQueue, checkProcesses, checkBudget, checkTemp, checkCleanCopies, checkGit, checkCiCost, ...BASELINE_CHECKS, doctorKeyScan].flatMap((f) => {
     try {
       return f();
     } catch (e) {

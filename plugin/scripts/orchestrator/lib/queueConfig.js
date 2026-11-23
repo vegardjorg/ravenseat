@@ -205,7 +205,9 @@ const STANDARD = Object.freeze({
   // allowlist: `ravenseat doctor` looks for keys in the commands Claude Code has approved (lib/allowlistSecrets.js).
   // atReceive and allowlist are OFF by default (owner decision 2026-11-15: a new check is opt-in): setup tips about each
   // once, the Checks tab has a "Turn on" card, and doctor shows one INFO line while it is off (lib/optInChecks.js).
-  secretScan: { enabled: true, maxBytes: 2_000_000, timeoutMs: 3000, atReceive: false, allowlist: false },
+  // historyDepth: the commits `ravenseat secrets scan --history` reads (lib/repoSecretScan.js); rescanDays: doctor suggests
+  // a new scan when the last one is older (0 = no reminder). The scan itself runs only on the owner's command.
+  secretScan: { enabled: true, maxBytes: 2_000_000, timeoutMs: 3000, atReceive: false, allowlist: false, historyDepth: 200, rescanDays: 14 },
   // The owner mark (lib/ownerMark.js, roadmap 0æ N4): a token new for each mission on the owner's words in it, and a
   // Suspicious content line at receive for a report that claims owner approval without it. A warning, never a stop.
   injection: { ownerMark: true },
