@@ -27,6 +27,9 @@
 // What waits on the owner is never ACTION (at night nobody answers): with --include-owner a last line
 // `FOR THE OWNER: <n> open question(s), <m> finished cloud track(s) to collect on your yes (...)` gives the counts for
 // the morning. It does not change the exit code.
+// The machine queue (lib/gateQueueView.js, roadmap 0s V12): with ACTION, or with --include-owner, one more line
+// `GATE QUEUE: <who holds>; <n> waiting (...)` when a slot is held or a run waits, so a track waiting for a slot is not
+// read as hung. Display only: never an item, never the exit code, and a plain SILENT stays exactly one line.
 //
 // Read-only apart from the orchestrator marker (the same update `orchestrator pulse` makes, so the session counts as
 // active) and, on SILENT with no running track, one queue-idle time log row when a queue session is open (AW-5,
@@ -234,6 +237,19 @@ function ownerLine(queue, cloudOwner) {
   return parts.length ? `FOR THE OWNER: ${parts.join(', ')}. Next (in the morning): ${CLI} decide` : null;
 }
 
+/** The machine queue's one line (lib/gateQueueView.js), or null. Never throws: display only. */
+function gateQueueLine() {
+  try {
+    const { config } = require('./lib/queueConfig.js');
+    const setup = require('./lib/gateQueue.js').setupFrom(config());
+    if (!setup.enabled) return null;
+    const V = require('./lib/gateQueueView.js');
+    return V.pulseLine(V.snapshot({ root: setup.root, slots: setup.slots, agingMin: setup.agingMin }), { slots: setup.slots });
+  } catch {
+    return null; // error-ignored: a line that cannot be read is no line
+  }
+}
+
 /** `ravenseat pulse-check` (the usage is at the top of queue.mjs and of this file). */
 export function cmdPulseCheck() {
   const args = parseArgs(a.slice(1));
@@ -258,6 +274,10 @@ export function cmdPulseCheck() {
     ...startItems(queue, scratch),
   ];
   const lines = items.length ? [`ACTION: ${items.length}`, ...items] : ['SILENT'];
+  if (items.length || args.includeOwner) {
+    const gq = gateQueueLine();
+    if (gq) lines.push(gq);
+  }
   if (args.includeOwner) {
     const owner = ownerLine(queue, cloud.owner);
     if (owner) lines.push(owner);

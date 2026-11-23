@@ -10,8 +10,12 @@
 //     heavyAfterSec (default 120). No history counts as light, so a small project never notices the queue.
 //   - One slot is one folder, <root>/slot-<n>. `mkdir` is atomic: only one process can create it. holder.json inside says
 //     who holds it (pid, start time, project, kind, track).
-//   - A slot is stale when its process is gone or it is older than 3 hours. A stale slot is renamed away (only one process
-//     can rename the same folder), the renamed holder is compared with what was judged stale, and only then removed.
+//   - A slot is stale when its process is gone, or (roadmap 0s V11) when its holder stopped its heartbeat: the holder
+//     touches holder.json every 30 s (startBeat) and declares in it after how long without a touch it is stale
+//     (gateQueue.staleMin, default 5 min), with a safety ceiling of 6 hours. A holder without those fields (an older
+//     Ravenseat sharing the folder, or staleMin 0) keeps the old rule: stale when older than 3 hours. A stale slot is
+//     renamed away (only one process can rename the same folder), the renamed holder is compared with what was judged
+//     stale, and only then removed.
 //   - A waiter polls every 3 seconds and prints one line saying who it waits for and its place in line.
 //   - The order among waiters (the gate queue only, not the evidence lock): each waiter puts a ticket in <root>/waiting
 //     (pid, class, arrival) and touches it on every poll. A waiter only tries a free slot when its place in line is
@@ -46,11 +50,21 @@ const path = require('node:path');
 const { pidAlive } = require('./mergeLock.js');
 
 /** The defaults for config().gateQueue (queueConfig STANDARD holds the same values; these are the fallback). */
-const DEFAULTS = Object.freeze({ enabled: true, slots: 1, heavyAfterSec: 120, agingMin: 10 });
+const DEFAULTS = Object.freeze({ enabled: true, slots: 1, heavyAfterSec: 120, agingMin: 10, staleMin: 5 });
 /** How often a waiter looks for a free slot. */
 const POLL_MS = 3000;
-/** A slot older than this is stale even when its pid runs (a pid can be reused). */
+/**
+ * A slot older than this is stale even when its pid runs (a pid can be reused). Only for a holder WITHOUT a heartbeat:
+ * an older Ravenseat sharing the folder, or gateQueue.staleMin 0.
+ */
 const MAX_AGE_MS = 3 * 60 * 60 * 1000;
+/** How often a holder with a heartbeat touches its holder.json (the same pace as the memory sampling in gates.mjs). */
+const HOLD_BEAT_MS = 30_000;
+/**
+ * The safety ceiling for a holder WITH a heartbeat: a run that still beats after this long is taken over all the same
+ * (a hung gate in the main checkout has no time budget, and its own timer keeps beating).
+ */
+const MAX_HELD_MS = 6 * 60 * 60 * 1000;
 /** A slot without a readable holder file is being created, unless it is older than this. */
 const CREATING_MS = 60_000;
 /** A waiter gives up on the queue (fail open) after this many rounds in a row where only file errors came back. */
@@ -89,20 +103,63 @@ function defaultRoot(env = process.env) {
  * The settings in effect. Missing or invalid values give the defaults.
  * @param {object} [cfg] config()
  * @param {object} [env] process.env
- * @returns {{ enabled: boolean, slots: number, heavyAfterSec: number, agingMin: number, root: string }}
+ * @returns {{ enabled: boolean, slots: number, heavyAfterSec: number, agingMin: number, staleMin: number, root: string }}
  */
 function setupFrom(cfg = {}, env = process.env) {
   const own = cfg?.gateQueue ?? {};
   const slots = Number.isInteger(own.slots) && own.slots >= 1 ? own.slots : DEFAULTS.slots;
   const heavy = Number(own.heavyAfterSec);
   const aging = Number(own.agingMin);
+  const stale = Number(own.staleMin);
   return {
     enabled: onOff(env?.QUEUE_GATE_QUEUE) ?? own.enabled !== false,
     slots,
     heavyAfterSec: own.heavyAfterSec != null && Number.isFinite(heavy) && heavy >= 0 ? heavy : DEFAULTS.heavyAfterSec,
     agingMin: own.agingMin != null && Number.isFinite(aging) && aging >= 0 ? aging : DEFAULTS.agingMin,
+    staleMin: own.staleMin != null && Number.isFinite(stale) && stale >= 0 ? stale : DEFAULTS.staleMin,
     root: defaultRoot(env),
   };
+}
+
+/**
+ * The heartbeat fields a holder writes into holder.json (roadmap 0s V11): how often it beats and after how long without
+ * a beat it counts as stale. Each holder carries its own, so projects with other settings (or an older Ravenseat
+ * without the fields) can share one folder: every reader judges a holder by what that holder declared.
+ * staleMin 0: no fields, so the holder is judged by the old 3 hour rule.
+ * @param {{ staleMin: number }} setup setupFrom()
+ */
+function beatFields(setup) {
+  const min = Number(setup?.staleMin);
+  if (!(min > 0)) return {};
+  return { beatSec: HOLD_BEAT_MS / 1000, staleSec: Math.round(min * 60) };
+}
+
+/**
+ * Keeps a held slot alive: touches its holder.json every `everyMs` (only the time; the text stays, which takeOver
+ * compares). Stops by itself when the file is gone (the slot was released or taken over) and never writes it back.
+ * The timer is unref'd, so it never keeps a process alive. Never throws.
+ * @param {{ dir: string } | null} slot what tryAcquire gave
+ * @returns {{ stop: () => void, stopped: () => boolean }}
+ */
+function startBeat(slot, { everyMs = HOLD_BEAT_MS } = {}) {
+  let timer = null;
+  const stop = () => {
+    if (timer) clearInterval(timer);
+    timer = null;
+  };
+  if (slot?.dir) {
+    const file = path.join(slot.dir, HOLDER_FILE);
+    timer = setInterval(() => {
+      try {
+        const t = Date.now() / 1000;
+        fs.utimesSync(file, t, t);
+      } catch {
+        stop(); // released or taken over: nothing to keep alive
+      }
+    }, Math.max(10, everyMs));
+    timer.unref?.();
+  }
+  return { stop, stopped: () => timer === null };
 }
 
 /**
@@ -173,9 +230,9 @@ function leaveLine(file) {
 /**
  * The live tickets in line, unsorted. A ticket whose process is gone is removed; one whose heartbeat stopped, or that
  * cannot be read (being written), is ignored. `skip` is the caller's own ticket file. Never throws: a folder that
- * cannot be read is an empty line.
+ * cannot be read is an empty line. `prune` false removes nothing (the read-only view, lib/gateQueueView.js).
  */
-function readLine(root, { now = Date.now(), alive = pidAlive, skip = null } = {}) {
+function readLine(root, { now = Date.now(), alive = pidAlive, skip = null, prune = true } = {}) {
   const dir = path.join(root, WAITING_DIR);
   let names;
   try {
@@ -197,7 +254,7 @@ function readLine(root, { now = Date.now(), alive = pidAlive, skip = null } = {}
     }
     if (!t || typeof t !== 'object') continue;
     if (!alive(t.pid)) {
-      leaveLine(file);
+      if (prune) leaveLine(file);
       continue;
     }
     if (now - mtimeMs > HEARTBEAT_STALE_MS) continue;
@@ -241,11 +298,22 @@ function budgetDeadline(startMs, budgetSec) {
   return budgetSec > 0 ? startMs + budgetSec * 1000 : null;
 }
 
-/** Why a slot is stale, or null when it is held. A slot without a holder is one being created, for a minute. */
+/**
+ * Why a slot is stale, or null when it is held. A slot without a holder is one being created, for a minute.
+ * A holder with a heartbeat (staleSec, beatFields) is stale when its holder.json (mtimeMs) was not touched for staleSec,
+ * or past the safety ceiling MAX_HELD_MS; one without keeps the old rule (older than maxAgeMs, 3 hours).
+ */
 function staleReason(holder, { now = Date.now(), alive = pidAlive, maxAgeMs = MAX_AGE_MS, mtimeMs = now } = {}) {
   if (!holder || typeof holder !== 'object') return now - mtimeMs > CREATING_MS ? 'it has no readable holder' : null;
   if (!alive(holder.pid)) return `the process ${holder.pid} is gone`;
   const started = Date.parse(holder.started ?? '');
+  const staleSec = Number(holder.staleSec);
+  if (staleSec > 0) {
+    const silent = now - mtimeMs;
+    if (silent > staleSec * 1000) return `its heartbeat stopped ${Math.round(silent / 60_000)} min ago`;
+    if (!Number.isFinite(started) || now - started > MAX_HELD_MS) return `it is older than ${Math.round(MAX_HELD_MS / 3_600_000)} hours`;
+    return null;
+  }
   if (!Number.isFinite(started) || now - started > maxAgeMs) return `it is older than ${Math.round(maxAgeMs / 3_600_000)} hours`;
   return null;
 }
@@ -467,7 +535,11 @@ module.exports = {
   DEFAULTS,
   POLL_MS,
   MAX_AGE_MS,
+  MAX_HELD_MS,
+  HOLD_BEAT_MS,
   HEARTBEAT_STALE_MS,
+  beatFields,
+  startBeat,
   CLASSES,
   defaultRoot,
   setupFrom,

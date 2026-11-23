@@ -224,6 +224,11 @@
 //                                                                  you, refused while a track runs: gates --quick once (when
 //                                                                  set) and gates --full once, then the times, the lowest free
 //                                                                  memory and a suggestion for this project; cli/machine.mjs)
+//   node scripts/orchestrator/queue.mjs heavy -- <command>            (runs a heavy command, such as npm test or vitest, in a slot
+//                                                                  of the machine queue shared by every worktree and project,
+//                                                                  so parallel tracks take turns; waits for a free slot, gives
+//                                                                  the command's exit code back. Without the queue it just
+//                                                                  runs. cli/heavy.mjs)
 //   node scripts/orchestrator/queue.mjs issues list [--label <name>] [--limit <n>] [--json]   (GitHub only, read only, on
 //                                                                  command: the origin repo's open issues through gh, and
 //                                                                  where an import would put each; writes nothing)
@@ -990,6 +995,8 @@ if (command === 'init') {
   (await import('./cli/instructions.mjs')).cmdInstructions();
 } else if (command === 'machine') {
   (await import('./cli/machine.mjs')).cmdMachine();
+} else if (command === 'heavy') {
+  await (await import('./cli/heavy.mjs')).cmdHeavy();
 } else if (command === 'conflicts') {
   (await import('./cli/conflicts.mjs')).cmdConflicts();
 } else if (command === 'finding') {
@@ -1138,7 +1145,7 @@ if (command === 'init') {
     'Use: ravenseat <init|add|approve|ask|show|next|start|set|edit|resolve|resolutions|question|limit|state|trackFile|' +
       'projects|project|edit-many|pickable|pick|deliver|release|qa|external|orchestrator|cloud|cloud-package|batch|' +
       'area|areas|focus|park|continue|rank|undo|classify|plan|fill|receive|merge|info|explain|activeOnes|next-migr|migr|' +
-      'capacity|schedule|compact|diagnose|doctor|instructions|machine|finding|cost|handover|deliveries|resume|attempt|follow|triage|wait|decide|unlock|surface|catalog|owner-log|settings|wiring|review-item|issues|pr|release-notes|pulse-check|since> ...  (see the top of the file)',
+      'capacity|schedule|compact|diagnose|doctor|instructions|machine|heavy|finding|cost|handover|deliveries|resume|attempt|follow|triage|wait|decide|unlock|surface|catalog|owner-log|settings|wiring|review-item|issues|pr|release-notes|pulse-check|since> ...  (see the top of the file)',
     command ? 1 : 0,
   );
 }

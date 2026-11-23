@@ -63,6 +63,7 @@ ravenseat private list|remove <path>       # the private paths, or take one out
 ravenseat secrets clean [--dry-run] --yes  # removes approved commands that hold a key, after a copy in the data folder; never shows the rule
 ravenseat instructions [--plan]     # what Claude loads at start, and where each section could go; changes none of your files (--json)
 ravenseat machine [--measure]       # cores, memory, free memory and a suggested maxConcurrent (an estimate); --measure times one quick and one full check when no track runs
+ravenseat heavy -- <command>        # runs a heavy command (npm test, vitest, a red team run) in a slot of the machine's gate queue; exits with its code
 ravenseat surface                   # git hooks and config that run code, against what was accepted; changes nothing
 ravenseat surface accept --by owner # accept the current state (after installing a hook tool, changing git config)
 ravenseat unlock                    # who holds the queue lock; changes nothing (--force --by owner releases it)

@@ -436,7 +436,11 @@ function coverageNow(want) {
 // Before --precheck too: its commands run in their own process group on POSIX, so Ctrl-C reaches them only through here.
 const GQ = require('./lib/gateQueue.js');
 let slot = null;
+// The heartbeat on the held slot (lib/gateQueue.js startBeat, roadmap 0s V11): stopped before the slot is given back.
+let slotBeat = null;
 const releaseSlot = () => {
+  slotBeat?.stop();
+  slotBeat = null;
   if (slot) GQ.release(slot);
   slot = null;
 };
@@ -777,11 +781,17 @@ if (GQ.needsSlot({ setup: QUEUE_SETUP, kind: mode, lastSec: GQ.lastDurationSec(t
   const got = await GQ.acquireWait({
     root: QUEUE_SETUP.root,
     slots: QUEUE_SETUP.slots,
-    who: { project: K.projectName ?? path.basename(K.root), kind: mode, track: option('--track') ?? TL.trackFromBranch(branchNow, K.branchPrefix) },
+    who: {
+      project: K.projectName ?? path.basename(K.root),
+      kind: mode,
+      track: option('--track') ?? TL.trackFromBranch(branchNow, K.branchPrefix),
+      ...GQ.beatFields(QUEUE_SETUP),
+    },
     order: { cls, agingMs: QUEUE_SETUP.agingMin * 60_000 },
     onWait: (holders, info) => console.log(GQ.waitLine(holders, { slots: QUEUE_SETUP.slots, ...info })),
   });
   slot = got.slot;
+  if (slot && QUEUE_SETUP.staleMin > 0) slotBeat = GQ.startBeat(slot);
   waitSec = got.waitSec;
   if (got.failedOpen) console.log(`GATE QUEUE: ${QUEUE_SETUP.root} cannot be used, so this run goes without the queue.`);
   if (waitSec >= 1) START = startState();

@@ -903,8 +903,18 @@ macOS.
   not been touched for 2 minutes, is ignored, so a crashed waiter never blocks the line.
 - `--timeout-sec` starts when the check starts, not during the wait. The wait goes into the `gate` row as `wait_sec`;
   `duration_s` does not include it.
-- A slot is free again when the run ends, also on a red run or a signal. A slot whose process is gone, or that is older than
-  3 hours, is taken over. A queue that cannot be used (no write access) runs the gate without it.
+- A slot is free again when the run ends, also on a red run or a signal. The run holding a slot touches it every 30 s; a
+  slot whose process is gone, or whose heartbeat stopped `gateQueue.staleMin` minutes ago (default 5), is taken over, and
+  no slot is held past 6 hours. `0` turns the heartbeat off (a slot is then taken over after 3 hours, as in older
+  versions, which share the queue fine). A queue that cannot be used (no write access) runs the gate without it.
+- `ravenseat heavy -- <command>` runs any heavy command (a test suite, vitest, a red team run) in a slot the same way:
+  it waits, holds the slot with a heartbeat, passes the output through, frees the slot and exits with the command's
+  code. In a track, the Bash hook notices `npm test`, `vitest`, `jest`, `playwright` and `redteam` run without it:
+  `processGuard.heavyQueue` `warn` (default) adds a note, `deny` stops the command with the wrapped one to use, `off`
+  says nothing. The hook never waits itself, and the words after `--` meet every other guard as a command of their own.
+- `ravenseat doctor` has an INFO line `gatequeue` with who holds each slot (project, track, command, minutes, last
+  heartbeat) and who waits in which order, and `ravenseat pulse-check --include-owner` adds one `GATE QUEUE:` line. Both
+  only read; a quiet queue gives no line.
 - `--precheck` and the commands of a separate base gate (`baseGate.commands`) do not queue. A gate command never queues:
   gates.mjs gives it `QUEUE_GATE_QUEUE=off`.
 
@@ -1165,6 +1175,8 @@ board ("Protects against: ...") and in that view.
 | `loadGuard.adaptive`, `loadGuard.minSlots`, `loadGuard.allSlotsFreeMemoryPct` | `true`, `1`, `40` (off on macOS) | Load-aware slots: fewer than `maxConcurrent` slots while free memory is below `allSlotsFreeMemoryPct`, at least `minSlots`; `QUEUE_LOAD_ADAPTIVE=off` turns it off | Advanced |
 | `loadGuard.allSlotsCpuPct`, `loadGuard.minSlotsCpuPct` | `null`, `null` | Optional CPU part of the load-aware slots (both set, e.g. `60` and `95`) | Advanced |
 | `gateQueue.enabled`, `gateQueue.slots`, `gateQueue.heavyAfterSec`, `gateQueue.agingMin` | `true`, `1`, `120`, `10` | [The queue for heavy gates](#the-queue-for-heavy-gates): how many heavy `--quick`/`--full` runs may run at once on the machine, from how many seconds (the last run of the same kind) a run counts as heavy, and after how many minutes of waiting a run counts as a base run | Advanced |
+| `gateQueue.staleMin` | `5` | [The queue for heavy gates](#the-queue-for-heavy-gates): minutes after a slot holder's heartbeat (every 30 s) stopped before the next run takes the slot over, also when the holder's process still exists; 6 hours is always the ceiling. `0` = no heartbeat, the 3 hour rule | Advanced |
+| `processGuard.heavyQueue` | `warn` | [The queue for heavy gates](#the-queue-for-heavy-gates): a track agent running `npm test`, `vitest`, `jest`, `playwright` or `redteam` without `ravenseat heavy --`. `warn` = a note in the agent's context, `deny` = stopped with the wrapped command to use, `off` = nothing. Tracks only; the hook never waits | Advanced |
 | `gateTemp.enabled` | `true` | [The temp folder](#the-temp-folder): each gate run gets a temp folder of its own, removed afterwards | Advanced |
 | `limits.parallelThreshold`, `limits.silentMin`, `limits.noAgentMin` | `0.7`, `20`, `15` | The share of concurrent tracks below which fill, receive and pulse write a short diagnosis; minutes without a sign of life before a running track counts as silent; minutes before a track marked running that no agent took counts as NO AGENT (`0` = off for both) | Advanced, queue.json |
 | `limits.spinMin` | `15` | Minutes a busy track may go without real work before it is `SPINNING`: its newest calls are only bookkeeping (to-do lists, tool loading), sleeps or the same reads again, with no write, command or commit. A line in `show`, the pulse and the pulse check; after 60 min also a Decisions card, as SILENT. Never a stop. `0` = off | Advanced, queue.json |
@@ -1199,6 +1211,7 @@ board ("Protects against: ...") and in that view.
 | `testWeakening.findingLog` | `true` | What the test weakening check finds at `receive` is also a finding log row (source `test-weakening`, class `test-weakening` from the rule register), so it counts when the same failure comes back. Nothing is printed and nothing stops. `false` = no row; the warning and the focus stop stay, so it weakens no guard | Advanced |
 | `testWeakening.enabled`, `testWeakening.focusStop` | `true`, `true` | `receive` warns, never stops, about deleted test files, test files moved out of the test paths and skip or focus markers on added lines in test files (`.skip(`, `.only(`, `xit(`, `it.todo(`, `@pytest.mark.skip`, `pytest.skip(`, `@unittest.skip`, `#[ignore]`, `t.Skip(`, `@Disabled`, `@Ignore`, `pending(`, `markTestSkipped` ...): one `WARN test weakening:` line and a `Test weakening` section in `00-package.md`. `focusStop`: a focus marker (`.only(`, `fit(`, `fdescribe(`) on an added line stops `merge`, since the other tests never ran; `--allow-focus` overrides (logged as `focus-overridden`), `false` = only the warning | Basic |
 | `testRuns.log` | `true` | Each `npm run test:changed` and plain `npm test` run in this repo is one JSON row in `<dataFolder>/test-runs.jsonl` (time in UTC, ref, mode, reason, picked and total test files, changed files, pick and run seconds, exit code, test and failed counts; a `--list` pick is marked `list`). The file stays on the machine and is cut to its newest 1000 rows past 512 KB; a failed write is ignored, so no run fails because of it. `node scripts/test-changed.mjs --stats [--days N]` shows the split, the median picked share and the run times. `RAVENSEAT_TEST_RUNS=off` turns it off for one shell. `false` = no rows | Advanced |
+| `testChanged.adaptLoad` | `true` | `npm run test:changed` measures the load before it starts vitest (a 0.5 s CPU sample). With CPU at least 70 % or free memory under 20 % vitest gets a quarter of the cores (at least 1) and 120 s test and hook timeouts, one line says so, and the run row gets `load_cpu`, `load_free` and `load_workers`, so load gives fewer false reds. `RAVENSEAT_TEST_LOAD=off` turns it off for one run. `false` = the vitest config's values always | Advanced |
 | `testWeakening.testPaths`, `testWeakening.markers` | `[]`, `[]` | More test file globs for the test weakening warning (`testPaths`, the `protectedPaths` rules) and more regular expressions for a skip marker on an added line (`markers`); `ravenseat doctor` names an invalid one | Advanced |
 | `qa.evidenceTypes`, `qa.autoTypes`, `qa.manualTypes` | `screenshot`, `test`, `manual`; auto `test`; manual `manual` | QA evidence types a track writes as `EVIDENCE <type>[=<ref>]`; auto types are closed by `qa auto --run`, manual ones gathered in one round | Advanced |
 | `qa.autoCommand` | `null` | Shell command for auto evidence, e.g. `npx vitest run {refs}` (`{refs}`, `{id}`; or `{ "<type>": "<command>" }`); `null` = `qa auto` only lists | Advanced |

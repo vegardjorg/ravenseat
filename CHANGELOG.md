@@ -88,7 +88,11 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **A green gate where no tests ran ("No test files found", "0 passing", "collected 0 items") gets a NOTE at receive, a line in the review package and a "no tests ran" badge on the card; never a stop.**
 - **Door and blast radius has a setting, so a project can turn it off everywhere.** `mergeDanger.show`, on by default.
 - **The Timeline shows a P50 to P85 band per focus step and a backtest line on how often past steps finished inside it.** `board.timelineUncertainty`, on by default.
+- **`ravenseat heavy -- <command>` runs a test suite or red team run in a machine queue slot, and tracks get a note when they run one without it.** `processGuard.heavyQueue` `warn`.
+- **Doctor and `pulse-check --include-owner` show who holds a gate queue slot and who waits.** Display only, no setting.
+- **test:changed gives vitest fewer workers and 120 s timeouts on a busy machine, so load gives fewer false reds.** `testChanged.adaptLoad` `true`.
 ### Changed
+- **A gate queue slot is held with a heartbeat: a stuck holder's slot is taken over after 5 minutes instead of 3 hours.** `gateQueue.staleMin` `5`, with a 6 hour ceiling.
 - **The reviewers and the researcher put independent calls in the same turn, as the tracks already did.** Text only, no setting; `ravenseat cost` "parallel" is the before and after.
 - **On the Timeline a step's band replaces the per-task likely range of its planned bars, and one line explains a band that starts after the last bar.** Rides on `board.timelineUncertainty`, no new setting.
 - **A Timeline drop's preview puts the plan sentence first with the raw field changes behind Details, and the drag tag no longer covers the step label.** Display only, no setting.

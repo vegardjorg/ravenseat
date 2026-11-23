@@ -634,6 +634,9 @@ const STANDARD = Object.freeze({
   // `node scripts/test-changed.mjs --stats`. It never leaves the machine and is capped in size; a failure to log never
   // fails a run. false = no rows.
   testRuns: { log: true },
+  // Load-adaptive test:changed (scripts/test-load.mjs, roadmap 0s V9): with CPU at least 70 % or free memory under 20 %
+  // vitest gets a quarter of the cores and 120 s timeouts. false = the vitest config's values always.
+  testChanged: { adaptLoad: true },
   // The reuse and scope facts at receive (lib/scopeNotes.js, bolk B1 of the scope drift plan): one NOTE line each and a
   // "Reuse and scope" section in 00-package.md, never a stop, no tokens. reuse: a name the diff defines (JS/TS) that the
   // base already defines in another file (git grep -w on the merge base). newFolders: an added file in a folder at depth
@@ -765,7 +768,12 @@ const STANDARD = Object.freeze({
   // overrides `enabled`. The time budget starts after the wait. Waiters are served by class (base runs in the main
   // checkout, then receive, then a track's own runs), then first come, first served; one that has waited agingMin
   // minutes counts as base, so no run is starved.
-  gateQueue: { enabled: true, slots: 1, heavyAfterSec: 120, agingMin: 10 },
+  // staleMin: a holder touches its slot every 30 s; a slot whose heartbeat stopped this many minutes ago is taken over
+  // (0 = no heartbeat, the old 3 h rule). A 6 h ceiling always holds (roadmap 0s V11).
+  gateQueue: { enabled: true, slots: 1, heavyAfterSec: 120, agingMin: 10, staleMin: 5 },
+  // A track agent's heavy command (npm test, vitest, playwright, redteam) outside `ravenseat heavy --` (lib/heavyCommand.js,
+  // roadmap 0s V10): warn adds a note, deny stops it with the wrapped command, off says nothing. Tracks only.
+  processGuard: { heavyQueue: 'warn' },
   // A temp folder of its own for each gate run, removed afterwards (lib/gateTemp.js): what a project's tests leave goes with
   // it. enabled false gives the gate commands the normal temp folder.
   gateTemp: { enabled: true },

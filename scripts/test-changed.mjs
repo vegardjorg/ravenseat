@@ -77,6 +77,10 @@
 // pick_s, run_s, exit, tests, failed. The counts come from scripts/test-run-reporter.mjs through RAVENSEAT_TEST_RUN_OUT;
 // the same reporter logs a plain `npm test`. A failure to log never changes the exit code.
 //
+// Load-adaptive (scripts/test-load.mjs, setting testChanged.adaptLoad, default on): on a busy machine (CPU at least 70 %
+// or free memory under 20 %) vitest gets a quarter of the cores and 120 s timeouts, with one line saying so, and the row
+// gets load_cpu, load_free and load_workers. RAVENSEAT_TEST_LOAD=off turns it off for one run.
+//
 // The pick is a pure function (selectTests) over a list of changed files and the repo's files with their text, so it is
 // tested without git: scripts/__tests__/testChanged.test.mjs.
 // =============================================================
@@ -85,6 +89,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { loadLine, measurePlan, vitestLoadArgs } from './test-load.mjs';
 import { appendRun, DEFAULT_DAYS, enabled, logPath, readRuns, runStats, statsLines } from './test-runs.mjs';
 
 /** Over this share of the test files the pick is not worth it: run everything. */
@@ -1439,8 +1444,14 @@ function vitest(testFiles, row) {
     // error-ignored: no counts then
   }
   const env = out ? { ...process.env, RAVENSEAT_TEST_RUN_OUT: out } : process.env;
+  // Load-adaptive (scripts/test-load.mjs, testChanged.adaptLoad): fewer workers and longer timeouts on a busy machine.
+  const { plan, load } = measurePlan(ROOT);
+  if (plan) {
+    console.log(loadLine(plan));
+    row = { ...row, load_cpu: load?.cpuPct ?? undefined, load_free: load?.freeMemoryPct ?? undefined, load_workers: plan.workers };
+  }
   const t0 = Date.now();
-  const r = spawnSync(process.execPath, [bin, 'run', ...testFiles], { cwd: ROOT, stdio: 'inherit', env });
+  const r = spawnSync(process.execPath, [bin, 'run', ...vitestLoadArgs(plan), ...testFiles], { cwd: ROOT, stdio: 'inherit', env });
   const code = r.status ?? 1;
   let counts = {};
   try {

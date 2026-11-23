@@ -446,6 +446,9 @@ const AGENT_PUSH_REASON =
 const AGENT_QUEUE_COMMANDS = Object.freeze({
   'prepare-track': true,
   gates: true,
+  // A heavy test run through the machine queue (cli/heavy.mjs, roadmap 0s V10). The command after `--` is read by every
+  // guard as if it ran bare (lib/shellCommands.js innerCommand), so the wrapper allows nothing the command alone is not.
+  heavy: true,
   help: true,
   '': true, // bare `ravenseat`: the help
   show: true,
@@ -461,7 +464,7 @@ const AGENT_QUEUE_COMMANDS = Object.freeze({
   catalog: ['show', 'check', 'find'],
 });
 /** For the reasons: the allowed commands as text. */
-const AGENT_QUEUE_LIST = 'prepare-track, gates, show, info, help, blockers, finding, question, block, deliver, plan show|get, catalog show|check|find, add (on its own, from your own track branch, with no cd)';
+const AGENT_QUEUE_LIST = 'prepare-track, gates, show, info, help, blockers, finding, question, block, deliver, plan show|get, catalog show|check|find, heavy -- <command>, add (on its own, from your own track branch, with no cd)';
 
 /**
  * The deny reason for a queue agent's ravenseat add, or null. It is only allowed from the agent's own track branch, because

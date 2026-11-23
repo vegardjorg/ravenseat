@@ -238,6 +238,14 @@ function innerCommand(t, i0, afterPipe) {
     while (j < t.length && (t[j].startsWith('-') || /^\d+(\.\d+)?[smhd]?$/.test(t[j]))) j++;
     return j < t.length ? { text: t.slice(j).join(' ') } : null;
   }
+  // The queue's own runner (cli/heavy.mjs, roadmap 0s V10): `ravenseat heavy -- <command>` runs <command> through the
+  // shell once a machine queue slot is free, so the words after `--` are read as a command line of their own.
+  const queue = queueCall(t, i0);
+  if (queue?.name === 'heavy') {
+    const at = queue.args.indexOf('--');
+    const rest = at >= 0 ? queue.args.slice(at + 1) : [];
+    return rest.length ? { text: rest.join(' ') } : null;
+  }
   if (OPAQUE_RUNNERS.has(word)) return { opaque: `${raw} runs a command built at run time` };
   if (word === 'find' && t.some((x, k) => k > i0 && /^-(exec|execdir|ok|okdir)$/.test(x)))
     return { opaque: 'find -exec runs a command per file' };

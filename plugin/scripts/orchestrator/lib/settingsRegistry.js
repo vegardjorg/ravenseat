@@ -260,6 +260,9 @@ const REQUIRES = Object.freeze({
   'gateQueue.slots': ['gateQueue.enabled'],
   'gateQueue.heavyAfterSec': ['gateQueue.enabled'],
   'gateQueue.agingMin': ['gateQueue.enabled'],
+  'gateQueue.staleMin': ['gateQueue.enabled'],
+  // lib/heavyCommand.js: with the gate queue off there is no slot to take, so the hook says nothing.
+  'processGuard.heavyQueue': ['gateQueue.enabled'],
   // lib/stateSnapshots.js tiersFrom: enabled false gives no tiers.
   'stateSnapshots.tiers': ['stateSnapshots.enabled'],
   // lib/silentSnapshot.js: enabled false writes no snapshot, so neither the count nor the cap is read.
@@ -435,6 +438,26 @@ const SETTINGS = Object.freeze([
     'A gate whose last run of the same kind took at least this long counts as heavy.'),
   row('gateQueue.agingMin', 'load', 'integer', 'Wait before it counts as base (minutes)',
     'Base runs go first in the gate queue. A run that has waited this long counts as a base run, so it is never starved.'),
+  // Friction: none for a live run, it touches one file every 30 s; it only decides how soon a slot whose holder hung
+  // (alive but stuck, or a pid reused) is taken over. 5 min by default (roadmap 0s V11): the old fixed 3 h kept the whole
+  // machine waiting behind one stuck run, and 10 missed beats is far past any pause of a healthy process. A 6 h ceiling
+  // always holds. 0 = no heartbeat (the 3 h rule of older versions).
+  row('gateQueue.staleMin', 'load', 'integer', 'Slot stale after (minutes)',
+    'A run holding a slot touches it every 30 s. A slot whose heartbeat has stopped this long is taken over by the next ' +
+    'run, also when the holder\'s process still exists. 0 = no heartbeat, a slot is taken over after 3 hours.'),
+  // Friction: warn adds one short note to the agent's context and stops nothing; deny stops an unwrapped test command in
+  // a track until it is run as `ravenseat heavy -- <command>`, which can make a track wait for a slot. Warn by default
+  // (roadmap 0s V10): the agent learns the wrapper without a hard stop, and deny is never the default. Tracks only; the
+  // hook itself never waits.
+  row('processGuard.heavyQueue', 'load', 'choice', 'Heavy commands in tracks',
+    'A track agent running a test suite, vitest, playwright or a red team run without `ravenseat heavy --` in front: ' +
+    'deny stops it with the wrapped command to use, warn lets it run with a note, off says nothing.', {
+      choices: ['deny', 'warn', 'off'],
+      weakens: rankWeakens(['deny', 'warn', 'off']),
+      protects: 'Parallel tracks running heavy test commands at once, which slows each into timeouts and false reds.',
+      whyNot: 'Without the note an agent does not learn to take a machine queue slot for its test runs.',
+      changes: 'Track agents get no note when they run a heavy command outside the machine queue.',
+    }),
   row('gateTemp.enabled', 'load', 'onoff', 'Temp folder per gate run',
     'Each gate run gets its own temp folder, removed afterwards, so what the tests leave goes with it.'),
   row('limits.parallelThreshold', 'load', 'number', 'Low parallelism threshold',
@@ -643,6 +666,13 @@ const SETTINGS = Object.freeze([
   row('testRuns.log', 'tests', 'onoff', 'Log test runs',
     'Each test:changed and plain npm test run in this repo is one row in a local file (time, mode, picked and total ' +
     'files, run time, exit, test and failed counts), read with node scripts/test-changed.mjs --stats. Off: no rows.'),
+  // Friction: a 0.5 s CPU sample before vitest starts; on a busy machine the run gets fewer workers, so it can take
+  // longer, but it stops nothing. On by default (roadmap 0s V9): under load the 60 s timeouts and worker RPC timeouts
+  // gave false reds, which cost a rerun each. Off: the vitest config's values always.
+  row('testChanged.adaptLoad', 'tests', 'onoff', 'Adapt test runs to load',
+    'test:changed measures the load before it starts vitest. With CPU at least 70 % or free memory under 20 % it runs ' +
+    'with a quarter of the cores and 120 s timeouts, and says so in one line. RAVENSEAT_TEST_LOAD=off turns it off for ' +
+    'one run. Off: the vitest config\'s workers and timeouts always.'),
   row('testWeakening.testPaths', 'tests', 'list', 'More test paths',
     'More file patterns that count as test files for the test weakening warning, on top of the usual ones (the same ' +
     'pattern rules as protectedPaths).'),

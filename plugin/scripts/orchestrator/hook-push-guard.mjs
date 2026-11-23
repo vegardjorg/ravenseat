@@ -73,10 +73,10 @@ const require = createRequire(import.meta.url);
 // Not a queue project (no queue.config.json): do nothing. A plugin's hooks run in every project the user opens.
 // A module that does not load is an internal error too: it is kept and handled by failSafe below, not thrown.
 let loadError = null;
-let assess, readEnvironment, isGuardedAgent, config, dataFolder, HK;
+let assess, readEnvironment, isGuardedAgent, isTrackAgent, config, dataFolder, HK;
 try {
   if (!require('./lib/projectRoot.js').queueActive()) process.exit(0);
-  ({ assess, readEnvironment, isGuardedAgent } = require('./lib/pushGuard.js'));
+  ({ assess, readEnvironment, isGuardedAgent, isTrackAgent } = require('./lib/pushGuard.js'));
   ({ config, dataFolder } = require('./lib/queueConfig.js'));
   // The hook payload in the core's names and the hook answers (lib/clients/claude/hookInput.js).
   HK = require('./lib/clients/index.js').clientFor().hooks;
@@ -308,8 +308,17 @@ process.stdin.on('end', () => {
     // pushes, runs only the allowed queue commands, has no network).
     // The answer, and its row in the time log (lib/guardLog.js, guardLog.enabled): the guard and the rule, never the
     // command. The append is synchronous, so it is done before the exit.
+    // A track's heavy test run outside the machine queue (lib/heavyCommand.js, processGuard.heavyQueue warn): one line of
+    // context for the agent, sent with whatever else the hook answers, or alone when nothing else is said.
+    let heavyNote = null;
+    const quietExit = () => {
+      if (heavyNote) process.stdout.write(JSON.stringify(HK.context('PreToolUse', heavyNote)));
+      process.exit(0);
+    };
     const answerWith = (decision, reason, rule, guard = 'push') => {
-      process.stdout.write(JSON.stringify(HK.decision('PreToolUse', decision, reason)));
+      const out = HK.decision('PreToolUse', decision, reason);
+      if (heavyNote) out.hookSpecificOutput.additionalContext = heavyNote;
+      process.stdout.write(JSON.stringify(out));
       try {
         require('./lib/guardLog.js').recordHook({ guard, rule, decision, input: p }, { cfg: k });
       } catch {
@@ -337,12 +346,27 @@ process.stdin.on('end', () => {
         }
       }
     }
+    // A track's heavy test run outside the machine queue (lib/heavyCommand.js, roadmap 0s V10): warn (default) adds a
+    // line of context and the command runs; deny refuses it with the wrapped command to run instead. Only while the gate
+    // queue is on (the wrapper would not queue otherwise). Never waits: the hook has 10 s (hooks.json).
+    if (guarded && isTrackAgent(agentType)) {
+      try {
+        const HC = require('./lib/heavyCommand.js');
+        const mode = HC.modeOf(k);
+        const match = mode === 'off' || !require('./lib/gateQueue.js').setupFrom(k).enabled ? null : HC.heavyMatch(command);
+        const a = match ? HC.answer({ command, match, mode, cli: require('./lib/projectRoot.js').cliCommand({ fromWorktree: true }) }) : null;
+        if (a?.decision === 'deny') answerWith('deny', `push-guard: ${a.text}`, 'heavy-unqueued', 'heavy');
+        if (a) heavyNote = a.text;
+      } catch {
+        // error-ignored: a hint only; the other guards below still judge the command
+      }
+    }
     const gitContext = canHit(command, k);
     // The main session's overrides ask (lib/approvalAsk.js, approvals.ask): only a line that can hold one is read on.
     const mainSession = !agentGuard.subagent;
     const approvalsOn = !guarded && mainSession && require('./lib/approvalAsk.js').setupOf(k).ask;
     const maybeOverride = approvalsOn && OVERRIDE_SHAPED.test(command);
-    if (!gitContext && !guarded && !maybeOverride) process.exit(0);
+    if (!gitContext && !guarded && !maybeOverride) quietExit();
     // Gate evidence (lib/gateEvidence.js): a queue agent may not record or touch it (deny; the orchestrator is free).
     const tamper = guarded ? require('./lib/gateEvidence.js').tamperReason(command) : null;
     if (tamper) answerWith('deny', `push-guard: ${tamper}`, 'state-file');
@@ -403,7 +427,7 @@ process.stdin.on('end', () => {
         : null,
       ownerPushQuestion: mainSession ? () => ownerPushQuestion(cwd, k) : undefined,
     });
-    if (!answer) process.exit(0);
+    if (!answer) quietExit();
     // An approval ask (lib/approvalAsk.js) is a deny in dontAsk and bypassPermissions, where no one sees the dialog.
     const final = require('./lib/approvalAsk.js').forMode(answer, p.permissionMode);
 
