@@ -76,6 +76,9 @@ export const PHRASES = {
   'guard-not-in-quick': 'a gate guard in the registry has a command that is not in `gates.quick` (`learning.quickGateCard`)',
   'audit-findings': 'the last [dependency audit](catalog.md#the-dependency-audit) (`catalog deps --audit`, read from its cache) found holes that no accepted catalog entry covers',
   'audit-high-prod': 'one of those holes is critical or high in a package that is not only for development',
+  'processes-left': 'a process Ravenseat started is still running after its starter ended or past its time budget (`processGuard.sweep`)',
+  'processes-untagged': 'a gate, done or base run without a track has run over 30 minutes',
+  'tracks-overtime': 'a running track is over `tracks.overtimeFactor` times its estimate',
 };
 
 /**
