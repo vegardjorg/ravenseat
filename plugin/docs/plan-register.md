@@ -3,7 +3,8 @@
 The queue holds work that is ready to run. The plan register holds everything before that: ideas, plans,
 investigations and decisions, with priority and maturity, and links to the documents where the details live. It is
 stored in `scripts/.queue/plans.json` (gitignored) and only written through `ravenseat plan …`, with a change log and
-undo.
+undo. Each write keeps the previous good copy in `plans.json.prev`; when `plans.json` does not parse, the command and
+`ravenseat doctor` stop and say how to restore that copy, and never restore it by themselves.
 
 <p align="center"><img src="../../assets/screenshots/light-08-plans-roadmap.jpg" alt="The plan register on the board: the Roadmap with its columns" width="800"></p>
 

@@ -69,6 +69,31 @@ the copy is one write older, and the owner should look first. Tested in `lib/__t
 `docs/orchestration.md` ("What happens when it is cut off") also says two cases are not covered: a kill while a lock file
 is being written, and a disk that fails in the middle of a rename.
 
+### The storage layer
+
+`lib/store/` is the one place that knows the data folder's files (LAGRING-1a, steps 1 to 3 of the storage plan).
+
+- **The register.** `lib/store/families.js` lists every state file and folder as a family: its name, where it lives
+  (the data folder or the project tree), who writes it, whether it keeps a `.prev` copy, and what a broken file means
+  (`fail` with the restore hint, read as empty, or fall back to `.prev`). `ravenseat doctor` gives one INFO row
+  `store` for entries the register does not know and for orphaned `*.tmp` files (dead pid, older than 10 minutes),
+  with their age and size. Doctor never deletes; `ravenseat store sweep --tmp [--dry]` removes the orphans when the owner
+  runs it, and it is refused from a track worktree.
+- **FileBackend** (`lib/store/fileBackend.js`) is the write path: a unique tmp name (`<file>.<pid>.<random>.tmp`),
+  `renameWithRetry`, the tmp removed on any failure, `.prev` as a plain copy when the family asks for it (never over a
+  last good copy with a broken file), and a per-process mtime and size cache so that copy skips a second parse.
+  `queue.json` (`writeState`), `plans.json`, `catalog-accepted.json`, gate evidence, the owner log and the approval
+  waits write through it.
+- **The store lock and ids.** `openStore().update()` and `withLock()` run under `<dataFolder>/.storeLock`, which uses
+  `lib/queueLock.js` itself, not a second lock implementation. When both are needed, the queue lock comes first.
+  `nextId('D' | 'G')` reserves the next decision or guard id in `id-reservations.json`, so a deleted proposal never
+  frees its id, two concurrent proposals never share one, and two track branches never get the same G-id: every
+  worktree shares the main data folder, so one counter serves them all. A broken reservation file falls back to `.prev`
+  with every counter raised by one, so an id is never handed out twice.
+
+**Adding a state file.** Register it as a family in `lib/store/families.js` first, and write it through FileBackend
+or `openStore()`. A file the register does not know shows up in doctor's `store` row.
+
 ## 3. One merger
 
 **What was chosen.** Only the orchestrator merges, one merge at a time per data folder. Tracks never merge or push. A

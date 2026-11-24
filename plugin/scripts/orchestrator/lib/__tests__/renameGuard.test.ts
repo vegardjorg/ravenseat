@@ -6,6 +6,8 @@
 // Every atomic write (temporary file, then a rename over the real one) goes through it, so a new raw rename fails this
 // test. The allow list holds only renames where one attempt IS the meaning (taking over a stale lock), each with a reason.
 // Tests (__tests__) and node_modules are not scanned.
+// A new state file: register its family in lib/store/families.js and write it with lib/store/fileBackend.js (writeJson or
+// writeText), which renames through renameWithRetry and removes its tmp file on a failure (ARCHITECTURE.md, the storage layer).
 // =============================================================
 import fs from 'node:fs';
 import path from 'node:path';

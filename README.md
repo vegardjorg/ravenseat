@@ -343,6 +343,8 @@ npm run test:changed    # only the tests your change can reach; run it before ea
   `shards complete` check fails unless every test file ran.
 - Windows with Node 20 runs weekly and on demand (`ci-weekly.yml`).
 - This repo uses `node scripts/test-changed.mjs --gate` as its quick gate; the full gate and CI run the complete suite.
+- A new file in the data folder is registered as a family in `plugin/scripts/orchestrator/lib/store/families.js` and
+  written through the storage layer ([ARCHITECTURE.md, the storage layer](ARCHITECTURE.md#the-storage-layer)).
 
 ## License
 
