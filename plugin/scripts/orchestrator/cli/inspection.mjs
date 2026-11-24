@@ -64,13 +64,15 @@ function readJson(file) {
   }
 }
 
-/** Writes a file atomically (a temporary file and a rename), with LF. */
+/** Writes a file atomically (lib/store/fileBackend.js: a unique tmp file and a rename, the tmp removed on a failure). */
 function writeAtomic(file, text) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, text);
-  require('./lib/stateFile.js').renameWithRetry(tmp, file);
+  require('./lib/store/fileBackend.js').writeText(file, text);
 }
+
+// The store (lib/store/, LAGRING-1a): guards add takes its G-id from store.nextId('G'), reserved in the data folder every
+// worktree shares, so a track's branch and the main tree never hand out the same id; and add and retire run under the
+// store lock, so two at once in one tree keep both entries.
+const store = () => require('./lib/store/index.js').openStore({ folder: FOLDER, tree: MAIN_TREE });
 
 const readState = () => readJson(STATE_FILE);
 const saveState = (state) => writeAtomic(STATE_FILE, `${JSON.stringify(state, null, 2)}\n`);
@@ -351,8 +353,9 @@ export function cmdInspection() {
 }
 
 function cmdGuardsAdd() {
-  const { file, registry, error } = readRegistry(ROOT);
-  if (error) die(`${file}: ${error}. Fix the file first; nothing was written.`);
+  // Checked once before the input is built, so a broken file stops at once; read again under the lock below.
+  const first = readRegistry(ROOT);
+  if (first.error) die(`${first.file}: ${first.error}. Fix the file first; nothing was written.`);
   let input = { against: {} };
   const fromTask = val('--from-task');
   if (fromTask) {
@@ -384,21 +387,38 @@ function cmdGuardsAdd() {
   };
   // The classes of THIS tree (a track's worktree has the same tracked docs/queue/failure-classes.json as the main tree).
   const { classes } = require('./lib/failureClasses.js').classesFor(ROOT);
-  const r = GR.addGuard(registry, input, { classes });
-  if (r.error.length) die(`Not added:\n${r.error.map((e) => `  - ${e}`).join('\n')}`);
-  writeAtomic(file, GR.serialize(registry));
-  console.log(`Added ${r.guard.id} [${r.guard.kind}] ${r.guard.title} to ${path.relative(ROOT, file).replace(/\\/g, '/')}. Commit the file with the change.`);
+  const st = store();
+  st.withLock(() => {
+    const { file, registry, error } = readRegistry(ROOT);
+    if (error) die(`${file}: ${error}. Fix the file first; nothing was written.`);
+    // The id: above this tree's highest G-<n> and above every G-id handed out from this data folder (any branch). Only
+    // reserved when the entry is valid; an id the registry already has is refused by addGuard.
+    const floor = Number(GR.nextId(registry).slice(2));
+    const r = GR.addGuard(registry, input, { classes, id: () => st.nextId('G', { atLeast: floor }) });
+    if (r.error.length) die(`Not added:\n${r.error.map((e) => `  - ${e}`).join('\n')}`);
+    writeAtomic(file, GR.serialize(registry));
+    console.log(`Added ${r.guard.id} [${r.guard.kind}] ${r.guard.title} to ${path.relative(ROOT, file).replace(/\\/g, '/')}. Commit the file with the change.`);
+  });
 }
 
 function cmdGuardsRetire() {
   const id = a[2];
   if (!id || id.startsWith('--')) die('guards retire <id>');
-  const { file, registry, error } = readRegistry(ROOT);
-  if (error) die(`${file}: ${error}. Fix the file first; nothing was written.`);
-  const problem = GR.retire(registry, id);
-  if (problem) die(problem);
-  writeAtomic(file, GR.serialize(registry));
+  store().withLock(() => {
+    const { file, registry, error } = readRegistry(ROOT);
+    if (error) die(`${file}: ${error}. Fix the file first; nothing was written.`);
+    const problem = GR.retire(registry, id);
+    if (problem) die(problem);
+    writeAtomic(file, GR.serialize(registry));
+  });
   console.log(`${id}: retired (the entry stays in the registry). Commit the file.`);
+}
+
+/** WARN lines for ids that appear more than once (a merge or a hand edit before ids were reserved). */
+function duplicateLines(registry, rel) {
+  return GR.duplicateIds(registry).map(
+    (d) => `WARN: ${d.id} appears ${d.count} times in ${rel}. Give all but one a new id by hand (the next free one is reserved by ${CLI} guards add), then commit.`,
+  );
 }
 
 export function cmdGuards() {
@@ -414,6 +434,7 @@ export function cmdGuards() {
   }
   if (error) console.log(`${rel}: ${error}`);
   for (const l of GR.lines(registry, rows, { cli: CLI, file: rel })) console.log(l);
+  for (const l of duplicateLines(registry, rel)) console.log(l);
   // A gate guard that no gate has run since it was built (learning.idleGuardDays): INFO, never a stop.
   for (const l of idleGuardLines({ tree: ROOT, rows })) console.log(l);
 }

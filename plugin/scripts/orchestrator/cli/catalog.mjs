@@ -54,7 +54,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
-import { a, CLI, CONFIG, die, edit, FILE, FOLDER, LM, MAIN_TREE, queueBranchId, read, readPlans, require, ROOT, SF } from './context.mjs';
+import { a, CLI, CONFIG, die, edit, FILE, FOLDER, LM, MAIN_TREE, queueBranchId, read, readPlans, require, ROOT } from './context.mjs';
 import { addTask, ensureProject } from './kickstart.mjs';
 import { trackBranchHere } from './settings.mjs';
 
@@ -73,21 +73,27 @@ const json = a.includes('--json');
 /** The catalog folder in a tree (the main tree for a write, the current one for a read). */
 export const catalogDir = (root) => path.join(root, ...C.DIR.split('/'));
 
+// The storage layer (lib/store/, LAGRING-1a): the 'ledger' family (catalog-accepted.json, backup prev, onCorrupt empty)
+// and the D id scheme. propose reserves its id with store.nextId and accept writes under the store lock, so two at once
+// never share an id or lose a record.
+const ST = require('./lib/store/index.js');
+const FB = require('./lib/store/fileBackend.js');
+const storeAt = (folder = FOLDER) => ST.openStore({ folder, tree: MAIN_TREE });
+
 /** The owner's record of the accepted design choices; a missing or broken file reads as empty. */
 export function readLedger(folder = FOLDER) {
   try {
-    return C.parseLedger(fs.readFileSync(path.join(folder, C.LEDGER_FILE), 'utf8'));
+    // C.parseLedger keeps only well-formed records, and reads anything broken as empty: nothing is confirmed, never
+    // everything (the family's onCorrupt 'empty').
+    return C.parseLedger(fs.readFileSync(storeAt(folder).path('ledger'), 'utf8'));
   } catch {
     return C.emptyLedger();
   }
 }
 
+/** Atomic, keeping catalog-accepted.json.prev of the last good record (the family's backup 'prev'). */
 function writeLedger(ledger) {
-  fs.mkdirSync(FOLDER, { recursive: true });
-  const file = path.join(FOLDER, C.LEDGER_FILE);
-  const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, `${JSON.stringify(ledger, null, 2)}\n`);
-  SF.renameWithRetry(tmp, file);
+  storeAt().writeJson('ledger', ledger);
 }
 
 /** The tracked paths of a tree, or null when git cannot list them (the path checks are then skipped). */
@@ -443,10 +449,14 @@ function accept() {
       old = { ...old, text: s.text };
     } else old = null; // already superseded: nothing to write
   }
-  // The record first: a file that says accepted with no record reads as unconfirmed, which is the safe side.
-  writeLedger(C.recordAccept(readLedger(), after.decision, { by }));
-  fs.writeFileSync(path.join(catalogDir(MAIN_TREE), 'decisions', hit.name), r.text);
-  if (old) fs.writeFileSync(path.join(catalogDir(MAIN_TREE), 'decisions', old.name), old.text);
+  // Under the store lock, so two accepts at once keep both records: the ledger is read inside the lock, the record is
+  // added and written, then the files. The record first: a file that says accepted with no record reads as unconfirmed,
+  // which is the safe side. The decision files are written atomically (a tmp file and a rename), never half.
+  storeAt().withLock(() => {
+    writeLedger(C.recordAccept(readLedger(), after.decision, { by }));
+    FB.writeText(path.join(catalogDir(MAIN_TREE), 'decisions', hit.name), r.text);
+    if (old) FB.writeText(path.join(catalogDir(MAIN_TREE), 'decisions', old.name), old.text);
+  });
   if (C.isNotBuilding(after.decision))
     console.log(
       `Accepted ${id} as not building (${after.decision.title}). The file says status: not-building; a new proposal with ` +
@@ -473,20 +483,32 @@ export function writeProposal({ title, invariant, paths, supersedes = null, plan
   const dir = catalogDir(MAIN_TREE);
   const decisionsDir = path.join(dir, 'decisions');
   let names = [];
-  try {
-    names = fs.readdirSync(decisionsDir);
-  } catch {
-    names = []; // error-ignored: no folder yet, the first id is D-0001
-  }
-  const id = C.nextDecisionId(names, readLedger());
   // kind not-building (roadmap 0f, lib/notBuilding.js draft): a rejection with its keywords, revisit and source.
-  const r = C.proposalFile({ id, title, invariant, paths, supersedes, plan, why, kind, keywords, revisit, source, except, check, uses, alternatives, stack, applies, reason, accepts, review_by });
-  if (r.errors.length) throw new Error(r.errors.join('; '));
-  fs.mkdirSync(decisionsDir, { recursive: true });
-  const readme = path.join(decisionsDir, 'README.md');
-  if (!fs.existsSync(readme)) fs.writeFileSync(readme, C.DECISIONS_README);
-  // wx: a file of that name that came in meanwhile is never written over.
-  fs.writeFileSync(path.join(decisionsDir, r.name), r.text, { flag: 'wx' });
+  const fields = { title, invariant, paths, supersedes, plan, why, kind, keywords, revisit, source, except, check, uses, alternatives, stack, applies, reason, accepts, review_by };
+  // The draft is checked first with a stand-in id, so a broken proposal reserves no number.
+  const draft = C.proposalFile({ id: 'D-0000', ...fields });
+  if (draft.errors.length) throw new Error(draft.errors.join('; '));
+  // The id (LAGRING-1a): one above the files and the owner's record (C.nextDecisionId), and above every id handed out
+  // before (store.nextId reserves it in <dataFolder>/id-reservations.json). All under the store lock, the file too: a
+  // deleted proposal never frees its number, and two proposals at once get one id each.
+  const st = storeAt();
+  const { id, r } = st.withLock(() => {
+    try {
+      names = fs.readdirSync(decisionsDir);
+    } catch {
+      names = []; // error-ignored: no folder yet, the first id is D-0001
+    }
+    const floor = Number(C.nextDecisionId(names, readLedger()).slice(2));
+    const id = st.nextId('D', { atLeast: floor });
+    const r = C.proposalFile({ id, ...fields });
+    if (r.errors.length) throw new Error(r.errors.join('; '));
+    fs.mkdirSync(decisionsDir, { recursive: true });
+    const readme = path.join(decisionsDir, 'README.md');
+    if (!fs.existsSync(readme)) fs.writeFileSync(readme, C.DECISIONS_README);
+    // wx: a file of that name that came in meanwhile is never written over.
+    fs.writeFileSync(path.join(decisionsDir, r.name), r.text, { flag: 'wx' });
+    return { id, r };
+  });
   const file = `${C.DIR}/decisions/${r.name}`;
   const mine = (line) => line.includes(id) || line.includes(`decisions/${r.name}`);
   const c = checkTree(MAIN_TREE);

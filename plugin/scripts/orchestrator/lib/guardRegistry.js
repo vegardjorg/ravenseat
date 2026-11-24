@@ -79,7 +79,20 @@ function parse(raw) {
 /** The file's text: 2-space JSON with LF and a final newline, so a diff shows one entry per change. */
 const serialize = (registry) => `${JSON.stringify(registry, null, 2)}\n`;
 
-/** The next free G-<n>. */
+/**
+ * The ids that appear more than once (a merge of two branches that each added the same G-<n> before ids were reserved,
+ * or a hand edit), as [{ id, count }]. `guards` lists them; `guards add` never adds one (the id it gets is checked).
+ */
+function duplicateIds(registry) {
+  const n = new Map();
+  for (const g of registry?.guards ?? []) if (typeof g?.id === 'string') n.set(g.id, (n.get(g.id) ?? 0) + 1);
+  return [...n].filter(([, c]) => c > 1).map(([id, count]) => ({ id, count }));
+}
+
+/**
+ * The next free G-<n> in this registry. `guards add` asks the store for a reserved id instead (lib/store/index.js
+ * nextId('G'), at least this number): tracks share the data folder, so two branches never get the same id.
+ */
 function nextId(registry) {
   const numbers = (registry?.guards ?? []).map((g) => /^G-(\d+)$/.exec(g?.id ?? '')?.[1]).filter(Boolean).map(Number);
   return `G-${Math.max(0, ...numbers) + 1}`;
@@ -148,19 +161,24 @@ function entryErrors(input, registry, { classes } = {}) {
  * @param {{ title: string, explain: string, kind: string,
  *   against: { signature?: string, lesson?: string, class?: string, area?: string },
  *   command?: string, task?: string, built?: string }} input
- * @param {{ now?: string, classes?: { id: string }[] }} [o]  classes: the project's failure classes (the core ones when
- *   left out), which a class must be one of
+ * @param {{ now?: string, classes?: { id: string }[], id?: string|(() => string) }} [o]  classes: the project's failure
+ *   classes (the core ones when left out), which a class must be one of. id: the id to use (a reserved one from the
+ *   store; a function is called only when the entry is valid, so a refused entry reserves nothing); nextId(registry)
+ *   when left out. An id the registry already has is refused, never added twice.
  * @returns {{ error: string[], guard?: object }}
  */
-function addGuard(registry, input, { now = new Date().toISOString(), classes } = {}) {
+function addGuard(registry, input, { now = new Date().toISOString(), classes, id } = {}) {
   const error = entryErrors(input, registry, { classes });
   if (error.length) return { error };
+  const newId = typeof id === 'function' ? id() : id ?? nextId(registry);
+  if ((registry?.guards ?? []).some((g) => g?.id === newId))
+    return { error: [`${newId} is already in the registry (a hand edit or a merge): fix the duplicate first, nothing was added`] };
   const against = isObject(input.against) ? input.against : {};
   const lesson = text(against.lesson);
   const cls = text(against.class);
   const area = text(against.area);
   const guard = {
-    id: nextId(registry),
+    id: newId,
     title: text(input.title),
     explain: text(input.explain),
     kind: input.kind,
@@ -299,6 +317,7 @@ module.exports = {
   parse,
   serialize,
   nextId,
+  duplicateIds,
   addGuard,
   retire,
   fromTask,

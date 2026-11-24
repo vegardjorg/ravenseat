@@ -494,6 +494,11 @@
 //                                                                  first, then the folder, git worktree prune, git branch
 //                                                                  -d) after y/N; no terminal and no --yes deletes nothing.
 //                                                                  --demo --execute removes the demo folders. lib/tidy.js)
+//   node scripts/orchestrator/queue.mjs store [--json]              (the data folder against the storage register: unknown
+//                                                                  entries and tmp files crashed writes left. Reads only.
+//                                                                  lib/store/, cli/store.mjs)
+//   node scripts/orchestrator/queue.mjs store sweep --tmp [--dry] [--json]   (removes those orphaned tmp files; --dry lists
+//                                                                  only. Refused from a track worktree)
 //   node scripts/orchestrator/queue.mjs unlock [--force --by owner]   (the queue lock: prints the holder; with both flags
 //                                                                  releases it. Refused from a track worktree; the guard
 //                                                                  denies it to queue agents. lib/queueLock.js)
@@ -1020,6 +1025,8 @@ if (command === 'init') {
   (await import('./cli/unlock.mjs')).cmdUnlock();
 } else if (command === 'tidy') {
   await (await import('./cli/tidy.mjs')).cmdTidy();
+} else if (command === 'store') {
+  (await import('./cli/store.mjs')).cmdStore();
 } else if (command === 'surface') {
   (await import('./cli/surface.mjs')).cmdSurface();
 } else if (command === 'catalog') {
@@ -1114,7 +1121,14 @@ if (command === 'init') {
   await (await import('./cli/undo.mjs')).cmdUndoLast();
 } else if (command === 'plan') {
   // ---- The plan register (see the top of the file and lib/queuePlan.js) ----
-  (await import('./cli/plans.mjs')).planCommand();
+  // A plans.json that does not parse stops with the store's message (the way back through plans.json.prev), not a
+  // stack trace (lib/store/fileBackend.js StoreCorruptError).
+  try {
+    await (await import('./cli/plans.mjs')).planCommand();
+  } catch (e) {
+    if (e?.code === 'ESTORECORRUPT') die(e.message);
+    throw e;
+  }
 } else if (command === 'classify') {
   (await import('./cli/tasks.mjs')).cmdClassify();
 } else if (command === 'handover') {
