@@ -97,6 +97,12 @@ is being written, and a disk that fails in the middle of a rename.
   write path and lock rule. `lib/__tests__/storeContract.test.ts` runs one contract on both backends, plus the race
   tests that only the memory backend can make exact (two id reservations, two ledger updates, a holder that dies in the
   middle of a write). A later database backend would have to pass the same contract.
+- **The logs: append, last, byId.** `lib/store/logBackend.js` writes a log row as one whole line (a half line left by a
+  writer that died gets a newline first), reads the last n rows from the end of the file, and keeps small sidecar
+  indexes (`<log>.<name>.idx`, family `log-index`): the highest F-id for `findingLog.append` and the wave each agent
+  started in for `hook-time.mjs`. A sidecar is trusted only while the log still starts with the bytes it hashed and is
+  at least as long as it says; then only the new bytes are read. Anything else (a rotation, a lost or broken sidecar)
+  rebuilds it from the archives and the file, so it needs no lock and can always be deleted.
 
 **Adding a state file.** Register it as a family in `lib/store/families.js` first, and write it through FileBackend
 or `openStore()`. A file the register does not know shows up in doctor's `store` row.

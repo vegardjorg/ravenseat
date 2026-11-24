@@ -105,7 +105,19 @@ async function main() {
   }
   // On "done": use the wave the agent STARTED in (from the start row with the same agent_id). With a continuous queue
   // wave-active may have changed while the agent ran, and then the done row would end up in the wrong wave.
+  // First the sidecar index of start rows (lib/store/logBackend.js AGENT_STARTS, times.jsonl.starts.idx), which reads
+  // only the rows since its last call; with no entry there (or an index that cannot be read) the backward scan below.
+  let indexed = null;
   if (event === 'done' && input.agent.id) {
+    try {
+      const LB = require('./lib/store/logBackend.js');
+      indexed = LB.byId(log, LB.AGENT_STARTS, input.agent.id)?.wave ?? null;
+    } catch {
+      indexed = null;
+    }
+    if (indexed) wave = indexed;
+  }
+  if (event === 'done' && input.agent.id && !indexed) {
     try {
       // The last week is enough: an agent's start row is never older than that (the archives before it are skipped).
       const rows = TA.readText(log, { from: Date.now() - 7 * 86_400_000 }).split('\n');

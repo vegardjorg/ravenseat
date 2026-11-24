@@ -81,6 +81,7 @@ const LIST = [
   // ---- Logs -------------------------------------------------------------------------------------------------------
   { name: 'time-log', file: 'times.jsonl', kind: 'log', writers: ['main', 'track', 'hook'], onCorrupt: 'skip', match: [MONTH_ARCHIVE('times')], note: 'the time log and its monthly archives (lib/timeLogArchive.js)' },
   { name: 'findings', file: 'findings.jsonl', kind: 'log', writers: ['main', 'track'], onCorrupt: 'skip', match: [MONTH_ARCHIVE('findings')], note: 'the finding log and its monthly archives (lib/findingLog.js)' },
+  { name: 'log-index', kind: 'cache', writers: ['main', 'track', 'hook'], onCorrupt: 'skip', share: 'never', match: [/\.jsonl\.[a-z]+\.idx$/], note: 'sidecar indexes of the logs (lib/store/logBackend.js): rebuilt from the log when missing or stale' },
   { name: 'test-runs', file: 'test-runs.jsonl', kind: 'log', writers: ['main', 'track'], onCorrupt: 'skip', note: 'test run rows (cut at 512 KB)' },
   { name: 'client-shapes', file: 'client-shapes.jsonl', kind: 'log', writers: ['hook'], onCorrupt: 'skip', note: 'client payload shapes (lib/clientCanary.js)' },
   { name: 'cost-guard-log', file: 'cost-guard-log.jsonl', kind: 'log', writers: ['hook'], onCorrupt: 'skip', note: 'cost guard rows' },

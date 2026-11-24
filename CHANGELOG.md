@@ -163,6 +163,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   .env file or the environment is logged on the Checks tab, the project's .env values are redacted in stored text, and
   doctor warns about a .dockerignore that lets .claude/ into an image.** `guards.secretReads` (`log`), `redact.envValues` (on).
 - **State files are written with a unique tmp name that is removed on any failure, plans.json keeps a `.prev` copy with a restore hint, and decision files are written atomically.**
+- **A finding and an agent's done row no longer read the whole log: small sidecar indexes hold the last F-id and each agent's start wave, and a half line left by a crashed writer no longer swallows the next row.**
 
 ## 0.20.0 (2026-11-19)
 
