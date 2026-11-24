@@ -1,6 +1,7 @@
 # The plugin's shell shim must keep LF endings, also in Windows checkouts (autocrlf), or sh fails on "\r".
 plugin/bin/ravenseat text eol=lf
-plugin/bin/*.cmd text eol=crlf
+# The .cmd shim is stored with CRLF as is (-text): the plugin directory validator refuses any eol other than lf.
+plugin/bin/*.cmd -text
 # Scripts with a shebang must keep LF endings, also in Windows checkouts (autocrlf): vitest cannot parse "#!...\r".
 *.mjs text eol=lf
 # Test snapshots are compared byte for byte: keep LF in every checkout (autocrlf would turn them into CRLF).
