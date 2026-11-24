@@ -44,6 +44,10 @@ const MG = require('./lib/mergeGuard.js');
 const QL = require('./lib/queueLock.js');
 // The safe write of queue.json (queue.json.prev and the rename retry) and the recovery hint.
 export const SF = require('./lib/stateFile.js');
+// The storage layer (lib/store/: the family register, FileBackend and the Store). New state files are registered in
+// lib/store/families.js and written through it.
+export const FB = require('./lib/store/fileBackend.js');
+export const ST = require('./lib/store/index.js');
 // The optional `fixes` field: the task(s) a fix task fixes (add, edit, info, state).
 export const FX = require('./lib/fixLinks.js');
 // Calibrated cost estimates (~$ in show, next, fill, info, state), `calibrate`, and USD per merged change (`cost`).
@@ -354,9 +358,14 @@ function stopIfLockLost(what) {
 }
 export function read() {
   if (!fs.existsSync(FILE)) die(`The queue does not exist. Run: ${CLI} init`);
+  const before = FB.statOf(FILE);
   const text = fs.readFileSync(FILE, 'utf8');
   try {
-    return JSON.parse(text);
+    const queue = JSON.parse(text);
+    // These bytes parse: the next write's queue.json.prev copy needs no parse of its own (lib/store/fileBackend.js),
+    // as long as the file is still the one read here (same mtime and size before and after the read).
+    FB.markGoodIf(FILE, before);
+    return queue;
   } catch (e) {
     // A broken queue.json: stop with the error and, when queue.json.prev parses, how to get the last good state back
     // (lib/stateFile.js). The queue never restores it by itself.
@@ -515,18 +524,22 @@ export const undoHint = () =>
     ? `Changelog no. ${lastEntry.nr} (${lastEntry.changes.length} field(s)); undo: ravenseat undo`
     : null;
 // ---- The plan register: storage under the same lock as the queue ---------------------------------------
-const PLAN_FILE = path.join(FOLDER, 'plans.json');
+// The 'plans' family (lib/store/families.js): backup prev, so every write keeps plans.json.prev, and onCorrupt fail: a
+// plans.json that does not parse throws a StoreCorruptError whose message has the way back (the .prev copy when it
+// parses). Callers that treat an unreadable register as "no plans" (autoAcceptContext, catalog planIds) catch it as
+// before; a plan command stops with the message.
+const PLAN_STORE = ST.openStore({ folder: FOLDER });
+/** What a plans.json copy holds, for the restore hint (here and in doctor). */
+export const planCount = (j) => `${Array.isArray(j?.entries) ? j.entries.length : 0} plan(s)`;
 export function readPlans() {
-  if (!fs.existsSync(PLAN_FILE)) return P.emptyRegister();
-  return P.normalize(JSON.parse(fs.readFileSync(PLAN_FILE, 'utf8')));
+  const raw = PLAN_STORE.readJson('plans', { describe: planCount });
+  return raw == null ? P.emptyRegister() : P.normalize(raw);
 }
 // `bump: false` (plan active) leaves `changed` alone: a pulse is no plan change and must not make --expect-changed outdated.
 export function writePlans(reg, { bump = true } = {}) {
   stopIfLockLost('plans.json');
   if (bump) reg.changed = new Date().toISOString();
-  const tmp = `${PLAN_FILE}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(reg, null, 2) + '\n');
-  SF.renameWithRetry(tmp, PLAN_FILE);
+  PLAN_STORE.writeJson('plans', reg);
 }
 /** The queue read-only (projects, areas, tasks, owner questions); empty when it does not exist. */
 // Read-only, with the archived tasks (lib/queueArchive.js) added last and marked archived: a plan's status is derived from

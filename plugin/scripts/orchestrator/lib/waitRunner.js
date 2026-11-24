@@ -2,11 +2,11 @@
 // =============================================================
 // lib/waitRunner.js: the detached runner of the wait mode (lib/waitMode.js). Never started by hand.
 //
-// Use: node lib/waitRunner.js <done file> <pid file> <hard cap sec> <lock file> <run id> -- <node arguments...>
+// Use: node lib/waitRunner.js <done file> <pid file> <hard cap sec> <lock file or -> <run id> -- <node arguments...>
 //
 // Runs `node <arguments>` with this process's stdout and stderr (the run's .out and .err files, opened by the call that
 // started it) and the environment it got (QUEUE_WAIT=off, so the command never uses the wait mode itself). When the
-// command exits it writes the done file ({ exit, endedAt }) through a rename and frees the run's lock. Over the hard cap it
+// command exits it writes the done file ({ exit, endedAt }) through a rename, which frees the run's key. Over the hard cap it
 // ends the command's whole process tree, prints a RED line as gates.mjs does for a gate over its budget, and writes
 // { exit: 1, timedOut: true }. The environment is never written to a file: tokens stay in memory. The command runs under
 // a guard (lib/treeRun.js), so a runner killed without warning (no cap, no done file) takes the command's tree along.
@@ -35,6 +35,9 @@ function writeDone(value) {
       // error-ignored: the waiter then reports the run as ended without a result
     }
   }
+  // '-': the key is a pointer under a lib/queueLock.js lock (lib/waitMode.js startOrAttach), which the done file frees by
+  // itself. A lock file path (a runner started by an older version): remove it when it is still this run's.
+  if (lockFile === '-') return;
   try {
     if (fs.readFileSync(lockFile, 'utf8').trim() === id) fs.rmSync(lockFile, { force: true });
   } catch {

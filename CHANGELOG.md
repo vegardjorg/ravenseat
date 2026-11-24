@@ -93,6 +93,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **`ravenseat heavy -- <command>` runs a test suite or red team run in a machine queue slot, and tracks get a note when they run one without it.** `processGuard.heavyQueue` `warn`.
 - **Doctor and `pulse-check --include-owner` show who holds a gate queue slot and who waits.** Display only, no setting.
 - **test:changed gives vitest fewer workers and 120 s timeouts on a busy machine, so load gives fewer false reds.** `testChanged.adaptLoad` `true`.
+- **`ravenseat store` lists the data folder's state files from one register, doctor names unknown entries and orphaned tmp files, and `store sweep --tmp [--dry]` removes the orphans on request.** Display and an explicit command, no setting.
 ### Changed
 - **Ready for the Claude plugin directory: the plugin has a listing icon (the raven seat logo), the README lists what Ravenseat runs, sends and fetches, and the Windows `.cmd` shim is stored with CRLF as is (`-text`), since the directory refuses `eol=crlf`.**
 - **The settings registry's rows live in one file per settings area (`lib/settings/`), put together by `lib/settingsRegistry.js` in the same order.** Internal structure only; no setting or output changes.
@@ -152,6 +153,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **Statistics: the three y-axis ticks are always distinct, so a small range no longer reads "1 s, 1 s, 0 s".**
 - **Plans tree map: the built fill's line no longer runs through a label such as "43 % built", in light and dark.**
 - **Checks: suggestion groups with one card sit side by side and use the width instead of one narrow column.**
+- **A deleted or concurrent `catalog propose` no longer reuses or shares a D-id, concurrent `catalog accept`s keep every record, and two branches never get the same G-id from `guards add`.**
 ### Hardened
 - **Gate, done and base runs register themselves while they run and carry `RAVENSEAT_TRACK`, and can run at below normal priority.** `processGuard.register` on, `processGuard.lowerPriority` off.
 - **The key scan's hash is salted per data folder, so a short password cannot be guessed back from `secret-scan.json`, and a false alarm stays set aside by that hash.**
@@ -162,6 +164,9 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **Secrets in transcripts: the key scan reads every worktree git lists and passwords of any length, an agent printing a
   .env file or the environment is logged on the Checks tab, the project's .env values are redacted in stored text, and
   doctor warns about a .dockerignore that lets .claude/ into an image.** `guards.secretReads` (`log`), `redact.envValues` (on).
+- **State files are written with a unique tmp name that is removed on any failure, plans.json keeps a `.prev` copy with a restore hint, and decision files are written atomically.**
+- **A finding and an agent's done row no longer read the whole log: small sidecar indexes hold the last F-id and each agent's start wave, and a half line left by a crashed writer no longer swallows the next row.**
+- **The merge lock, the `ravenseat wait` lock and the wait mode's run key use the queue lock's rule: a lock whose process is gone is taken over at once, and a merge that still runs is never taken over, also after 6 h.** The lock files of older versions are still honoured.
 
 ## 0.20.0 (2026-11-19)
 

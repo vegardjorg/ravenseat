@@ -69,6 +69,8 @@ ravenseat heavy -- <command>        # runs a heavy command (npm test, vitest, a 
 ravenseat surface                   # git hooks and config that run code, against what was accepted; changes nothing
 ravenseat surface accept --by owner # accept the current state (after installing a hook tool, changing git config)
 ravenseat unlock                    # who holds the queue lock; changes nothing (--force --by owner releases it)
+ravenseat store [--json]            # the data folder's state files by family (lib/store/families.js), unknown entries and orphaned tmp files; changes nothing
+ravenseat store sweep --tmp [--dry] # removes orphaned *.tmp files (dead pid, older than 10 min); --dry lists them only; refused from a track worktree
 ravenseat tidy                      # merged worktrees (anywhere on disk) and branches left behind, with sizes; changes nothing
 ravenseat tidy --execute            # removes only the merged, clean, unlocked ones no active task uses, after y/N (--yes skips it)
 ravenseat issues list [--label x]   # GitHub's open issues (your gh login, read only) and where an import would put each

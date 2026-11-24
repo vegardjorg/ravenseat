@@ -17,7 +17,9 @@
 // =============================================================
 
 const fs = require('node:fs');
-const { renameWithRetry } = require('./stateFile.js');
+// The 'approval-waits' family of the storage layer (lib/store/families.js): written through FileBackend (sync, no lock:
+// the hook path stays fast; the read-modify-write race is plan step 6).
+const FB = require('./store/fileBackend.js');
 const path = require('node:path');
 
 /** The client adapter (0w W2b1): the transcript rows and the subagent file names are its format, read on first use. */
@@ -174,12 +176,9 @@ function merge(waits, found, now = Date.now()) {
   return out;
 }
 
-/** Writes the file whole (a temp file and a rename, so the board never reads half a file). */
+/** Writes the file whole (a temp file and a rename, so the board never reads half a file; the tmp removed on a failure). */
 function write(folder, waits) {
-  fs.mkdirSync(folder, { recursive: true });
-  const tmp = path.join(folder, `${FILE}.${process.pid}.tmp`);
-  fs.writeFileSync(tmp, JSON.stringify(waits, null, 2) + '\n');
-  renameWithRetry(tmp, path.join(folder, FILE));
+  FB.writeJson(path.join(folder, FILE), waits);
 }
 
 /**

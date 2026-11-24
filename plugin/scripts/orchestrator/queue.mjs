@@ -396,8 +396,8 @@
 //   node scripts/orchestrator/queue.mjs merge <id> [--without-migr-push] [--without-fill] [--scratchpad <folder>] [--force]
 //        [--allow-guard] [--allow-partial] [--allow-focus] [--allow-secret] [--allow-unreviewed] [--allow-catalog] [--done-cwd <folder>] [--force-red-base] [--force-red-gate]
 //        [--resume]
-//        (one merge at a time per repo: the lock <dataFolder>/merge.lock with pid, host and start time; a held lock
-//         refuses with the holder, a stale one (the pid is gone, or older than 6 h) is taken over. A merge, rebase,
+//        (one merge at a time per repo: the lock <dataFolder>/.mergeLock with pid, host and start time; a held lock
+//         refuses with the holder, a stale one (the pid is gone, or another host's after 6 h) is taken over. A merge, rebase,
 //         cherry-pick or revert in progress in the main checkout (MERGE_HEAD and so on) refuses the merge with how to
 //         finish or undo it. The track tip must be in baseBranch (git merge-base --is-ancestor) after the merge and before
 //         done, otherwise nothing is marked; the merge commit is stored on the task as merge_commit. Every step is
@@ -494,6 +494,11 @@
 //                                                                  first, then the folder, git worktree prune, git branch
 //                                                                  -d) after y/N; no terminal and no --yes deletes nothing.
 //                                                                  --demo --execute removes the demo folders. lib/tidy.js)
+//   node scripts/orchestrator/queue.mjs store [--json]              (the data folder against the storage register: unknown
+//                                                                  entries and tmp files crashed writes left. Reads only.
+//                                                                  lib/store/, cli/store.mjs)
+//   node scripts/orchestrator/queue.mjs store sweep --tmp [--dry] [--json]   (removes those orphaned tmp files; --dry lists
+//                                                                  only. Refused from a track worktree)
 //   node scripts/orchestrator/queue.mjs unlock [--force --by owner]   (the queue lock: prints the holder; with both flags
 //                                                                  releases it. Refused from a track worktree; the guard
 //                                                                  denies it to queue agents. lib/queueLock.js)
@@ -1020,6 +1025,8 @@ if (command === 'init') {
   (await import('./cli/unlock.mjs')).cmdUnlock();
 } else if (command === 'tidy') {
   await (await import('./cli/tidy.mjs')).cmdTidy();
+} else if (command === 'store') {
+  (await import('./cli/store.mjs')).cmdStore();
 } else if (command === 'surface') {
   (await import('./cli/surface.mjs')).cmdSurface();
 } else if (command === 'catalog') {
@@ -1114,6 +1121,7 @@ if (command === 'init') {
   await (await import('./cli/undo.mjs')).cmdUndoLast();
 } else if (command === 'plan') {
   // ---- The plan register (see the top of the file and lib/queuePlan.js) ----
+  // A plans.json that does not parse stops with the store's message, not a stack trace (cli/plans.mjs planCommand).
   (await import('./cli/plans.mjs')).planCommand();
 } else if (command === 'classify') {
   (await import('./cli/tasks.mjs')).cmdClassify();

@@ -73,7 +73,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
-import { a, branchFor, CONFIG, CLI, FILE, FOLDER, FOLLOW_FILE, git, GIT_ROOT, HERE, KK, L, LOCK, MAIN_TREE, require, SF } from './context.mjs';
+import { a, branchFor, CONFIG, CLI, FILE, FOLDER, FOLLOW_FILE, git, GIT_ROOT, HERE, KK, L, LOCK, MAIN_TREE, planCount, require, SF } from './context.mjs';
+import { storeDoctorRows } from './store.mjs';
 import { cloudSetupFacts } from './cloud.mjs';
 import { BASELINE_CHECKS } from './doctorBaseline.mjs';
 import { REPO_CHECKS } from './doctorRepo.mjs';
@@ -424,14 +425,15 @@ function checkState() {
           `remove one dependency: ${CLI} edit ${c[0]} --json '{"depends_on":[...]}'`,
         ),
       );
-    // A temporary file of a process that is gone (lib/stateFile.js writes queue.json.<pid>.tmp and renames it): a crash in
-    // the middle of a write. The queue above is fine and never read it; the file is only left over (red team RT-21).
+    // A temporary file of a process that is gone (lib/store/fileBackend.js writes queue.json.<pid>.<hex>.tmp, older
+    // versions queue.json.<pid>.tmp, and renames it): a crash in the middle of a write. The queue above is fine and never
+    // read it; the file is only left over (red team RT-21). The other families' leftovers are in the store row.
     let left = [];
     try {
       left = fs
         .readdirSync(path.dirname(FILE))
-        .filter((n) => new RegExp(`^${path.basename(FILE).replace(/\./g, '\\.')}(\\.prev)?\\.(\\d+)\\.tmp$`).test(n))
-        .filter((n) => !QL.pidAlive(Number(n.match(/\.(\d+)\.tmp$/)[1])));
+        .filter((n) => new RegExp(`^${path.basename(FILE).replace(/\./g, '\\.')}(\\.prev)?\\.(\\d+)(\\.[0-9a-f]+)?\\.tmp$`).test(n))
+        .filter((n) => !QL.pidAlive(Number(n.match(/\.(\d+)(?:\.[0-9a-f]+)?\.tmp$/)[1])));
     } catch {
       left = []; // error-ignored: an unreadable folder is reported by the checks that need it
     }
@@ -440,7 +442,7 @@ function checkState() {
         info(
           'queue',
           `left over from an interrupted write: ${left.join(', ')} (queue.json itself is fine and never read it)`,
-          `delete it when no ravenseat command is running: ${left.map((n) => path.join(path.dirname(FILE), n)).join(' ')}`,
+          `delete it when no ravenseat command is running: ${left.map((n) => path.join(path.dirname(FILE), n)).join(' ')} (or ${CLI} store sweep --tmp once it is 10 min old)`,
         ),
       );
   }
@@ -449,9 +451,16 @@ function checkState() {
     ['follow.json', FOLLOW_FILE],
   ]) {
     const r = readJson(file);
-    if (r?.error) out.push(fail('queue', `${name} does not parse: ${r.error}`, `restore ${name} from a backup`));
+    // plans.json keeps plans.json.prev since LAGRING-1a: the hint names it when it parses.
+    const prev = name === 'plans.json' ? SF.recoveryHint(file, { describe: planCount }) : null;
+    if (r?.error) out.push(fail('queue', `${name} does not parse: ${r.error}`, prev ?? `restore ${name} from a backup`));
   }
   return out;
+}
+
+/** The storage layer (lib/store/, cli/store.mjs): unknown data folder entries and orphaned tmp files. INFO only. */
+function checkStore() {
+  return storeDoctorRows(info);
 }
 
 /** The git hooks and config that run code against the accepted baseline. Reads only: no ensure here. */
@@ -991,7 +1000,7 @@ export async function cmdDoctor() {
     fixed = gitignoreNote(writeGitignore(CONFIG.root, CONFIG));
     if (!a.includes('--json')) console.log(`doctor --fix: ${fixed}\n`);
   }
-  const every = [checkNode, checkHooks, checkConfig, checkIssues, checkState, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkTidy, checkProjectFiles, checkSettings, checkTaxonomy, checkCatalog, checkNotBuilding, checkDepsAudit, checkLinks, checkGuards, checkGuardDecisions, checkCanary, checkCodeMode, ...REPO_CHECKS, checkCloud, checkMachine, checkGateQueue, checkProcesses, checkBudget, checkTemp, checkCleanCopies, checkGit, checkCiCost, ...BASELINE_CHECKS, doctorKeyScan].flatMap((f) => {
+  const every = [checkNode, checkHooks, checkConfig, checkIssues, checkState, checkStore, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkTidy, checkProjectFiles, checkSettings, checkTaxonomy, checkCatalog, checkNotBuilding, checkDepsAudit, checkLinks, checkGuards, checkGuardDecisions, checkCanary, checkCodeMode, ...REPO_CHECKS, checkCloud, checkMachine, checkGateQueue, checkProcesses, checkBudget, checkTemp, checkCleanCopies, checkGit, checkCiCost, ...BASELINE_CHECKS, doctorKeyScan].flatMap((f) => {
     try {
       return f();
     } catch (e) {

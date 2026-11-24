@@ -17,9 +17,10 @@
 // command exits; this command is that exit. It only works while the Claude Code session is open (also via Remote
 // Control), and costs no tokens while it waits.
 //
-// One waiter at a time: <dataFolder>/wait.lock holds { pid, startedAt }. A second `ravenseat wait` while a live one runs prints
-// "ALREADY WAITING (pid n)" and exits 0; a lock whose pid is dead is taken over. The lock and the heartbeat are removed
-// on exit, SIGINT and SIGTERM. The heartbeat <dataFolder>/wait-heartbeat.json ({ pid, startedAt, beatAt }) is
+// One waiter at a time: <dataFolder>/.waitLock (a lib/queueLock.js lock, token with pid and startedAt). A second
+// `ravenseat wait` while a live one runs prints "ALREADY WAITING (pid n)" and exits 0; a lock whose pid is dead is taken
+// over (a wait.lock file from an older version is honoured the same way). The lock and the heartbeat are removed on
+// exit, SIGINT and SIGTERM. The heartbeat <dataFolder>/wait-heartbeat.json ({ pid, startedAt, beatAt }) is
 // rewritten every 30 s; the board shows "Orchestrator listening" while it is fresh.
 //
 // Watching: fs.watch on the data folder (queue.json is replaced by a rename, so the folder is watched, not the file)
@@ -42,7 +43,13 @@ export const EXIT_TIMEOUT = 10;
 /** The exit code when a track needs a look. */
 export const EXIT_TRACKS = 11;
 const TRACKS_SEEN = path.join(FOLDER, 'wait-tracks-seen.json');
-const LOCK_FILE = path.join(FOLDER, 'wait.lock');
+const QL = require('./lib/queueLock.js');
+/** The waiter lock, a lib/queueLock.js folder (LAGRING step 6: one lock implementation). */
+const LOCK_DIR = path.join(FOLDER, '.waitLock');
+/** The lock file of the versions before; a live holder there still counts (takeLock). */
+const LEGACY_LOCK = path.join(FOLDER, 'wait.lock');
+/** A waiter on another host (a shared data folder) whose pid cannot be checked: taken over after 8 h, the default --timeout. */
+const OTHER_HOST_STALE_MS = 8 * 3_600_000;
 const HEARTBEAT = path.join(FOLDER, W.HEARTBEAT_FILE);
 const BEAT_MS = 30_000;
 const POLL_MS = 2_000;
@@ -74,25 +81,25 @@ function readSeen() {
   }
 }
 
-/** Takes the lock, or returns the live holder's { pid, startedAt }. A dead holder's lock is taken over. */
+/**
+ * Takes the lock: { me } (the token to release), or { held } with the live holder ({ pid, ... }). A dead holder is
+ * taken over (lib/queueLock.js: the same rule as the queue lock, one try). A wait.lock file from an older version is
+ * still a holder while its pid runs, and removed when it is gone.
+ */
 function takeLock(startedAt) {
-  for (let i = 0; i < 3; i += 1) {
-    try {
-      fs.writeFileSync(LOCK_FILE, JSON.stringify({ pid: process.pid, startedAt }) + '\n', { flag: 'wx' });
-      return null;
-    } catch (e) {
-      if (e?.code !== 'EEXIST') die(`Could not write ${LOCK_FILE}: ${e?.message ?? e}`);
-    }
-    let held = null;
-    try {
-      held = JSON.parse(fs.readFileSync(LOCK_FILE, 'utf8'));
-    } catch {
-      /* half written or gone: treated as stale */
-    }
-    if (held && held.pid !== process.pid && W.pidAlive(held.pid)) return held;
-    fs.rmSync(LOCK_FILE, { force: true });
+  let old = null;
+  try {
+    old = JSON.parse(fs.readFileSync(LEGACY_LOCK, 'utf8'));
+  } catch {
+    /* none, or half written: no holder */
   }
-  die(`Could not take ${LOCK_FILE} (another waiter keeps replacing it).`);
+  if (old && old.pid !== process.pid && W.pidAlive(old.pid)) return { held: old };
+  fs.rmSync(LEGACY_LOCK, { force: true });
+  const got = QL.acquire(LOCK_DIR, { waitMs: 0, staleAgeMs: OTHER_HOST_STALE_MS, meta: { startedAt } });
+  if (got.ok) return { me: got.me };
+  const holder = got.state?.tokens?.[0]?.owner;
+  if (holder) return { held: holder };
+  die(`Could not take ${LOCK_DIR} (try again, or look with ${CLI} unlock).`);
 }
 
 /** Removes a file only when it is ours (a waiter that took over a stale lock must not lose it to the old one). */
@@ -116,14 +123,14 @@ export function cmdWait() {
   if (!fs.existsSync(FILE)) die(`The queue does not exist. Run: ${CLI} init`);
 
   const startedAt = new Date().toISOString();
-  const held = takeLock(startedAt);
+  const { held, me } = takeLock(startedAt);
   if (held) {
     console.log(`ALREADY WAITING (pid ${held.pid})`);
     process.exit(0);
   }
   process.on('exit', () => {
     removeOwn(HEARTBEAT);
-    removeOwn(LOCK_FILE);
+    QL.release(LOCK_DIR, me); // only this waiter's own token (a waiter that took over must not lose it to the old one)
   });
   // process.exit runs the exit handler above; 128 + the signal number, as a shell reports it.
   process.on('SIGINT', () => process.exit(130));

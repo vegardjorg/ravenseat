@@ -92,7 +92,7 @@ const QUEUE_COMMANDS = [
   'cloud-package', 'compact', 'conflicts', 'continue', 'controls', 'cost', 'decide', 'deliver', 'deliveries', 'diagnose', 'doctor', 'edit', 'edit-many', 'explain', 'external',
   'fill', 'finding', 'focus', 'follow', 'forecast', 'gate', 'guards', 'guidance', 'handover', 'heavy', 'helpers', 'info', 'init', 'inspection', 'issues', 'instructions', 'kickstart', 'limit', 'machine', 'merge', 'migr', 'mode', 'next', 'next-migr',
   'orchestrator', 'owner-log', 'park', 'pick', 'pickable', 'plan', 'pr', 'private', 'project', 'projects', 'proposals', 'pulse-check', 'qa', 'question', 'rank', 'receive',
-  'release', 'release-notes', 'resolutions', 'resolve', 'resume', 'review-item', 'schedule', 'secrets', 'set', 'settings', 'share', 'show', 'since', 'start', 'state', 'surface', 'tidy', 'trackFile', 'triage', 'unblock', 'undo', 'unlock', 'update', 'wait', 'wiring',
+  'release', 'release-notes', 'resolutions', 'resolve', 'resume', 'review-item', 'schedule', 'secrets', 'set', 'settings', 'share', 'show', 'since', 'start', 'state', 'store', 'surface', 'tidy', 'trackFile', 'triage', 'unblock', 'undo', 'unlock', 'update', 'wait', 'wiring',
 ];
 
 /** Short names ravenseat.mjs maps to a script file (ravenseat board = queue-board.mjs). */

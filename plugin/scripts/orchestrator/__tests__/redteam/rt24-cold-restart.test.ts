@@ -14,7 +14,7 @@
 //     second agent until `ravenseat attempt close <id> --outcome interrupted`.
 //   - `ravenseat resume <id> --reason context`: the mission for a new agent on the same branch (prepare-track --continue).
 //   - `ravenseat deliveries`: a report that was never received, found without the agent's notification.
-//   - `receive` and `merge`, and the locks they and the loop leave: the queue lock, the gate evidence lock, wait.lock.
+//   - `receive` and `merge`, and the locks they and the loop leave: the queue lock, the gate evidence lock, the waiter lock (.waitLock).
 // Only the agents are fake (scripts that commit and write their RESULT line); git, the CLI, prepare-track and the time
 // hook (hook-time.mjs, fed the payload Claude Code sends) are the real ones.
 // =============================================================
@@ -147,7 +147,7 @@ describe('RT-24: the orchestrator dies cold in the middle, and a new one finishe
     const fill = p.run('fill', '--ids', 'A', '--scratchpad', p.scratch);
     expect(fill.code, fill.out).toBe(0);
     const waiter = background(p, [path.join(SCRIPTS, 'queue.mjs'), 'wait', '--check-min', '0']);
-    await waitFor(path.join(p.folder, 'wait.lock'));
+    await waitFor(path.join(p.folder, '.waitLock'));
     const wt1 = p.agentWorktree('agent-A', 'A');
     p.hook('SubagentStart', 'dead1', 'A');
     const work = agentScript(
@@ -163,7 +163,9 @@ describe('RT-24: the orchestrator dies cold in the middle, and a new one finishe
     killTree(agent.pid);
     killTree(waiter.pid);
     await Promise.all([agent.exited, waiter.exited]);
-    expect(JSON.parse(fs.readFileSync(path.join(p.folder, 'wait.lock'), 'utf8')).pid).toBe(waiter.pid);
+    const waitLock = path.join(p.folder, '.waitLock');
+    const token = fs.readdirSync(waitLock).find((n) => /^owner-\d+\.json$/.test(n))!;
+    expect(JSON.parse(fs.readFileSync(path.join(waitLock, token), 'utf8')).pid).toBe(waiter.pid);
     const deadWork = { 'lib/A.ts': fs.readFileSync(path.join(wt1, 'lib/A.ts'), 'utf8'), 'lib/A.helper.ts': fs.readFileSync(path.join(wt1, 'lib/A.helper.ts'), 'utf8') };
 
     // ---- A new orchestrator, with only the disk. ----
@@ -178,7 +180,7 @@ describe('RT-24: the orchestrator dies cold in the middle, and a new one finishe
     const wait = runWithin(p, 60_000, 'wait', '--check-min', '0', '--timeout', '0.0005');
     expect(wait.out).not.toMatch(/ALREADY WAITING/);
     expect(wait.code, wait.out).toBe(10);
-    expect(fs.existsSync(path.join(p.folder, 'wait.lock'))).toBe(false);
+    expect(fs.existsSync(path.join(p.folder, '.waitLock'))).toBe(false);
 
     // SAFETY: the dead agent's attempt is still running on record, so no second agent is started on its branch, by any
     // path, until someone says it is gone. Neither refusal writes a new attempt.
@@ -356,7 +358,7 @@ describe('RT-24: the orchestrator dies cold in the middle, and a new one finishe
 
     // The waiter: a live one is never replaced (the second says ALREADY WAITING with its pid); a dead one's lock is taken.
     const w1 = background(p, [path.join(SCRIPTS, 'queue.mjs'), 'wait', '--check-min', '0']);
-    await waitFor(path.join(p.folder, 'wait.lock'));
+    await waitFor(path.join(p.folder, '.waitLock'));
     const second = runWithin(p, 60_000, 'wait', '--check-min', '0', '--timeout', '0.0005');
     expect(second.code).toBe(0);
     expect(second.out).toMatch(new RegExp(`ALREADY WAITING \\(pid ${w1.pid}\\)`));

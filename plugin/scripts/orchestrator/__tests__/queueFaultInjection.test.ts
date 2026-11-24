@@ -121,7 +121,7 @@ function project() {
     return t.split('\n').filter(Boolean);
   };
   const find = (id: string) => (JSON.parse(fs.readFileSync(queueFile, 'utf8')) as { tasks: Task[] }).tasks.find((t) => t.id === id);
-  const lockFile = path.join(folder, 'merge.lock');
+  const lockFile = path.join(folder, '.mergeLock'); // a lib/queueLock.js folder (LAGRING step 6)
   const stateFile = (id: string) => path.join(folder, `merge-state-${id}.json`);
   const state = (id: string) => JSON.parse(fs.readFileSync(stateFile(id), 'utf8'));
   /** A task on a branch queue/<id> from develop with the files committed. */

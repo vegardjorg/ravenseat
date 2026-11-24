@@ -63,56 +63,42 @@ function parses(file, f = nodeFs) {
 
 /**
  * Copies `file` to `<file>.prev` (through a temporary file and a rename) when it exists and parses. Never throws: a
- * failed copy must not stop the write it protects.
+ * failed copy must not stop the write it protects. Since LAGRING-1a this is lib/store/fileBackend.js keepPrevious (a
+ * unique tmp name, removed on a failure, and no parse when this process already knows the bytes are good).
  * @param {string} file
  * @param {{ fs?: typeof nodeFs }} [o]
  * @returns {boolean} whether a copy was made
  */
 function keepPrevious(file, o = {}) {
-  const f = o.fs ?? nodeFs;
-  try {
-    const text = f.readFileSync(file, 'utf8');
-    JSON.parse(text);
-    const tmp = `${prevPath(file)}.${process.pid}.tmp`;
-    f.writeFileSync(tmp, text);
-    renameWithRetry(tmp, prevPath(file), { fs: f });
-    return true;
-  } catch {
-    return false;
-  }
+  return require('./store/fileBackend.js').keepPrevious(file, o);
 }
 
 /**
  * Writes `text` to `file` safely: the previous good state to <file>.prev, then a temporary file renamed over it
- * (with retries).
+ * (with retries). Through lib/store/fileBackend.js writeText: a unique tmp name, removed on ANY failure (the write's as
+ * well as the rename's), so a full disk leaves no half file behind.
  * @param {string} file
  * @param {string} text
- * @param {{ fs?: typeof nodeFs }} [o]
+ * @param {{ fs?: typeof nodeFs, snapshots?: object[] }} [o]
  */
 function writeState(file, text, o = {}) {
   const f = o.fs ?? nodeFs;
-  keepPrevious(file, { fs: f });
-  // The rolling copies at a few ages (lib/stateSnapshots.js), of the state BEFORE this write; o.snapshots = the tiers.
-  if (o.snapshots?.length) require('./stateSnapshots.js').roll(file, o.snapshots, { fs: f });
-  const tmp = `${file}.${process.pid}.tmp`;
-  f.writeFileSync(tmp, text);
-  try {
-    renameWithRetry(tmp, file, { fs: f });
-  } catch (e) {
-    try {
-      f.rmSync(tmp, { force: true });
-    } catch {
-      /* the temporary file is left; doctor's hint names queue.json.*.tmp */
-    }
-    throw e;
-  }
+  require('./store/fileBackend.js').writeText(file, text, {
+    fs: f,
+    backup: 'prev',
+    json: true,
+    mkdir: false,
+    // The rolling copies at a few ages (lib/stateSnapshots.js), of the state BEFORE this write; o.snapshots = the tiers.
+    before: o.snapshots?.length ? (ff) => require('./stateSnapshots.js').roll(file, o.snapshots, { fs: ff }) : undefined,
+  });
 }
 
 /**
- * The hint when `file` does not parse: names <file>.prev when that one parses (with its task count and time), else
- * null. Shown by read() and `ravenseat doctor`.
+ * The hint when `file` does not parse: names <file>.prev when that one parses (with what it holds and its time), else
+ * null. Shown by read() and `ravenseat doctor`. `describe(json)` says what the copy holds ("3 plan(s)"); the default
+ * counts queue tasks.
  * @param {string} file
- * @param {{ fs?: typeof nodeFs }} [o]
+ * @param {{ fs?: typeof nodeFs, describe?: (json: any) => string }} [o]
  * @returns {string|null}
  */
 function recoveryHint(file, o = {}) {
@@ -124,7 +110,7 @@ function recoveryHint(file, o = {}) {
   } catch {
     return null;
   }
-  const n = Array.isArray(q?.tasks) ? `${q.tasks.length} task(s)` : 'no tasks list';
+  const n = typeof o.describe === 'function' ? o.describe(q) : Array.isArray(q?.tasks) ? `${q.tasks.length} task(s)` : 'no tasks list';
   const when = typeof q?.changed === 'string' ? `, changed ${q.changed}` : '';
   return (
     `${prev} holds the previous good state (${n}${when}; one write older). Look at it, then copy it over the ` +

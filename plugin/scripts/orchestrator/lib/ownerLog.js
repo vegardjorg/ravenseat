@@ -35,7 +35,8 @@
 
 const crypto = require('node:crypto');
 const fs = require('node:fs');
-const { renameWithRetry } = require('./stateFile.js');
+// The 'owner-log' family of the storage layer (lib/store/families.js): written through FileBackend.
+const FB = require('./store/fileBackend.js');
 const path = require('node:path');
 
 /** The log's file name in the data folder. */
@@ -128,13 +129,10 @@ function load(folder) {
   return { state: 'broken', log: { version: 1, since: null, entries: [] } };
 }
 
-/** Writes the log atomically (a temporary file and a rename). */
+/** Writes the log atomically (lib/store/fileBackend.js: a unique tmp file and a rename, the tmp removed on a failure). */
 function save(folder, log) {
-  const file = logFile(folder);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, `${JSON.stringify({ ...log, entries: log.entries.slice(-MAX_ENTRIES) })}\n`);
-  renameWithRetry(tmp, file);
+  // Compact JSON on one line, as before (the log can hold 20000 entries).
+  FB.writeText(logFile(folder), `${JSON.stringify({ ...log, entries: log.entries.slice(-MAX_ENTRIES) })}\n`, { json: true });
 }
 
 /** The log with every owner row of the queue added (the first use). */

@@ -73,7 +73,8 @@
 
 const crypto = require('node:crypto');
 const fs = require('node:fs');
-const { renameWithRetry } = require('./stateFile.js');
+// The 'gate-evidence' family of the storage layer (lib/store/families.js): written through FileBackend.
+const FB = require('./store/fileBackend.js');
 const path = require('node:path');
 const { CLI_PATTERN } = require('./productNames.js');
 
@@ -153,12 +154,12 @@ function readStore(file) {
   return parseStore(readStoreText(file));
 }
 
-/** Writes the store atomically (a temporary file and a rename), so a reader never sees half a file. */
+/**
+ * Writes the store atomically (lib/store/fileBackend.js: a unique tmp file and a rename, the tmp removed on any
+ * failure), so a reader never sees half a file and a full disk leaves nothing behind.
+ */
 function writeStore(file, store) {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, `${JSON.stringify(store, null, 2)}\n`);
-  renameWithRetry(tmp, file);
+  FB.writeJson(file, store);
 }
 
 /**

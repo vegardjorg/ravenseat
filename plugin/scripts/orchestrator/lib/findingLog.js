@@ -33,8 +33,10 @@
 // makeRow stays pure and does not classify.
 //
 // CONCURRENT WRITERS: append takes a lock folder next to the file (<file>.lock, lib/queueLock.js), reads the highest id,
-// and appends one whole line with O_APPEND (timeLogArchive.appendText, which also rotates). The lock makes the ids
-// unique; the single write per row keeps lines whole.
+// and appends one whole line with O_APPEND (lib/store/logBackend.js append, then timeLogArchive.appendText, which also
+// rotates). The lock makes the ids unique; the single write per row keeps lines whole, and a half line a dead writer
+// left gets a newline first. The highest id comes from a sidecar index (findings.jsonl.lastid.idx), so append parses
+// only the rows since its last call; a missing or stale index is rebuilt from the file and its archives.
 //
 // FOLLOW-UPS (setFixedBy): old lines are never rewritten. A later fact (the commit that fixed a deferred finding) is a
 // follow-up row { update: 'fixed_by', item, fixed_by, time }, and read merges the latest follow-up per item (the review
@@ -422,8 +424,24 @@ function read(root, { since = null, includeArchive = false } = {}) {
   return { rows, warnings: out.warnings };
 }
 
-/** The highest id in the log: the newest file with a row holds it (ids only grow). 0 for none. */
+/**
+ * The highest id in the log. Read from the sidecar index (lib/store/logBackend.js FINDINGS_LAST_ID,
+ * findings.jsonl.lastid.idx): only the rows written since the last call are parsed, not every archive. The index can
+ * only count a row the full scan would skip as well (a higher id gives a gap, never a reused id). If the index cannot be
+ * read at all, the full scan below decides, as before.
+ */
 function highestId(file) {
+  try {
+    const n = require('./store/logBackend.js').indexOf(file, require('./store/logBackend.js').FINDINGS_LAST_ID).lastId;
+    if (Number.isInteger(n) && n >= 0) return n;
+  } catch {
+    // error-ignored: the scan below is the old, slower way to the same number
+  }
+  return highestIdByScan(file);
+}
+
+/** The highest id by reading the files: the newest file with a row holds it (ids only grow). 0 for none. */
+function highestIdByScan(file) {
   const files = [file, ...TA.archives(file).map((a) => a.file).reverse()];
   for (const f of files) {
     const out = { rows: [], updates: [], warnings: [] };
@@ -476,7 +494,8 @@ function append(root, input, o = {}) {
     file,
     () => {
       const written = { ...row, id: `F-${highestId(file) + 1}` };
-      TA.appendText(file, `${JSON.stringify(written)}\n`, { now: o.now ?? Date.now(), mode: 'monthly' });
+      // logBackend.append: one whole line, after a newline if a dead writer left half a line (then rotates as before).
+      require('./store/logBackend.js').append(file, written, { rotate: 'monthly', now: o.now ?? Date.now() });
       return written;
     },
     o.waitMs,
@@ -497,7 +516,7 @@ function setFixedBy(root, item, commit, o = {}) {
   if (!fixedBy) throw fail('sha', 'is required');
   const file = fileOf(root);
   const row = { update: 'fixed_by', item: key, fixed_by: fixedBy, time: utc(o.now ?? Date.now()) };
-  withLock(file, () => TA.appendText(file, `${JSON.stringify(row)}\n`, { now: o.now ?? Date.now(), mode: 'monthly' }), o.waitMs);
+  withLock(file, () => require('./store/logBackend.js').append(file, row, { rotate: 'monthly', now: o.now ?? Date.now() }), o.waitMs);
   return row;
 }
 

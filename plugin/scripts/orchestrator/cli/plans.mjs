@@ -227,7 +227,20 @@ function planChallenge(json) {
   console.log('It changes nothing by itself: weigh it with the owner before the plan goes to ready.');
 }
 
+/**
+ * The plan sub-commands. A plans.json that does not parse stops with the store's message (the way back through
+ * plans.json.prev, lib/store/fileBackend.js StoreCorruptError), not a stack trace.
+ */
 export function planCommand() {
+  try {
+    planSubcommand();
+  } catch (e) {
+    if (e?.code === 'ESTORECORRUPT') die(e.message);
+    throw e;
+  }
+}
+
+function planSubcommand() {
   const under = a[1];
   const json = a.includes('--json');
   if (under === 'show') {

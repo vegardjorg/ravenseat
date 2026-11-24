@@ -677,9 +677,10 @@ checkout or with ravenseat's own `--evidence` run:
 
 `ravenseat merge` runs several steps in a row, so it guards against being cut off or run twice (`lib/mergeLock.js`):
 
-- **One at a time.** A lock file `<dataFolder>/merge.lock` (pid, host, start time) lets one `ravenseat merge` run per repo. A
-  second one stops at once and names the holder. A lock whose process is gone (same host) or that is older than 6 h
-  is stale and taken over; the message names the merge that was cut off.
+- **One at a time.** A lock `<dataFolder>/.mergeLock` (pid, host, start time, task) lets one `ravenseat merge` run per repo.
+  A second one stops at once and names the holder. A lock whose process is gone (same host) is taken over at once, one
+  from another host after 6 h; a merge that is still running is never taken over, however long it runs. The message
+  names the merge that was cut off. A `merge.lock` file left by an older version is still honoured.
 - **No merge on top of an unfinished one.** A merge, rebase, cherry-pick or revert in progress in the main checkout
   (`MERGE_HEAD` and the like) refuses `ravenseat merge` and `merge-track.mjs` (exit 5), with how to finish or undo it.
 - **Done only when merged.** After the merge step and again before `done`, the track tip must be in the base
