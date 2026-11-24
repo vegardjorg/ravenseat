@@ -130,6 +130,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **Settings marks the command palette (`board.palette`) as having no effect while `board.shortcuts` is off.**
 - **Internal: `cli/merge.mjs` is split by step of the receive and merge flow into `cli/merge/`, with the old file as the map.** No change in behaviour.
 ### Fixed
+- **`undo <id>` finds the merge on a base log over 1 MB, and says when the log cannot be read instead of "merge not found".**
 - **Dragging a Timeline bar with the mouse no longer selects text: a ghost follows the pointer and the landing row, insertion mark and place are shown.** Rides on `board.timelineDrag`, no new setting.
 - **The owner-question examples in the add-to-queue, review and plans skills carry the card fields, so a copied example is no longer refused.** No setting: they are examples.
 - Board settings: the "How to use the board" and "Keyboard shortcuts" buttons have a gap between them.
@@ -156,6 +157,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **Every atomic write retries a rename Windows refuses for a moment, not only queue.json.** A guard test keeps new raw renames out.
 - **A push or write guard that crashes, does not start or times out now refuses the call instead of letting it through, also from Code Mode.** `guards.onHookFailure` `block`.
 - **The write guard no longer lets a write through when it is slow: after 8 s it refuses with how to retry.** Follows `guards.onHookFailure` (`block`).
+- **The push guard checks a first push of a long history for private files instead of skipping it, and refuses when git cannot list the files.**
 - **The shell reader treats a backslash-escaped space as part of the word, so `C:/Program\ Files/GitHub\ CLI/gh.exe` is checked as `gh`.**
 - **Queue agents may only read with the GitHub CLI: `gh api`, `gh auth`, `gh gist` and every write are denied (rule `gh-cli`).**
 - **Secrets in transcripts: the key scan reads every worktree git lists and passwords of any length, an agent printing a

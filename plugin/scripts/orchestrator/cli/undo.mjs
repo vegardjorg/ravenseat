@@ -155,7 +155,14 @@ export async function cmdUndoMerge() {
     .split(/\r?\n/)
     .filter((l) => l.trim())
     .map((l) => l.slice(3));
-  const rows = UM.parseLog(git(['log', '--first-parent', `--format=${UM.LOG_FORMAT}`, `refs/heads/${BASE}`]));
+  // A log git could not give is said as such, never read as an empty history ("merge not found"; ARK-1 T2).
+  const log = git(['log', '--first-parent', `--format=${UM.LOG_FORMAT}`, `refs/heads/${BASE}`]);
+  if (log == null)
+    die(
+      `${CLI} undo ${id}: could not read the history of ${BASE} (git log failed or printed more than 256 MB), so the merge ` +
+        `cannot be looked up. Nothing was done. Check it with git log --first-parent ${BASE}, then run ${CLI} undo ${id} again.`,
+    );
+  const rows = UM.parseLog(log);
   const found = UM.findMerge({ id, recorded: o.merge_commit ?? null, rows, prefix: PREFIX });
   const inBase = !!found && git(['merge-base', '--is-ancestor', found.sha, `refs/heads/${BASE}`]) !== null;
   const parents = found?.index >= 0 ? rows[found.index].parents.length : 0;

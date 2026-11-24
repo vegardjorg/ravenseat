@@ -120,6 +120,8 @@ export function git(args) {
         cwd: GIT_ROOT,
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'ignore'],
+        // The large buffer lib/queueGit.js uses: the 1 MB default turned a long log into null (ARK-1 T2).
+        maxBuffer: 256 * 1024 * 1024,
       }).trim();
     } catch {
       return null;
