@@ -53,9 +53,12 @@ const guard = setTimeout(() => {
     'happening, run `ravenseat doctor`.';
   let text;
   try {
+    // The deny shape comes from the client adapter, never written by hand here (clientCouplingGate).
     text = JSON.stringify(require('./lib/clients/claude/hookInput.js').deny('PreToolUse', reason));
   } catch {
-    text = JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason } });
+    // The adapter would not load: exit 2 with the reason on stderr, which also blocks the call (fail-closed).
+    process.stderr.write(reason, () => process.exit(2));
+    return;
   }
   // Exit only once stdout is flushed; if it never flushes, Claude Code's own limit blocks the call (onFailure block).
   process.stdout.write(text, () => process.exit(0));
