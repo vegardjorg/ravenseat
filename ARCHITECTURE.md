@@ -191,7 +191,10 @@ file tools, not a Bash redirect. Failures have two levels. An internal error ins
 load, a rule that throws) fails open, because a bug in a guard must not stop normal work; the push guard still denies a
 forced push, a branch delete and `--mirror` through `lib/pushGuardFallback.js`. When the guard process itself fails
 (cannot start, crashes, times out, invalid output), the push guard and the write guard block the call
-(`"onFailure": "block"` in `hooks/hooks.json`, setting `guards.onHookFailure`); the other hooks let it run. Details:
+(`"onFailure": "block"` in `hooks/hooks.json`, setting `guards.onHookFailure`); the other hooks let it run. A blocking
+guard never fails open on a timer: the write guard that has not decided after 8 s answers with a deny that says the
+check did not finish and to try again (`lib/__tests__/hookFailMode.test.ts` checks every `onFailure: block` script for
+a timer that exits 0). Details:
 `plugin/docs/orchestration.md`. And a hook only runs while the plugin loads:
 the 0.8.24 changelog warns that after the rename an old `cq` install failed to load, and its hooks, the push guard among
 them, were off.

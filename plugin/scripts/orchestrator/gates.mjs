@@ -749,9 +749,12 @@ async function ghRunList(sha) {
       const mod = await import(pathToFileURL(path.resolve(process.env.QUEUE_CI_GH)).href);
       r = await mod.default(args);
     } else {
-      const x = spawnSync('gh', args, { encoding: 'utf8', cwd, maxBuffer: 64 * 1024 * 1024, windowsHide: true });
-      if (x.error) return { error: 'gh (the GitHub CLI) was not found' };
-      r = { code: x.status ?? 1, out: `${x.stdout ?? ''}` };
+      // Through cli/ghRun.mjs: a 20 s limit, so a gh that does not answer cannot hold the gate run (ARK-1 T3).
+      const { ghSpawn } = await import('./cli/ghRun.mjs');
+      const x = ghSpawn(args, { cwd });
+      if (x.missing) return { error: 'gh (the GitHub CLI) was not found' };
+      if (x.timedOut) return { error: 'gh run list did not answer within 20 s' };
+      r = { code: x.code ?? 1, out: x.out };
     }
     if (r?.code !== 0) return { error: `gh run list failed (exit ${r?.code ?? '?'})` };
     const runs = JSON.parse(String(r.out ?? ''));

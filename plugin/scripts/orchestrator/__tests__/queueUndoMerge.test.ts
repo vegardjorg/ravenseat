@@ -307,6 +307,36 @@ describe('ravenseat undo <id>: a conflicting revert is aborted', () => {
   });
 });
 
+describe('ravenseat undo <id>: a long or unreadable history (ARK-1 T2)', () => {
+  it('finds the merge when the base log is over 1 MB', () => {
+    const p = project();
+    const m = p.merged('A-1', { 'lib/a.js': "exports.name = () => 'A';\n" });
+    // A later commit with a 1.2 MB subject: the first-parent log is over the old 1 MB default buffer.
+    const msg = path.join(p.folder, 'long-subject.txt');
+    fs.writeFileSync(msg, `${'long subject '.repeat(100_000)}\n`);
+    p.g(['commit', '-q', '--allow-empty', '-F', msg]);
+    const r = p.run(['undo', 'A-1', '--dry']);
+    expect(r.code, r.out.slice(0, 400)).toBe(0);
+    expect(r.out).toContain(m.slice(0, 12));
+  });
+
+  it('says the log could not be read instead of "merge not found", and changes nothing', () => {
+    const p = project();
+    p.merged('A-1', { 'lib/a.js': "exports.name = () => 'A';\n" });
+    const before = p.tip();
+    // Take the first commit away: git log --first-parent cannot walk the history any more.
+    const root = p.g(['rev-list', '--max-parents=0', 'develop']);
+    const obj = path.join(p.repo, '.git', 'objects', root.slice(0, 2), root.slice(2));
+    fs.chmodSync(obj, 0o644);
+    fs.rmSync(obj);
+    const r = p.run(['undo', 'A-1', '--dry']);
+    expect(r.code).not.toBe(0);
+    expect(r.out).toMatch(/could not read the history/i);
+    expect(r.out).not.toMatch(/not found/i);
+    expect(p.tip()).toBe(before);
+  });
+});
+
 describe('a queue agent cannot undo', () => {
   it('the push guard denies `ravenseat undo <id>` for a track', () => {
     const track = { baseBranch: 'develop', agentType: 'track', branch: 'queue/A-1', knownPackage: () => false };

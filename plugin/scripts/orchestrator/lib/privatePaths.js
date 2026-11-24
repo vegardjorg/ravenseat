@@ -28,6 +28,7 @@
 'use strict';
 
 const path = require('node:path');
+const PK = require('./pathKey.js');
 
 /**
  * A project-relative path in gitignore form (forward slashes, no leading ./ or trailing /), or null when it is empty,
@@ -78,26 +79,27 @@ function matching(file, cfg) {
   return entries(cfg).find((e) => under(f, e)) ?? null;
 }
 
-/** The repo-relative forms of an absolute path: from the main tree, and from inside an agent worktree there. */
-function relativeForms(abs, root) {
-  const fold = (s) => {
-    const x = String(s).replace(/\\/g, '/').replace(/\/+$/, '');
-    return process.platform === 'win32' ? x.toLowerCase() : x;
-  };
-  const a = fold(abs);
-  const r = fold(root);
-  if (!r || !a.startsWith(`${r}/`)) return [];
-  const rel = a.slice(r.length + 1);
-  const m = /^\.claude\/worktrees\/[^/]+\/(.+)$/.exec(rel);
-  return m ? [m[1]] : [rel];
+/**
+ * The repo-relative forms of an absolute path: from the main tree, and from inside an agent worktree there. In
+ * lib/pathKey.js key form (ARK-1 T4): the real path, case folded on win32 AND darwin.
+ */
+function relativeForms(abs, root, platform = process.platform) {
+  const out = [];
+  for (const rel of PK.rels(abs, root, { platform })) {
+    if (!rel) continue;
+    const m = /^\.claude\/worktrees\/[^/]+\/(.+)$/.exec(rel);
+    const form = m ? m[1] : rel;
+    if (!out.includes(form)) out.push(form);
+  }
+  return out;
 }
 
 /** The read: false entry `abs` falls under, read from the main tree `root` (also through an agent's worktree), or null. */
-function readDenied(abs, { root, cfg } = {}) {
+function readDenied(abs, { root, cfg, platform = process.platform } = {}) {
   const noRead = entries(cfg).filter((e) => !e.read);
   if (!noRead.length || !abs || !root) return null;
-  const fold = (s) => (process.platform === 'win32' ? s.toLowerCase() : s);
-  for (const rel of relativeForms(abs, root)) {
+  const fold = (s) => (PK.folds(platform) ? s.toLowerCase() : s);
+  for (const rel of relativeForms(abs, root, platform)) {
     const hit = noRead.find((e) => rel === fold(e.path) || rel.startsWith(`${fold(e.path)}/`));
     if (hit) return hit;
   }

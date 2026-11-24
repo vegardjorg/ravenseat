@@ -15,7 +15,8 @@
 // a protected path the task does not own, a new skip or focus marker in a test file, a test file that loses its last
 // assertion (lib/writeWarn.js), and with scopeNotes.driftWarn on (off by default) a file outside the task's files and
 // reads. Once per agent, file and kind.
-// Fails OPEN: any internal error gives no output and exit 0.
+// Fails OPEN on an internal error (a rule that throws): no output and exit 0. Fails CLOSED on the slow path: no answer
+// within 8 s is a deny with how to retry (guards.onHookFailure "allow": no answer), never a timer that exits 0.
 // Smoke test: echo '{"agent_type":"track","tool_input":{"file_path":"gate-evidence.json"}}' | node scripts/orchestrator/hook-write-guard.mjs
 // =============================================================
 import fs from 'node:fs';
@@ -29,8 +30,48 @@ const require = createRequire(import.meta.url);
 const PR = require('./lib/projectRoot.js');
 if (!PR.queueActive()) process.exit(0);
 
-const guard = setTimeout(() => process.exit(0), 5000);
+// The slow path fails CLOSED (ARK-1 T1, architecture review B): hooks.json marks this hook `"onFailure": "block"` with a
+// 10 s limit, so a guard that is too slow to decide must not let the write through. After BUDGET_MS (8 s, inside the
+// 10 s) the hook answers with a deny that says what happened and how to retry. guards.onHookFailure "allow"
+// (lib/hookFailure.js) keeps the owner's choice: no answer, the write runs. WRITE_GUARD_BUDGET_MS only shortens the
+// budget (the tests use it); it can never make the guard wait past Claude Code's own limit.
+const BUDGET_MS = Math.min(8000, Math.max(50, Number(process.env.WRITE_GUARD_BUDGET_MS) || 8000));
+let answered = false;
+const guard = setTimeout(() => {
+  if (answered) return;
+  answered = true;
+  let mode = 'block';
+  try {
+    mode = require('./lib/hookFailure.js').settingOf(require('./lib/queueConfig.js').config());
+  } catch {
+    mode = 'block'; // fail-closed: an unreadable setting reads as the default
+  }
+  if (mode === 'allow') process.exit(0);
+  const reason =
+    `Write guard: the check did not finish in ${Math.round(BUDGET_MS / 1000)} s (a busy machine or a stalled hook), so the ` +
+    'write was stopped instead of let through unchecked. Nothing was written. Try the same write again; if it keeps ' +
+    'happening, run `ravenseat doctor`.';
+  let text;
+  try {
+    // The deny shape comes from the client adapter, never written by hand here (clientCouplingGate).
+    text = JSON.stringify(require('./lib/clients/claude/hookInput.js').deny('PreToolUse', reason));
+  } catch {
+    // The adapter would not load: exit 2 with the reason on stderr, which also blocks the call (fail-closed).
+    process.stderr.write(reason, () => process.exit(2));
+    return;
+  }
+  // Exit only once stdout is flushed; if it never flushes, Claude Code's own limit blocks the call (onFailure block).
+  process.stdout.write(text, () => process.exit(0));
+}, BUDGET_MS);
 guard.unref();
+
+/** Every answer of main() goes through here, so the budget timer and main never both write. */
+function reply(obj) {
+  if (answered) return;
+  answered = true;
+  clearTimeout(guard);
+  process.stdout.write(JSON.stringify(obj));
+}
 
 async function readIn() {
   let s = '';
@@ -73,7 +114,7 @@ async function main() {
     WG.assessWrite({ agentType: input.agent.type, filePath: abs, folder, guardedTypes, agentGuard }) ??
     controlAnswer(input.agent.type, abs, guardedTypes, agentGuard);
   if (answer) {
-    process.stdout.write(JSON.stringify(HK.deny('PreToolUse', answer.reason)));
+    reply(HK.deny('PreToolUse', answer.reason));
     // One row in the time log (lib/guardLog.js): the guard and the rule, never the path or the content.
     require('./lib/guardLog.js').recordHook({ guard: 'write', rule: answer.rule ?? 'state-file', decision: 'deny', input });
     return;
@@ -83,7 +124,7 @@ async function main() {
   if (agentType !== 'track' && agentType !== 'track-d') return;
   const warnings = trackWarnings(input, abs, folder);
   if (!warnings.length) return;
-  process.stdout.write(JSON.stringify(HK.context('PreToolUse', warnings.join('\n'))));
+  reply(HK.context('PreToolUse', warnings.join('\n')));
 }
 
 /**
@@ -110,7 +151,7 @@ function mainSessionAsk(HK, input) {
     if (!finding) return false;
     const answer = AA.forMode(finding, input.permissionMode);
     const reason = `Write guard: ${answer.reason}`;
-    process.stdout.write(JSON.stringify(answer.decision === 'ask' ? HK.ask('PreToolUse', reason) : HK.deny('PreToolUse', reason)));
+    reply(answer.decision === 'ask' ? HK.ask('PreToolUse', reason) : HK.deny('PreToolUse', reason));
     try {
       require('./lib/guardLog.js').recordHook({ guard: 'write', rule: answer.rule, decision: answer.decision, input });
     } catch {
@@ -217,4 +258,9 @@ function trackWarnings(input, abs, folder) {
 
 main()
   // No process.exit here: stdout must be flushed before the process exits (the guard timer is unref'd).
-  .catch(() => undefined); // error-ignored: the guard fails open and must never stop an agent
+  .catch(() => undefined) // error-ignored: an internal error fails open and must never stop an agent
+  // Decided (an answer or none): the budget timer may no longer answer.
+  .finally(() => {
+    answered = true;
+    clearTimeout(guard);
+  });

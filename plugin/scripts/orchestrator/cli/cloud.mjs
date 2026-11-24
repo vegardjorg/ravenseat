@@ -34,6 +34,8 @@ const CS = require('./lib/cloudSetup.js');
 const CHECK_EVERY_MS = 5 * 60 * 1000;
 /** A remote that does not answer must not hold up a pulse. */
 const REMOTE_TIMEOUT_MS = 15_000;
+/** `cloud done` fetches a whole delivered branch, which may take longer than a pulse's check, but never forever. */
+const DONE_FETCH_MS = 120_000;
 const SCRIPTS = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 // ---- queue.mjs cloud: suitability with git --------------------------------------------------------------------
@@ -85,12 +87,15 @@ function cloudParts(queue, ids, usage) {
 }
 
 // ---- Noticing that a cloud track has finished ------------------------------------------------------------------------
-/** git against the remote, with a time limit and never a prompt for a password. null when it fails. */
-function gitRemote(args) {
+/**
+ * git against the remote, with a time limit (default REMOTE_TIMEOUT_MS) and never a prompt for a password. null when it
+ * fails or runs out of time.
+ */
+function gitRemote(args, { timeoutMs = REMOTE_TIMEOUT_MS } = {}) {
   const r = spawnSync('git', args, {
     cwd: GIT_ROOT,
     encoding: 'utf8',
-    timeout: REMOTE_TIMEOUT_MS,
+    timeout: timeoutMs,
     env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
     stdio: ['ignore', 'pipe', 'ignore'],
   });
@@ -868,16 +873,16 @@ export function cmdCloud() {
     const sha = val('--sha') ?? null;
     if (sha != null && !/^[0-9a-f]{7,40}$/i.test(sha)) die(`Invalid sha: ${sha}`);
     // Fetch the branch the cloud pushed (and baseBranch, so the count is against what is pushed now).
-    const fetched = git([
-      'fetch',
-      '-q',
-      REMOTE,
-      `+refs/heads/${branch}:refs/remotes/${REMOTE}/${branch}`,
-      `+refs/heads/${BASE}:refs/remotes/${REMOTE}/${BASE}`,
-    ]);
+    // Through gitRemote (ARK-1 T3): no password prompt, and a remote that does not answer stops after DONE_FETCH_MS
+    // instead of holding the command forever.
+    const fetched = gitRemote(
+      ['fetch', '-q', REMOTE, `+refs/heads/${branch}:refs/remotes/${REMOTE}/${branch}`, `+refs/heads/${BASE}:refs/remotes/${REMOTE}/${BASE}`],
+      { timeoutMs: DONE_FETCH_MS },
+    );
     if (fetched == null)
       die(
-        `Could not find ${branch} on ${REMOTE} (git fetch failed). Did the cloud push to another branch? Use --branch <name>.`,
+        `Could not find ${branch} on ${REMOTE} (git fetch failed or took over ${DONE_FETCH_MS / 60_000} min). Did the cloud ` +
+          'push to another branch? Use --branch <name>. A slow remote: run the same command again.',
       );
     const remove = `refs/remotes/${REMOTE}/${branch}`;
     const count =

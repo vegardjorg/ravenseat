@@ -13,7 +13,12 @@
 //   lib/__tests__/mergeGuard.test.ts, __tests__/queueBaseGate.test.ts.
 // =============================================================
 
+import { spawnSync } from 'node:child_process';
+
 import { BASE, CLI, CONFIG, edit, FOLDER, G, git, GIT_ROOT, L, read, require, TK } from '../context.mjs';
+
+/** The cloud branch delete talks to the remote: a remote that does not answer must not hold the merge's last step. */
+const DELETE_TIMEOUT_MS = 60_000;
 import { mergeBlock, readTimeLog, reviewerFindingsLines } from '../tracks.mjs';
 import { BASE_SETUP, BH, HEALTH_FILE } from '../baseHealth.mjs';
 import { logEvent } from '../events.mjs';
@@ -200,9 +205,18 @@ function deleteCloudBranch(branch) {
     const remoteBranch = read().tasks.find((o) => o.id === id)?.cloud?.branch;
     if (!remoteBranch || CONFIG.cloud?.deleteBranch === false) return;
     const remote = CONFIG.remote ?? 'origin';
+    // A time limit and no password prompt (ARK-1 T3): the merge stands either way, so a slow remote only leaves the branch.
+    const r = spawnSync('git', ['push', '-q', remote, '--delete', remoteBranch], {
+      cwd: GIT_ROOT,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+      timeout: DELETE_TIMEOUT_MS,
+      windowsHide: true,
+    });
     console.log(
-      git(['push', '-q', remote, '--delete', remoteBranch]) == null
-        ? `Cloud branch: ${remoteBranch} is still on ${remote}; git push ${remote} --delete ${remoteBranch}`
+      r.status !== 0
+        ? `Cloud branch: ${remoteBranch} is still on ${remote}${r.error?.code === 'ETIMEDOUT' ? ` (no answer within ${DELETE_TIMEOUT_MS / 1000} s)` : ''}; git push ${remote} --delete ${remoteBranch}`
         : `Cloud branch: ${remoteBranch} removed from ${remote}.`,
     );
   } catch (e) {

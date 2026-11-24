@@ -59,24 +59,11 @@ const SCRIPTS_SKIP = new Set(['__tests__', 'node_modules']);
 
 const bare = (t) => (typeof t === 'string' && t ? t.replace(/^ravenseat:/, '') : null);
 
-/** A path made absolute with "/" separators; on Windows Git Bash's /c/x is C:/x. */
-function absOf(p, platform = process.platform) {
-  let s = String(p ?? '');
-  if (platform === 'win32') {
-    const gb = /^\/([a-zA-Z])(\/|$)/.exec(s);
-    if (gb) s = `${gb[1]}:/${s.slice(3)}`;
-  }
-  return path.resolve(s).replace(/\\/g, '/').replace(/(.)\/+$/, '$1');
-}
-
-/** A path in one form for comparing: absOf, and lower case on Windows (C:\X and c:\x are the same folder). */
-function norm(p, platform = process.platform) {
-  const r = absOf(p, platform);
-  return platform === 'win32' ? r.toLowerCase() : r;
-}
-
-/** `inner` is `outer` or inside it (both normalised). */
-const inside = (inner, outer) => inner === outer || inner.startsWith(`${outer}/`);
+// Paths are compared in one form (lib/pathKey.js, ARK-1 T4): the real path, case folded on win32 AND darwin, so a
+// `claude.md` on macOS is the `CLAUDE.md` it overwrites. absOf is only for what a message shows and for joining.
+const PK = require('./pathKey.js');
+const absOf = (p, platform = process.platform) => PK.abs(p, { platform });
+const norm = (p, platform = process.platform) => PK.key(p, { platform });
 
 /**
  * The control file kind of a path (KIND), or null.
@@ -85,12 +72,20 @@ const inside = (inner, outer) => inner === outer || inner.startsWith(`${outer}/`
  */
 function controlKind(file, { mainTree, scriptsDir = null, configFile = null, platform = process.platform } = {}) {
   if (!file || !mainTree) return null;
-  const abs = norm(file, platform);
-  if (configFile && abs === norm(configFile, platform)) return KIND.config;
-  if (scriptsDir && inside(abs, norm(scriptsDir, platform))) return KIND.scripts;
-  const main = norm(mainTree, platform);
-  if (!abs.startsWith(`${main}/`)) return null;
-  const rel = abs.slice(main.length + 1);
+  const o = { platform };
+  // Each form of the path (PK.keys): as written below real folders, and fully resolved (a link to a control file).
+  if (configFile && PK.keys(file, o).includes(PK.key(configFile, o))) return KIND.config;
+  if (scriptsDir && PK.inside(file, scriptsDir, o)) return KIND.scripts;
+  for (const rel of PK.rels(file, mainTree, o)) {
+    const kind = relKind(rel);
+    if (kind) return kind;
+  }
+  return null;
+}
+
+/** The control file kind of a path below the main tree, in key form ("CLAUDE.md", ".claude/x"), or null. */
+function relKind(rel) {
+  if (!rel) return null;
   // The agent worktrees live under .claude/worktrees in many setups: a track's own files, never the main tree's.
   if (/^\.claude\/worktrees(\/|$)/i.test(rel)) return null;
   if (/^queue\.config\.json$/i.test(rel)) return KIND.config;
@@ -104,9 +99,7 @@ function controlKind(file, { mainTree, scriptsDir = null, configFile = null, pla
 
 /** The path as the denial shows it: relative to the main tree when inside it. */
 function shown(file, mainTree, platform = process.platform) {
-  const main = norm(mainTree, platform);
-  const abs = absOf(file, platform);
-  return norm(file, platform).startsWith(`${main}/`) ? abs.slice(main.length + 1) : abs;
+  return PK.shown(file, mainTree, { platform });
 }
 
 const denial = (kind, name) =>

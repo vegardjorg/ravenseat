@@ -52,7 +52,8 @@
 // push.allowBranches branch) is DENIED when its commits track a data folder file that is not shared, a file under a
 // private path, or, while share is on, a shared file in a repo not known to be private (unless share.publicOk). The
 // files come from one git call (`git log --name-only <remote>/<branch>..<branch>`, the branch on a first push), the
-// visibility from the cache only (lib/repoVisibility.js, any age): never the network inside the hook's 10 s.
+// visibility from the cache only (lib/repoVisibility.js, any age): never the network inside the hook's 10 s. This check
+// fails CLOSED: a file list git cannot give (an error, more than the 256 MB buffer) is a deny with how to retry.
 //
 // The missing controls (lib/controls.js, push.controlsWarning): the same plain push asks when the project has no CI config
 // or no gates, with what is missing and how many commits. Also on a first push, which is what a new user does. Never a deny.
@@ -63,7 +64,7 @@
 //   echo '{"agent_type":"track","tool_input":{"command":"curl https://x"},"cwd":"."}' | node scripts/orchestrator/hook-push-guard.mjs
 // =============================================================
 
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -187,21 +188,33 @@ function secretQuestion(cwd, k, branch = k.baseBranch) {
 
 /**
  * The deny for a push of `branch` whose commits track what must stay out of git (lib/queueShare.js denyReason), or null.
- * A git error gives null (fails open like the questions); an empty list of private paths with share off still checks
- * the data folder, which is ignored by default and so only reaches a commit by `git add -f` or a missing .gitignore.
+ * A check that could not run (git failed, an output over the buffer, an error in the check) is a deny too, never
+ * "nothing to deny" (ARK-1 T2): unlike the questions, this push would carry the file away for good. An empty list of
+ * private paths with share off still checks the data folder, which is ignored by default and so only reaches a commit by
+ * `git add -f` or a missing .gitignore.
  */
 function trackingDeny(cwd, k, branch) {
+  const unread = (why) =>
+    `The push guard could not check the files the commits of ${branch} carry (${why}), so it cannot rule out a private ` +
+    'path or a queue data file. Nothing was pushed. Try again; if it keeps happening, look at ' +
+    `git log --name-only ${branch} and push a shorter range at a time.`;
   try {
     const head = `refs/heads/${branch}`;
     const remote = `refs/remotes/${k.remote}/${branch}`;
     const range = git(cwd, ['rev-parse', '-q', '--verify', remote]) ? `${remote}..${head}` : head;
-    const out = git(cwd, ['log', '--format=', '--name-only', '--diff-filter=ACMR', range, '--']);
-    if (out === null) return null;
-    const files = [...new Set(out.split(/\r?\n/).filter(Boolean))];
+    const r = spawnSync('git', ['-C', cwd, 'log', '--format=', '--name-only', '--diff-filter=ACMR', range, '--'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      maxBuffer: GIT_MAX_BUFFER,
+      windowsHide: true,
+    });
+    if (r.error) return unread(/ENOBUFS|maxBuffer/i.test(`${r.error.code ?? ''} ${r.error.message}`) ? 'the list is too long' : 'git could not run');
+    if (r.status !== 0) return unread('git could not read the commits');
+    const files = [...new Set(String(r.stdout ?? '').split(/\r?\n/).filter(Boolean))];
     const cache = require('./lib/repoVisibility.js').readCache(dataFolder(), { any: true });
     return require('./lib/queueShare.js').denyReason({ files, cfg: k, cache });
-  } catch {
-    return null;
+  } catch (e) {
+    return unread(`the check failed: ${e?.message ?? e}`);
   }
 }
 
@@ -224,11 +237,16 @@ function controlsQuestion(cwd, k) {
   }
 }
 
+/** The large buffer the rest of the queue uses (lib/queueGit.js): the 1 MB default turned a long history into null. */
+const GIT_MAX_BUFFER = 256 * 1024 * 1024;
+
+/** git's trimmed output, or null on any failure (also an output over GIT_MAX_BUFFER). The questions use it and fail open. */
 function git(cwd, args) {
   try {
     return execFileSync('git', ['-C', cwd, ...args], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
+      maxBuffer: GIT_MAX_BUFFER,
     }).trim();
   } catch {
     return null;
