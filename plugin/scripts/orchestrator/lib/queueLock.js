@@ -41,7 +41,11 @@
 //   * Another host: its pid cannot be asked, so a slow holder there can lose the lock by age. See stopIfLockLost in
 //     cli/context.mjs on what that means.
 //
-// Used by: cli/context.mjs (withLock, write, die), cli/unlock.mjs. Tested in: lib/__tests__/queueLock.test.ts.
+// ANOTHER FILE SYSTEM: lockOn(io) gives the same functions on an injected fs, clock, pid and sleep (the storage
+// layer's memory backend, lib/store/memoryBackend.js). The rule above is the same there; only the io differs.
+//
+// Used by: cli/context.mjs (withLock, write, die), cli/unlock.mjs, lib/store/index.js. Tested in:
+// lib/__tests__/queueLock.test.ts, lib/__tests__/storeContract.test.ts.
 // =============================================================
 
 const crypto = require('node:crypto');
@@ -62,6 +66,21 @@ const tokenName = (generation) => `owner-${generation}.json`;
 
 /** A blocking sleep (the CLI is synchronous). */
 const sleepMs = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+// The file system and the sleep every function below uses. The real ones, except inside a lockOn(io) call, which swaps
+// them for that call only (everything here is synchronous, so nothing else runs while they are swapped). That lets the
+// storage layer's memory backend (lib/store/memoryBackend.js) run THIS rule, not a copy of it (LAGRING step 4).
+let IO = { fs, sleep: sleepMs };
+
+function using(io, fn) {
+  const prev = IO;
+  IO = { fs: io?.fs ?? fs, sleep: io?.sleep ?? sleepMs };
+  try {
+    return fn();
+  } finally {
+    IO = prev;
+  }
+}
 
 /**
  * True when the pid runs on this machine, on Windows and Linux alike. `process.kill(pid, 0)` sends no signal. ESRCH =
@@ -111,7 +130,7 @@ function newOwner({ generation = 1, pid = process.pid, hostname = os.hostname(),
 /** The text of a token file, or null when it is gone. */
 function readText(file) {
   try {
-    return fs.readFileSync(file, 'utf8');
+    return IO.fs.readFileSync(file, 'utf8');
   } catch {
     return null;
   }
@@ -135,8 +154,8 @@ function readState(lockDir, now = Date.now) {
   let names;
   let mtimeMs;
   try {
-    names = fs.readdirSync(lockDir);
-    mtimeMs = fs.statSync(lockDir).mtimeMs;
+    names = IO.fs.readdirSync(lockDir);
+    mtimeMs = IO.fs.statSync(lockDir).mtimeMs;
   } catch (e) {
     if (e.code === 'ENOENT' || e.code === 'ENOTDIR') return null;
     throw e;
@@ -165,16 +184,16 @@ function isHeld(lockDir, me) {
 function removeFolderIfEmpty(lockDir) {
   for (let i = 0; i < 8; i++) {
     try {
-      fs.rmdirSync(lockDir);
+      IO.fs.rmdirSync(lockDir);
       return true;
     } catch (e) {
       if (e.code === 'ENOENT') return false;
       try {
-        if (fs.readdirSync(lockDir).length) return false;
+        if (IO.fs.readdirSync(lockDir).length) return false;
       } catch {
         return false;
       }
-      sleepMs(25);
+      IO.sleep(25);
     }
   }
   return false;
@@ -189,7 +208,7 @@ function removeFolderIfEmpty(lockDir) {
 function placeToken(lockDir, me, seen) {
   const mine = tokenName(me.generation);
   try {
-    fs.writeFileSync(path.join(lockDir, mine), `${JSON.stringify(me)}\n`, { flag: 'wx' });
+    IO.fs.writeFileSync(path.join(lockDir, mine), `${JSON.stringify(me)}\n`, { flag: 'wx' });
   } catch {
     // Another process has that name, or the folder went away. After a mkdir of my own that failed for another reason,
     // this leaves no empty folder for the others to wait on.
@@ -199,7 +218,7 @@ function placeToken(lockDir, me, seen) {
   const saw = new Map(seen.tokens.map((t) => [t.name, t.text]));
   let unchanged = false;
   try {
-    unchanged = fs
+    unchanged = IO.fs
       .readdirSync(lockDir)
       .filter((n) => TOKEN_RE.test(n) && n !== mine)
       .every((n) => saw.has(n) && saw.get(n) === readText(path.join(lockDir, n)));
@@ -207,12 +226,12 @@ function placeToken(lockDir, me, seen) {
     /* the folder went away, and my token with it */
   }
   if (!unchanged) {
-    fs.rmSync(path.join(lockDir, mine), { force: true });
+    IO.fs.rmSync(path.join(lockDir, mine), { force: true });
     removeFolderIfEmpty(lockDir);
     return false;
   }
-  for (const t of seen.tokens) fs.rmSync(path.join(lockDir, t.name), { force: true });
-  for (const name of seen.other) fs.rmSync(path.join(lockDir, name), { recursive: true, force: true });
+  for (const t of seen.tokens) IO.fs.rmSync(path.join(lockDir, t.name), { force: true });
+  for (const name of seen.other) IO.fs.rmSync(path.join(lockDir, name), { recursive: true, force: true });
   return true;
 }
 
@@ -226,7 +245,7 @@ function tryOnce(lockDir, { hostname, isAlive, now, pid }) {
   const lost = { ok: false, verdict: null, state: null };
   let made = false;
   try {
-    fs.mkdirSync(lockDir);
+    IO.fs.mkdirSync(lockDir);
     made = true;
   } catch {
     /* it exists, or (Windows) is being deleted: read below */
@@ -275,7 +294,7 @@ function acquire(lockDir, { waitMs = WAIT_MS, hostname = os.hostname(), isAlive 
     // A round that lost a race says nothing about the holder: keep the last real answer for the message.
     if (r.state) last = r;
     if (now() - started > waitMs) return { ok: false, waitedMs: now() - started, verdict: last.verdict, state: last.state };
-    sleepMs(Math.min(POLL_MS, Math.max(1, waitMs)));
+    IO.sleep(Math.min(POLL_MS, Math.max(1, waitMs)));
   }
 }
 
@@ -283,7 +302,7 @@ function acquire(lockDir, { waitMs = WAIT_MS, hostname = os.hostname(), isAlive 
 function release(lockDir, me) {
   try {
     if (!isHeld(lockDir, me)) return false;
-    fs.rmSync(path.join(lockDir, tokenName(me.generation)), { force: true });
+    IO.fs.rmSync(path.join(lockDir, tokenName(me.generation)), { force: true });
   } catch {
     return false; // Could not be removed: left to the rule (this pid is gone soon).
   }
@@ -300,10 +319,10 @@ function forceRelease(lockDir, state) {
   for (const t of state.tokens) {
     const file = path.join(lockDir, t.name);
     if (readText(file) !== t.text) continue;
-    fs.rmSync(file, { force: true });
+    IO.fs.rmSync(file, { force: true });
     taken++;
   }
-  for (const name of state.other) fs.rmSync(path.join(lockDir, name), { recursive: true, force: true });
+  for (const name of state.other) IO.fs.rmSync(path.join(lockDir, name), { recursive: true, force: true });
   return { taken, removed: removeFolderIfEmpty(lockDir) };
 }
 
@@ -328,7 +347,29 @@ function heldMessage({ folder, ravenseat = 'ravenseat', verdict, state, waitedMs
   return `Could not get the lock on ${folder} (${tried}): ${holderText(token)}, ${ageS} s old. Try again. ${how}`;
 }
 
+/**
+ * The lock on another io: { fs, sleep, now, pid, pidAlive, hostname } (each optional; the real one when left out).
+ * The same rule and code as the functions above; used by the storage layer (lib/store/index.js { io }) and its memory
+ * backend's tests.
+ */
+function lockOn(io = {}) {
+  const base = () => ({
+    hostname: io.hostname ?? os.hostname(),
+    isAlive: io.pidAlive ?? pidAlive,
+    pid: io.pid ?? process.pid,
+    now: io.now ?? Date.now,
+  });
+  return {
+    acquire: (lockDir, o = {}) => using(io, () => acquire(lockDir, { ...base(), ...o })),
+    release: (lockDir, me) => using(io, () => release(lockDir, me)),
+    isHeld: (lockDir, me) => using(io, () => isHeld(lockDir, me)),
+    readState: (lockDir) => using(io, () => readState(lockDir, base().now)),
+    forceRelease: (lockDir, state) => using(io, () => forceRelease(lockDir, state)),
+  };
+}
+
 module.exports = {
+  lockOn,
   STALE_AGE_MS,
   EMPTY_AGE_MS,
   WAIT_MS,

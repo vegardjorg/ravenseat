@@ -44,8 +44,10 @@ const ORPHAN_AGE_MS = 10 * 60_000;
 const SCAN_DEPTH = 3;
 
 // The store lock this process holds, per lock folder: { me, depth }. Shared by every Store of the same folder in this
-// process, so the lock is re-entrant (nextId inside withLock does not wait on itself).
+// process, so the lock is re-entrant (nextId inside withLock does not wait on itself). A Store opened with an `io` (a
+// simulated process on the memory backend) has a map of its own per io, so two simulated processes never share a hold.
 const held = new Map();
+const heldByIo = new WeakMap();
 let exitHook = false;
 
 function releaseAll() {
@@ -55,10 +57,23 @@ function releaseAll() {
 
 /**
  * Opens a Store on a data folder.
- * @param {{ folder: string, tree?: string, lockWaitMs?: number, now?: () => number, pidAlive?: (pid: number) => boolean }} o
+ * @param {{ folder: string, tree?: string, lockWaitMs?: number, now?: () => number, pidAlive?: (pid: number) => boolean,
+ *   io?: { fs?: object, now?: () => number, pid?: number, pidAlive?: Function, sleep?: Function, hostname?: string } }} o
+ *   io: the backend's io (lib/store/memoryBackend.js mem.io(), or a test's wrapped fs); the real fs, clock and pid
+ *   when left out. The file backend and the memory backend run the same code below, only the io differs (step 4).
  */
-function openStore({ folder, tree = null, lockWaitMs, now = Date.now, pidAlive = QL.pidAlive } = {}) {
+function openStore({ folder, tree = null, lockWaitMs, now, pidAlive, io = null } = {}) {
   if (!folder) throw new Error('openStore needs the data folder');
+  const f = io?.fs ?? fs;
+  now = now ?? io?.now ?? Date.now;
+  pidAlive = pidAlive ?? io?.pidAlive ?? QL.pidAlive;
+  const pid = io?.pid ?? process.pid;
+  const LK = io ? QL.lockOn(io) : QL;
+  let holds = held;
+  if (io) {
+    holds = heldByIo.get(io) ?? new Map();
+    heldByIo.set(io, holds);
+  }
   const lockDir = path.join(folder, LOCK_DIR);
   const waitMs = lockWaitMs ?? QL.waitMsFrom(process.env.QUEUE_LOCK_WAIT_MS);
 
@@ -75,22 +90,23 @@ function openStore({ folder, tree = null, lockWaitMs, now = Date.now, pidAlive =
   const emptyOf = (f) => (f.empty === undefined ? null : JSON.parse(JSON.stringify(f.empty)));
 
   function readJson(name, o = {}) {
-    const f = FAM.family(name);
+    const fam = FAM.family(name);
     return FB.readJson(pathOf(name), {
-      onCorrupt: o.onCorrupt ?? (f.onCorrupt === 'broken' || f.onCorrupt === 'skip' ? 'empty' : f.onCorrupt),
-      fallback: o.fallback !== undefined ? o.fallback : emptyOf(f),
+      onCorrupt: o.onCorrupt ?? (fam.onCorrupt === 'broken' || fam.onCorrupt === 'skip' ? 'empty' : fam.onCorrupt),
+      fallback: o.fallback !== undefined ? o.fallback : emptyOf(fam),
       describe: o.describe,
       cache: o.cache === true,
+      fs: f,
     });
   }
 
   function writeJson(name, value) {
-    const f = FAM.family(name);
-    FB.writeJson(pathOf(name), value, { backup: f.backup === 'prev' ? 'prev' : 'none' });
+    const fam = FAM.family(name);
+    FB.writeJson(pathOf(name), value, { backup: fam.backup === 'prev' ? 'prev' : 'none', fs: f, pid });
   }
 
   function withLock(fn) {
-    const h = held.get(lockDir);
+    const h = holds.get(lockDir);
     if (h) {
       h.depth++;
       try {
@@ -99,12 +115,12 @@ function openStore({ folder, tree = null, lockWaitMs, now = Date.now, pidAlive =
         h.depth--;
       }
     }
-    fs.mkdirSync(folder, { recursive: true });
-    const got = QL.acquire(lockDir, { waitMs });
+    f.mkdirSync(folder, { recursive: true });
+    const got = LK.acquire(lockDir, { waitMs });
     if (!got.ok)
       throw new Error(QL.heldMessage({ folder: `${folder} (the store lock, ${LOCK_DIR})`, ravenseat: 'ravenseat', ...got }));
-    held.set(lockDir, { me: got.me, depth: 1 });
-    if (!exitHook) {
+    holds.set(lockDir, { me: got.me, depth: 1 });
+    if (!io && !exitHook) {
       exitHook = true;
       // process.exit skips finally blocks: a die() inside fn must not leave the lock to the takeover rule.
       process.on('exit', releaseAll);
@@ -112,9 +128,9 @@ function openStore({ folder, tree = null, lockWaitMs, now = Date.now, pidAlive =
     try {
       return fn();
     } finally {
-      const mine = held.get(lockDir);
-      held.delete(lockDir);
-      if (mine) QL.release(lockDir, mine.me);
+      const mine = holds.get(lockDir);
+      holds.delete(lockDir);
+      if (mine) LK.release(lockDir, mine.me);
     }
   }
 
@@ -150,7 +166,7 @@ function openStore({ folder, tree = null, lockWaitMs, now = Date.now, pidAlive =
       return ok(r) ? r : { version: 1, ids: {} };
     } catch (e) {
       if (e?.code !== 'ESTORECORRUPT') throw e;
-      const prev = FB.readJson(`${pathOf('id-reservations')}.prev`, { onCorrupt: 'empty', fallback: null });
+      const prev = FB.readJson(`${pathOf('id-reservations')}.prev`, { onCorrupt: 'empty', fallback: null, fs: f });
       const ids = {};
       if (ok(prev)) for (const [k, v] of Object.entries(prev.ids)) if (Number.isInteger(v?.top)) ids[k] = { ...v, top: v.top + 1 };
       console.error(
@@ -161,10 +177,11 @@ function openStore({ folder, tree = null, lockWaitMs, now = Date.now, pidAlive =
   }
 
   /** Is a tmp file left by a crashed write? (pid not running and old enough) */
+  const ownPid = pid;
   function orphaned(name, mtimeMs) {
     const pid = FAM.tmpPid(name);
     if (pid == null) return false;
-    if (pid === process.pid) return false;
+    if (pid === ownPid) return false;
     if (now() - mtimeMs < ORPHAN_AGE_MS) return false;
     return !pidAlive(pid);
   }
@@ -174,14 +191,14 @@ function openStore({ folder, tree = null, lockWaitMs, now = Date.now, pidAlive =
     const orphanTmp = [];
     let top = [];
     try {
-      top = fs.readdirSync(folder, { withFileTypes: true });
+      top = f.readdirSync(folder, { withFileTypes: true });
     } catch {
       return { unknown, orphanTmp };
     }
     const walk = (dir, rel, depth) => {
       let list;
       try {
-        list = fs.readdirSync(dir, { withFileTypes: true });
+        list = f.readdirSync(dir, { withFileTypes: true });
       } catch {
         return;
       }
@@ -195,7 +212,7 @@ function openStore({ folder, tree = null, lockWaitMs, now = Date.now, pidAlive =
         }
         if (!FAM.isTmpName(e.name)) continue;
         try {
-          const s = fs.statSync(abs);
+          const s = f.statSync(abs);
           if (orphaned(e.name, s.mtimeMs)) orphanTmp.push({ path: abs, rel: r, ageMs: now() - s.mtimeMs, size: s.size });
         } catch {
           /* gone meanwhile */
@@ -220,9 +237,9 @@ function openStore({ folder, tree = null, lockWaitMs, now = Date.now, pidAlive =
     for (const t of listed) {
       try {
         // Asked again right before the removal: a tmp file that became a live write's is never touched.
-        const s = fs.statSync(t.path);
+        const s = f.statSync(t.path);
         if (!orphaned(path.basename(t.path), s.mtimeMs)) continue;
-        fs.rmSync(t.path, { force: true });
+        f.rmSync(t.path, { force: true });
         removed.push(t);
       } catch (e) {
         failed.push({ ...t, error: e?.message ?? String(e) });

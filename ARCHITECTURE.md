@@ -90,6 +90,13 @@ is being written, and a disk that fails in the middle of a rename.
   frees its id, two concurrent proposals never share one, and two track branches never get the same G-id: every
   worktree shares the main data folder, so one counter serves them all. A broken reservation file falls back to `.prev`
   with every counter raised by one, so an id is never handed out twice.
+- **Two backends, one contract.** `openStore({ io })` takes the file system, clock and pid it works with.
+  `lib/store/memoryBackend.js` is an in-memory file system with a virtual clock, simulated processes, injected faults
+  (`ENOSPC` at a rename) and hooks that run one process's operation exactly between two steps of another's. The Store,
+  FileBackend and `lib/queueLock.js` (through `lockOn(io)`) run on it unchanged, so the memory backend tests the real
+  write path and lock rule. `lib/__tests__/storeContract.test.ts` runs one contract on both backends, plus the race
+  tests that only the memory backend can make exact (two id reservations, two ledger updates, a holder that dies in the
+  middle of a write). A later database backend would have to pass the same contract.
 
 **Adding a state file.** Register it as a family in `lib/store/families.js` first, and write it through FileBackend
 or `openStore()`. A file the register does not know shows up in doctor's `store` row.

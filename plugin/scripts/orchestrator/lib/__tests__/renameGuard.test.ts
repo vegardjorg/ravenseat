@@ -19,6 +19,7 @@ const ROOTS = ['plugin', 'scripts'].map((d) => path.join(REPO, d));
 
 /** File (repo-relative, forward slashes) -> how many raw renames it may have, and why. */
 const ALLOWED: Record<string, { count: number; why: string }> = {
+  'plugin/scripts/orchestrator/lib/store/memoryBackend.js': { count: 1, why: 'the in-memory fs defines renameSync itself; it renames nothing on disk' },
   'plugin/scripts/orchestrator/lib/stateFile.js': { count: 1, why: 'renameWithRetry itself' },
   'plugin/scripts/orchestrator/lib/mergeLock.js': {
     count: 2,

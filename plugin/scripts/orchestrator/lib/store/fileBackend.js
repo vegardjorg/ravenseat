@@ -29,15 +29,29 @@ const path = require('node:path');
 
 const SF = require('../stateFile.js');
 
-/** A unique temporary name next to `file`: <file>.<pid>.<12 hex>.tmp (doctor and the sweep know the pid in it). */
-function tmpName(file) {
-  return `${file}.${process.pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
+/**
+ * A unique temporary name next to `file`: <file>.<pid>.<12 hex>.tmp (doctor and the sweep know the pid in it). `pid`
+ * is the writer's (a simulated process on the memory backend), this process by default.
+ */
+function tmpName(file, pid = process.pid) {
+  return `${file}.${pid}.${crypto.randomBytes(6).toString('hex')}.tmp`;
 }
 
 // ---- the per-process cache -----------------------------------------------------------------------------------------
 
-/** file -> { mtimeMs, size, good: true, value?: any } for the version of the file this process last saw. */
-const seen = new Map();
+/**
+ * Per fs object: file -> { mtimeMs, size, good: true, value?: any } for the version of the file this process last saw.
+ * Per fs, so two memory backends (or a test's wrapped fs) with the same path and the same clock never share an entry.
+ */
+let seenByFs = new WeakMap();
+function seenOf(f) {
+  let m = seenByFs.get(f);
+  if (!m) {
+    m = new Map();
+    seenByFs.set(f, m);
+  }
+  return m;
+}
 
 /** The stat key of a file now, or null when it cannot be read. */
 function statOf(file, f = nodeFs) {
@@ -54,7 +68,7 @@ const sameStat = (a, b) => !!a && !!b && a.mtimeMs === b.mtimeMs && a.size === b
 function markGood(file, f = nodeFs, value) {
   const st = statOf(file, f);
   if (!st) return;
-  seen.set(path.resolve(file), { ...st, good: true, ...(value !== undefined ? { value } : {}) });
+  seenOf(f).set(path.resolve(file), { ...st, good: true, ...(value !== undefined ? { value } : {}) });
 }
 
 /**
@@ -67,12 +81,14 @@ function markGoodIf(file, before, f = nodeFs) {
 
 /** The cache entry for `file` when it still describes the file on disk. */
 function cached(file, f = nodeFs) {
-  const hit = seen.get(path.resolve(file));
+  const hit = seenOf(f).get(path.resolve(file));
   return hit && sameStat(hit, statOf(file, f)) ? hit : null;
 }
 
 /** Forgets everything (tests). */
-const clearCache = () => seen.clear();
+const clearCache = () => {
+  seenByFs = new WeakMap();
+};
 
 // ---- writes -----------------------------------------------------------------------------------------------------------
 
@@ -89,7 +105,7 @@ function keepPrevious(file, o = {}) {
     const text = f.readFileSync(file, 'utf8');
     if (!known) JSON.parse(text);
     const prev = SF.prevPath(file);
-    tmp = tmpName(prev);
+    tmp = tmpName(prev, o.pid);
     f.writeFileSync(tmp, text);
     SF.renameWithRetry(tmp, prev, { fs: f });
     return true;
@@ -110,15 +126,16 @@ function keepPrevious(file, o = {}) {
  *   before     a function run after the backup and before the write (writeState rolls the snapshots there)
  *   json       true when `text` is JSON (the cache then knows the new file is good, for the next .prev copy)
  *   mkdir      false skips creating the folder
- *   fs         an fs object (tests inject failures)
+ *   fs         an fs object (tests inject failures; the memory backend)
+ *   pid        the writer's pid in the tmp name (the memory backend's simulated process)
  * Throws what the write or the rename threw, after removing the tmp file. The old file is untouched then.
  */
 function writeText(file, text, o = {}) {
   const f = o.fs ?? nodeFs;
   if (o.mkdir !== false) f.mkdirSync(path.dirname(file), { recursive: true });
-  if (o.backup === 'prev') keepPrevious(file, { fs: f });
+  if (o.backup === 'prev') keepPrevious(file, { fs: f, pid: o.pid });
   if (typeof o.before === 'function') o.before(f);
-  const tmp = tmpName(file);
+  const tmp = tmpName(file, o.pid);
   try {
     f.writeFileSync(tmp, text);
     SF.renameWithRetry(tmp, file, { fs: f });
@@ -131,7 +148,7 @@ function writeText(file, text, o = {}) {
     throw e;
   }
   if (o.json) markGood(file, f);
-  else seen.delete(path.resolve(file));
+  else seenOf(f).delete(path.resolve(file));
 }
 
 /** JSON with 2-space indent and a final newline (the format every family had). */
