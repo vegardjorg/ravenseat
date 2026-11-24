@@ -17,11 +17,13 @@
 //
 // Limits, on purpose: Bash can still write the files (the push guard and the tamper checks in gateEvidence.js cover the
 // likely paths); this is a guard against mistakes and casual forgery, not a security boundary.
-// Pure, no I/O. Tested in lib/__tests__/writeGuard.test.ts.
+// Pure apart from the real path lookup (lib/pathKey.js). Tested in lib/__tests__/writeGuard.test.ts and pathKey.test.ts.
 // =============================================================
 'use strict';
 
 const path = require('node:path');
+// Paths compared in one form (lib/pathKey.js, ARK-1 T4): the real path, case folded on win32 AND darwin.
+const PK = require('./pathKey.js');
 
 /** The file names the guard protects: where, and what the denial says. */
 const PROTECTED = Object.freeze([
@@ -39,10 +41,6 @@ const PROTECTED = Object.freeze([
 const ALWAYS = ['track', 'track-d'];
 
 const bare = (t) => (typeof t === 'string' && t ? t.replace(/^ravenseat:/, '') : null);
-const norm = (p) => {
-  const r = path.resolve(String(p));
-  return process.platform === 'win32' ? r.toLowerCase() : r;
-};
 
 /** The file a Write, Edit or NotebookEdit call targets, or null. */
 function targetPath(toolInput) {
@@ -56,19 +54,24 @@ function targetPath(toolInput) {
  * @param {{ agentType: string|null, filePath: string, folder: string, guardedTypes?: Set<string>,
  *   agentGuard?: { enabled?: boolean, except?: string[], subagent?: boolean } }} x
  *   agentGuard: the setting (lib/agentGuard.js policyOf) and whether the payload came from a subagent; default: every
- *   subagent is guarded
+ *   subagent is guarded; platform: the case rule (lib/pathKey.js), default this process's
  * @returns {{ reason: string } | null}
  */
-function assessWrite({ agentType, filePath, folder, guardedTypes = new Set(), agentGuard }) {
+function assessWrite({ agentType, filePath, folder, guardedTypes = new Set(), agentGuard, platform = process.platform }) {
   const type = bare(agentType);
   if (!type || !filePath) return null;
   const AG = require('./agentGuard.js');
   const queueTypes = new Set([...ALWAYS, ...guardedTypes]);
   if (!AG.isGuarded(agentType, { queueTypes, policy: agentGuard ?? AG.DEFAULTS, subagent: agentGuard?.subagent })) return null;
-  const abs = norm(filePath);
-  const name = path.basename(abs);
-  const inFolder = folder ? path.dirname(abs) === norm(folder) : false;
-  const hit = PROTECTED.find((p) => p.re.test(name) && (p.anywhere || inFolder));
+  // Each form of the path (lib/pathKey.js keys): the name as written, and the file a link points at.
+  const dataKey = folder ? PK.key(folder, { platform }) : null;
+  let hit = null;
+  for (const k of PK.keys(filePath, { platform })) {
+    const name = path.posix.basename(k);
+    const inFolder = dataKey != null && path.posix.dirname(k) === dataKey;
+    hit = PROTECTED.find((p) => p.re.test(name) && (p.anywhere || inFolder));
+    if (hit) break;
+  }
   if (!hit) return null;
   return {
     reason:

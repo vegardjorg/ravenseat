@@ -265,16 +265,8 @@ function overrideFinding(command, { boardPort = 2000, tipOf, outboundPreview } =
 
 // ---- The control files -------------------------------------------------------------------------------------------
 
-/** a inside b (normalised the way lib/controlFiles.js compares paths). */
-function insideDir(a, b, platform) {
-  const n = (p) => {
-    const r = require('node:path').resolve(String(p)).replace(/\\/g, '/').replace(/(.)\/+$/, '$1');
-    return platform === 'win32' ? r.toLowerCase() : r;
-  };
-  const x = n(a);
-  const y = n(b);
-  return x === y || x.startsWith(`${y}/`);
-}
+// Paths compared the way lib/controlFiles.js compares them: lib/pathKey.js (real path, case folded on win32 AND darwin).
+const PK = require('./pathKey.js');
 
 /**
  * The approval ask for the main session's Write, Edit or NotebookEdit of a main tree control file, or null. The same
@@ -284,15 +276,10 @@ function insideDir(a, b, platform) {
  */
 function controlWriteFinding({ filePath, mainTree, scriptsDir = null, configFile = null, platform = process.platform }) {
   if (!filePath || !mainTree) return null;
-  const ownSource = scriptsDir && insideDir(scriptsDir, mainTree, platform);
+  const ownSource = scriptsDir && PK.inside(scriptsDir, mainTree, { platform });
   const kind = CF.controlKind(filePath, { mainTree, scriptsDir: ownSource ? null : scriptsDir, configFile, platform });
   if (!kind) return null;
-  const p = require('node:path');
-  const main = p.resolve(mainTree).replace(/\\/g, '/');
-  const abs = p.resolve(filePath).replace(/\\/g, '/');
-  const rel = (platform === 'win32' ? abs.toLowerCase().startsWith(`${main.toLowerCase()}/`) : abs.startsWith(`${main}/`))
-    ? abs.slice(main.length + 1)
-    : abs;
+  const rel = PK.shown(filePath, mainTree, { platform });
   return {
     decision: 'ask',
     rule: 'override-control-file',
