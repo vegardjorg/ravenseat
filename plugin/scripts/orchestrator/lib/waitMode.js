@@ -12,7 +12,7 @@
 // and exits 75. The next command waits for the SAME run (it never starts another one), shows only the output the earlier
 // calls did not show, and blocks again for at most wait.blockSec. The run goes on while nobody waits.
 //   - The same command with the same arguments in the same folder on the same commit is never started twice while one
-//     runs: a second call says so and waits for the first run (a lock file per key, created exclusively).
+//     runs: a second call says so and waits for the first run (a pointer file per key, under a lib/queueLock.js lock).
 //   - A hard cap (hardSec, generous over the gate budgets; QUEUE_WAIT_HARD_SEC overrides) ends a run that hangs; the
 //     runner reports it red as timed out, as gates.mjs reports a gate over its budget.
 //   - Off: wait.blockSec 0, QUEUE_WAIT=off (the runner sets it for the command it runs, so nothing nests), or a terminal
@@ -189,48 +189,56 @@ function sweep(folder, { now = Date.now() } = {}) {
  */
 function startOrAttach({ folder, command, args, key, what, childArgv, cwd, hardSec, env = process.env, now = Date.now }) {
   fs.mkdirSync(folder, { recursive: true });
-  const lock = path.join(folder, `key-${key}.lock`);
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const held = readText(lock);
-    if (held) {
+  // THE KEY (LAGRING step 6: one lock implementation): the pointer file key-<key>.run holds the id of the key's last
+  // run, and is read and written only under a short lib/queueLock.js lock (key-<key>.lockState). A pointer to a run
+  // that is over means the key is free. Nothing removes a pointer, so a fresh one is never lost to a slow remover (the
+  // read-then-remove race of the old key-<key>.lock file).
+  const QL = require('./queueLock.js');
+  const pointer = path.join(folder, `key-${key}.run`);
+  const lockDir = path.join(folder, `key-${key}.lockState`);
+  const got = QL.acquire(lockDir, { waitMs: 5_000 });
+  if (!got.ok) throw new Error('the run lock could not be taken');
+  try {
+    // A key-<key>.lock from an older version: its run still counts while it runs.
+    const legacy = path.join(folder, `key-${key}.lock`);
+    for (const held of [readText(pointer), readText(legacy)]) {
+      if (!held) continue;
       const s = runState(folder, held);
       if (s.running) return { id: held, attached: true, meta: s.meta };
-      fs.rmSync(lock, { force: true }); // the run there is over: this call starts a new one
-      continue;
     }
+    fs.rmSync(legacy, { force: true }); // over, or never there: the pointer takes its place
     const id = `${command}-${now().toString(36)}${crypto.randomBytes(3).toString('hex')}`;
-    try {
-      fs.writeFileSync(lock, id, { flag: 'wx' });
-    } catch {
-      continue; // another call took the key just now: look again, and wait for that run
-    }
-    sweep(folder);
-    const f = files(folder, id);
-    const meta = { id, command, args, what, cwd, key, startedAt: new Date(now()).toISOString(), hardSec };
-    writeJson(f.meta, meta);
-    const out = fs.openSync(f.out, 'a');
-    const err = fs.openSync(f.err, 'a');
-    try {
-      const runner = spawn(
-        process.execPath,
-        [path.join(__dirname, 'waitRunner.js'), f.done, f.pid, String(hardSec), lock, id, '--', ...childArgv],
-        {
-          cwd,
-          detached: true, // its own process group (POSIX) / no console (Windows): it outlives this call
-          windowsHide: true,
-          stdio: ['ignore', out, err],
-          // The command it runs never uses the wait mode itself. Hidden windows passed on to everything below it (lib/hideWindows.cjs: windowsHide here does not reach what the run starts).
-          env: hiddenWindowsEnv({ ...env, QUEUE_WAIT: 'off' }),
-        },
-      );
-      runner.unref();
-    } finally {
-      fs.closeSync(out);
-      fs.closeSync(err);
-    }
-    return { id, attached: false, meta };
+    fs.writeFileSync(pointer, id);
+    return startRun({ folder, command, args, key, what, childArgv, cwd, hardSec, env, now, id });
+  } finally {
+    QL.release(lockDir, got.me);
   }
-  throw new Error('the run lock could not be taken');
+}
+
+/** Starts the detached runner for a new run (startOrAttach holds the key's lock while this runs). */
+function startRun({ folder, command, args, key, what, childArgv, cwd, hardSec, env, now, id }) {
+  sweep(folder);
+  const f = files(folder, id);
+  const meta = { id, command, args, what, cwd, key, startedAt: new Date(now()).toISOString(), hardSec };
+  writeJson(f.meta, meta);
+  const out = fs.openSync(f.out, 'a');
+  const err = fs.openSync(f.err, 'a');
+  try {
+    // The runner gets '-' where an old version passed the lock file: it has no key file to free (waitRunner.js).
+    const runner = spawn(process.execPath, [path.join(__dirname, 'waitRunner.js'), f.done, f.pid, String(hardSec), '-', id, '--', ...childArgv], {
+      cwd,
+      detached: true, // its own process group (POSIX) / no console (Windows): it outlives this call
+      windowsHide: true,
+      stdio: ['ignore', out, err],
+      // The command it runs never uses the wait mode itself. Hidden windows passed on to everything below it (lib/hideWindows.cjs: windowsHide here does not reach what the run starts).
+      env: hiddenWindowsEnv({ ...env, QUEUE_WAIT: 'off' }),
+    });
+    runner.unref();
+  } finally {
+    fs.closeSync(out);
+    fs.closeSync(err);
+  }
+  return { id, attached: false, meta };
 }
 
 /** Writes the bytes of `file` from `offset` to `stream`; returns the new offset. */

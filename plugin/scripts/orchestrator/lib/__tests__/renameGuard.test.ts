@@ -21,13 +21,9 @@ const ROOTS = ['plugin', 'scripts'].map((d) => path.join(REPO, d));
 const ALLOWED: Record<string, { count: number; why: string }> = {
   'plugin/scripts/orchestrator/lib/store/memoryBackend.js': { count: 1, why: 'the in-memory fs defines renameSync itself; it renames nothing on disk' },
   'plugin/scripts/orchestrator/lib/stateFile.js': { count: 1, why: 'renameWithRetry itself' },
-  'plugin/scripts/orchestrator/lib/mergeLock.js': {
-    count: 2,
-    why: 'taking over a stale merge lock: the rename aside is the atomic claim (a second taker must fail at once), and the move back returns a fresh lock that was never ours; a retry would only widen the race',
-  },
   'plugin/scripts/orchestrator/lib/gateQueue.js': {
     count: 2,
-    why: 'taking over a stale gate slot: same claim-by-rename as mergeLock; a failed claim is looked at again next round by design',
+    why: 'taking over a stale gate slot: the rename aside is the atomic claim (a second taker must fail at once); a failed claim is looked at again next round by design',
   },
 };
 

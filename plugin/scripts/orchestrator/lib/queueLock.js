@@ -104,16 +104,17 @@ const usableOwner = (owner) =>
  * @param {{ owner: object|null, ageMs: number, hostname: string, isAlive: (pid: number) => boolean }} x
  * @returns {{ action: 'wait'|'take_over', reason: string, holderAlive: boolean }}
  */
-function assessLock({ owner, ageMs, hostname, isAlive }) {
+function assessLock({ owner, ageMs, hostname, isAlive, staleAgeMs = STALE_AGE_MS }) {
   if (usableOwner(owner) && owner.hostname === hostname) {
     if (isAlive(owner.pid))
       return { action: 'wait', reason: `process ${owner.pid} on this host is alive`, holderAlive: true };
     return { action: 'take_over', reason: `process ${owner.pid} on this host is gone`, holderAlive: false };
   }
+  // staleAgeMs: a lock held for long (the merge lock, the waiter) sets how old another host's holder may get.
   const who = usableOwner(owner) ? `the holder on ${owner.hostname}` : 'a lock without a readable owner';
-  if (ageMs > STALE_AGE_MS)
-    return { action: 'take_over', reason: `${who} is older than ${STALE_AGE_MS / 1000} s`, holderAlive: false };
-  return { action: 'wait', reason: `${who} is not older than ${STALE_AGE_MS / 1000} s`, holderAlive: false };
+  if (ageMs > staleAgeMs)
+    return { action: 'take_over', reason: `${who} is older than ${Math.round(staleAgeMs / 1000)} s`, holderAlive: false };
+  return { action: 'wait', reason: `${who} is not older than ${Math.round(staleAgeMs / 1000)} s`, holderAlive: false };
 }
 
 /** The wait in ms. QUEUE_LOCK_WAIT_MS exists for the tests and can only shorten it, so it never weakens anything. */
@@ -122,9 +123,12 @@ function waitMsFrom(value) {
   return value != null && value !== '' && Number.isFinite(n) && n >= 0 ? Math.min(n, WAIT_MS) : WAIT_MS;
 }
 
-/** A new owner: the content of the token. withLock keeps it to ask whether it still holds the lock. */
-function newOwner({ generation = 1, pid = process.pid, hostname = os.hostname(), now = Date.now(), nonce = crypto.randomBytes(12).toString('hex') } = {}) {
-  return { generation, pid, nonce, hostname, started: new Date(now).toISOString() };
+/**
+ * A new owner: the content of the token. withLock keeps it to ask whether it still holds the lock. `meta` adds fields
+ * for the holder's message (the merge lock's task and command); it can never replace the lock's own fields.
+ */
+function newOwner({ generation = 1, pid = process.pid, hostname = os.hostname(), now = Date.now(), nonce = crypto.randomBytes(12).toString('hex'), meta = null } = {}) {
+  return { ...(meta && typeof meta === 'object' ? meta : {}), generation, pid, nonce, hostname, started: new Date(now).toISOString() };
 }
 
 /** The text of a token file, or null when it is gone. */
@@ -239,9 +243,10 @@ const NOTHING_SEEN = { tokens: [], other: [] };
 
 /**
  * One attempt to get the lock.
- * @returns {{ ok: true, me: object, tookOver: string|null } | { ok: false, verdict: object|null, state: object|null }}
+ * @returns {{ ok: true, me: object, tookOver: string|null, previous: object|null } | { ok: false, verdict: object|null, state: object|null }}
+ *   previous: the holder that was taken over (its parsed token), for the caller's report.
  */
-function tryOnce(lockDir, { hostname, isAlive, now, pid }) {
+function tryOnce(lockDir, { hostname, isAlive, now, pid, meta = null, staleAgeMs = STALE_AGE_MS }) {
   const lost = { ok: false, verdict: null, state: null };
   let made = false;
   try {
@@ -251,13 +256,13 @@ function tryOnce(lockDir, { hostname, isAlive, now, pid }) {
     /* it exists, or (Windows) is being deleted: read below */
   }
   if (made) {
-    const me = newOwner({ pid, hostname, now: now() });
-    if (placeToken(lockDir, me, NOTHING_SEEN)) return { ok: true, me, tookOver: null };
+    const me = newOwner({ pid, hostname, now: now(), meta });
+    if (placeToken(lockDir, me, NOTHING_SEEN)) return { ok: true, me, tookOver: null, previous: null };
     return lost;
   }
   const state = readState(lockDir, now);
   if (!state) return lost;
-  const judge = (owner) => assessLock({ owner, ageMs: state.ageMs, hostname, isAlive });
+  const judge = (owner) => assessLock({ owner, ageMs: state.ageMs, hostname, isAlive, staleAgeMs });
   // Any token that says wait decides: a live holder is never taken over, also not next to a leftover older token.
   const verdicts = state.tokens.map((t) => judge(t.owner));
   if (!verdicts.length)
@@ -268,23 +273,24 @@ function tryOnce(lockDir, { hostname, isAlive, now, pid }) {
     );
   const waiting = verdicts.find((v) => v.action === 'wait');
   if (waiting) return { ok: false, verdict: waiting, state };
-  const me = newOwner({ generation: (state.tokens[0]?.generation ?? 0) + 1, pid, hostname, now: now() });
-  return placeToken(lockDir, me, state) ? { ok: true, me, tookOver: verdicts[0].reason } : lost;
+  const me = newOwner({ generation: (state.tokens[0]?.generation ?? 0) + 1, pid, hostname, now: now(), meta });
+  return placeToken(lockDir, me, state) ? { ok: true, me, tookOver: verdicts[0].reason, previous: state.tokens[0]?.owner ?? null } : lost;
 }
 
 /**
  * Gets the lock, waiting up to waitMs.
  * @param {string} lockDir
- * @param {{ waitMs?: number, hostname?: string, isAlive?: Function, pid?: number, now?: () => number }} [o]
- * @returns {{ ok: true, me: object, tookOver: string|null } | { ok: false, waitedMs: number, verdict: object|null, state: object|null }}
+ * @param {{ waitMs?: number, hostname?: string, isAlive?: Function, pid?: number, now?: () => number, meta?: object,
+ *   staleAgeMs?: number }} [o]  waitMs 0 = one try. meta: extra token fields (newOwner). staleAgeMs: see assessLock.
+ * @returns {{ ok: true, me: object, tookOver: string|null, previous: object|null } | { ok: false, waitedMs: number, verdict: object|null, state: object|null }}
  */
-function acquire(lockDir, { waitMs = WAIT_MS, hostname = os.hostname(), isAlive = pidAlive, pid = process.pid, now = Date.now } = {}) {
+function acquire(lockDir, { waitMs = WAIT_MS, hostname = os.hostname(), isAlive = pidAlive, pid = process.pid, now = Date.now, meta = null, staleAgeMs = STALE_AGE_MS } = {}) {
   const started = now();
   let last = { verdict: null, state: null };
   for (;;) {
     let r;
     try {
-      r = tryOnce(lockDir, { hostname, isAlive, now, pid });
+      r = tryOnce(lockDir, { hostname, isAlive, now, pid, meta, staleAgeMs });
     } catch {
       // A file system error in this round: try until the deadline, which then ends in the error, as an unusable data
       // folder always did.
@@ -293,7 +299,8 @@ function acquire(lockDir, { waitMs = WAIT_MS, hostname = os.hostname(), isAlive 
     if (r.ok) return r;
     // A round that lost a race says nothing about the holder: keep the last real answer for the message.
     if (r.state) last = r;
-    if (now() - started > waitMs) return { ok: false, waitedMs: now() - started, verdict: last.verdict, state: last.state };
+    // >=, not >: with waitMs 0 and a clock that does not move (a test's, or a coarse timer) this is still one try.
+    if (now() - started >= waitMs) return { ok: false, waitedMs: now() - started, verdict: last.verdict, state: last.state };
     IO.sleep(Math.min(POLL_MS, Math.max(1, waitMs)));
   }
 }

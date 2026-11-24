@@ -226,7 +226,14 @@ describe('queue.mjs wait', () => {
   });
 
   const writeQueue = (q: Queue) => fs.writeFileSync(path.join(folder, 'queue.json'), JSON.stringify(q, null, 2));
-  const lockFile = () => path.join(folder, 'wait.lock');
+  // The waiter lock: a lib/queueLock.js folder; wait.lock is the file of older versions (still honoured).
+  const lockFile = () => path.join(folder, '.waitLock');
+  const legacyLock = () => path.join(folder, 'wait.lock');
+  /** The token of the waiter that holds the lock. */
+  const lockOwner = () => {
+    const names = fs.readdirSync(lockFile()).filter((n) => /^owner-\d+\.json$/.test(n));
+    return JSON.parse(fs.readFileSync(path.join(lockFile(), names[0]), 'utf8'));
+  };
   const beatFile = () => path.join(folder, W.HEARTBEAT_FILE);
 
   /** Starts queue.mjs with the arguments; `done` resolves with the exit code and the output. */
@@ -365,7 +372,7 @@ describe('queue.mjs wait', () => {
     expect(second.code).toBe(0);
     expect(second.out.trim()).toBe(`ALREADY WAITING (pid ${w.p.pid})`);
     // The second one must not have touched the first one's lock.
-    expect(JSON.parse(fs.readFileSync(lockFile(), 'utf8')).pid).toBe(w.p.pid);
+    expect(lockOwner().pid).toBe(w.p.pid);
   });
 
   it('a stale lock (dead pid) is taken over', async () => {
@@ -377,11 +384,15 @@ describe('queue.mjs wait', () => {
     await new Promise((r) => gone.on('close', r));
     const deadPid = gone.pid!;
     expect(W.pidAlive(deadPid)).toBe(false);
-    fs.writeFileSync(lockFile(), JSON.stringify({ pid: deadPid, startedAt: T0 }));
+    // Both kinds of leftover: an old wait.lock file and a lock folder whose token's pid is gone.
+    fs.writeFileSync(legacyLock(), JSON.stringify({ pid: deadPid, startedAt: T0 }));
+    fs.mkdirSync(lockFile());
+    fs.writeFileSync(path.join(lockFile(), 'owner-1.json'), JSON.stringify({ generation: 1, pid: deadPid, nonce: 'n', hostname: os.hostname(), started: T0 }));
     const r = await start('wait', '--since', '0', '--debounce', '0', '--timeout', '0.01').done;
     expect(r.code, r.out).toBe(0);
     expect(r.out).not.toContain('ALREADY WAITING');
     expect(r.out).toContain('OWNER ACTED: edit T-1');
     expect(fs.existsSync(lockFile())).toBe(false);
+    expect(fs.existsSync(legacyLock())).toBe(false);
   });
 });

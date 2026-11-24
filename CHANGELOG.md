@@ -164,6 +164,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
   doctor warns about a .dockerignore that lets .claude/ into an image.** `guards.secretReads` (`log`), `redact.envValues` (on).
 - **State files are written with a unique tmp name that is removed on any failure, plans.json keeps a `.prev` copy with a restore hint, and decision files are written atomically.**
 - **A finding and an agent's done row no longer read the whole log: small sidecar indexes hold the last F-id and each agent's start wave, and a half line left by a crashed writer no longer swallows the next row.**
+- **The merge lock, the `ravenseat wait` lock and the wait mode's run key use the queue lock's rule: a lock whose process is gone is taken over at once, and a merge that still runs is never taken over, also after 6 h.** The lock files of older versions are still honoured.
 
 ## 0.20.0 (2026-11-19)
 

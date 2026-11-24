@@ -93,7 +93,7 @@ const LIST = [
   { name: 'processes', dir: 'processes', kind: 'collection', writers: ['main', 'track'], share: 'never', note: 'one file per guarded process (lib/processGuard.js)' },
   { name: 'approval-waits', file: 'approval-waits.json', writers: ['hook'], share: 'never', note: 'agents waiting on a permission prompt (lib/approvalWait.js)' },
   { name: 'silent-snapshots', dir: 'silent-snapshots', kind: 'collection', share: 'never', note: 'silent track snapshots (keep 20)' },
-  { name: 'waiting', dir: 'waiting', kind: 'collection', share: 'never', note: 'wait mode state (lib/waitMode.js)' },
+  { name: 'wait-runs', dir: 'runs', kind: 'collection', share: 'never', note: 'wait mode runs: output, done files, key pointers and their locks (lib/waitMode.js)' },
   // ---- Handover, release notes, ask ---------------------------------------------------------------------------------
   { name: 'handover', file: 'handover-ongoing.md', kind: 'blob', backend: 'file-only', onCorrupt: 'skip', match: ['handover.md'], note: 'the ongoing handover note (lib/queueHandover.js)' },
   { name: 'handover-archive', dir: 'handover-archive', kind: 'blob', backend: 'file-only', note: 'monthly handover archives' },
@@ -103,7 +103,7 @@ const LIST = [
   { name: 'suggestions', dir: 'suggestions', kind: 'collection', note: 'suggestions' },
   { name: 'demo', dir: 'demo', kind: 'collection', share: 'never', note: 'the demo board, a data folder of its own (lib/demoMode.js)' },
   // ---- Locks ------------------------------------------------------------------------------------------------------
-  { name: 'locks', kind: 'lock', share: 'never', onCorrupt: 'skip', match: ['.lockState', '.storeLock', 'merge.lock', 'wait.lock', /\.lock$/], note: 'locks (lib/queueLock.js, lib/mergeLock.js, cli/wait.mjs)' },
+  { name: 'locks', kind: 'lock', share: 'never', onCorrupt: 'skip', match: ['.lockState', '.storeLock', '.mergeLock', '.waitLock', 'merge.lock', 'wait.lock', /\.lock$/], note: 'locks: lib/queueLock.js folders (queue, store, merge, waiter) and the lock files of older versions' },
   // ---- Small state files and caches (one family each would be noise; they hold one small JSON each) ------------------
   {
     name: 'small-state',

@@ -103,6 +103,13 @@ is being written, and a disk that fails in the middle of a rename.
   started in for `hook-time.mjs`. A sidecar is trusted only while the log still starts with the bytes it hashed and is
   at least as long as it says; then only the new bytes are read. Anything else (a rotation, a lost or broken sidecar)
   rebuilds it from the archives and the file, so it needs no lock and can always be deleted.
+- **One lock implementation.** Every exclusive lock is a `lib/queueLock.js` lock (a folder with a generation token):
+  the queue lock, the store lock, the merge lock (`.mergeLock`, task and command in the token, another host's holder
+  after 6 h), the waiter lock of `ravenseat wait` (`.waitLock`) and the wait mode's run key (`runs/key-<key>.lockState`
+  around a pointer file `key-<key>.run`). A holder on this host is taken over the moment its pid is gone and never
+  while it runs. The lock files of older versions (`merge.lock`, `wait.lock`, `key-<key>.lock`) are still honoured
+  while their holder lives. `lib/gateQueue.js` keeps its own multi-slot semaphore (several gate runs at once is a
+  different thing from one holder). `lib/__tests__/oneLock.test.ts`.
 
 **Adding a state file.** Register it as a family in `lib/store/families.js` first, and write it through FileBackend
 or `openStore()`. A file the register does not know shows up in doctor's `store` row.
@@ -118,9 +125,10 @@ for example when one renames a function and the other adds a call to the old nam
 gate"). Merging one at a time and running the gates on each new tip finds which merge broke it. A red base refuses
 further merges (`lib/baseHealth.js`, `cli/baseHealth.mjs`).
 
-**The merge lock and merge state.** `lib/mergeLock.js` has a separate lock file, `merge.lock`, created with `wx`, held for
-the whole merge. A lock is stale when its pid is gone on the same host, or after 6 hours on any host (`MAX_AGE_MS`), since
-gates and migrations can run long. Each step is written to `merge-state-<id>.json` as it starts and ends.
+**The merge lock and merge state.** `lib/mergeLock.js` holds a lock of its own, `.mergeLock`, for the whole merge. It
+is a `lib/queueLock.js` lock (the one lock implementation, see the storage layer), so a holder on this host is taken
+over when its pid is gone and never while it runs; one on another host after 6 hours (`MAX_AGE_MS`), since gates and
+migrations can run long. A `merge.lock` file from an older version is still judged by the old rule. Each step is written to `merge-state-<id>.json` as it starts and ends.
 `ravenseat merge <id> --resume` reads it and runs only the steps that are left. The file header names the three failures
 this fixed: a merge left in place from an earlier conflict that made the next merge commit the wrong work and mark the
 wrong task done; a crash after the merge but before `done` with nothing to continue from; and two merges on top of each
@@ -238,7 +246,7 @@ reads that line.
 | --- | --- | --- |
 | 0.8.28: on Windows a release could fail to remove the lock folder. The empty folder made other commands wait and give up although nobody held the lock. | An empty lock folder is taken after 2 s, by creating `owner-1.json` with `wx`, so a holder paused between `mkdir` and its token finds its name taken (`lib/queueLock.js`). | `lib/__tests__/queueLock.test.ts`, "an empty lock folder" |
 | The lock used to be a bare folder deleted after 60 s. A slow holder lost the lock without knowing, published, and then removed the new holder's lock. | Token with nonce, `isHeld` before every write and release, and a live holder on the same host is never taken over (`lib/queueLock.js`, `cli/context.mjs`). | `lib/__tests__/queueLock.test.ts` |
-| A merge left in place made the next merge commit the wrong work; a crash before `done` left nothing to resume; two merges ran on top of each other. | `gitInProgress`, tip-in-base check before `done`, `merge.lock`, merge state and `--resume` (`lib/mergeLock.js`, `cli/merge.mjs`). | `__tests__/queueMergeResume.test.ts`, `__tests__/queueFaultInjection.test.ts` |
+| A merge left in place made the next merge commit the wrong work; a crash before `done` left nothing to resume; two merges ran on top of each other. | `gitInProgress`, tip-in-base check before `done`, the merge lock (`.mergeLock`, a `lib/queueLock.js` lock), merge state and `--resume` (`lib/mergeLock.js`, `cli/merge.mjs`). | `__tests__/queueMergeResume.test.ts`, `__tests__/queueFaultInjection.test.ts`, `lib/__tests__/oneLock.test.ts` |
 | `receive` trusted the track's own `gates=OK`. | The evidence store and its rules (`lib/gateEvidence.js`). | `lib/__tests__/gateEvidence.test.ts`, `__tests__/queueGateEvidence.test.ts` |
 | A rename of `queue.json` on Windows failed when another process had it open, after the change was made in memory. | `renameWithRetry` (`lib/stateFile.js`). | `lib/__tests__/queueStateSafety.test.ts` |
 | 0.8.9: the docs promised more than the code did. They described deleted tests and skip markers as a merge stop, the secret scan without its gaps, and a quarantine rule as a control. | The docs were changed to match the code: a warning at receive, the scan's gaps listed (first push, size, timeout, fail open), the quarantine rule called a recommended pattern. | The behaviour the docs now describe is tested in `lib/__tests__/testWeakening.test.ts` and `lib/__tests__/secretScan.test.ts`. No test checks the docs against the code; a reviewer has to. |

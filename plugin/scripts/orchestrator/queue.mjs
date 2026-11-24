@@ -396,8 +396,8 @@
 //   node scripts/orchestrator/queue.mjs merge <id> [--without-migr-push] [--without-fill] [--scratchpad <folder>] [--force]
 //        [--allow-guard] [--allow-partial] [--allow-focus] [--allow-secret] [--allow-unreviewed] [--allow-catalog] [--done-cwd <folder>] [--force-red-base] [--force-red-gate]
 //        [--resume]
-//        (one merge at a time per repo: the lock <dataFolder>/merge.lock with pid, host and start time; a held lock
-//         refuses with the holder, a stale one (the pid is gone, or older than 6 h) is taken over. A merge, rebase,
+//        (one merge at a time per repo: the lock <dataFolder>/.mergeLock with pid, host and start time; a held lock
+//         refuses with the holder, a stale one (the pid is gone, or another host's after 6 h) is taken over. A merge, rebase,
 //         cherry-pick or revert in progress in the main checkout (MERGE_HEAD and so on) refuses the merge with how to
 //         finish or undo it. The track tip must be in baseBranch (git merge-base --is-ancestor) after the merge and before
 //         done, otherwise nothing is marked; the merge commit is stored on the task as merge_commit. Every step is

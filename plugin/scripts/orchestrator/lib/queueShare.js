@@ -48,6 +48,7 @@ const HEADER = "# Ravenseat (the queue's data, the agents' worktrees and local s
  */
 const NEVER = Object.freeze([
   { test: (n, log) => /^times(-.*)?\.jsonl$/.test(n) || (log && n === log), why: 'the time log (who worked on what, when, and the cost)' },
+  { test: (n) => /\.jsonl\.[a-z]+\.idx$/.test(n), why: 'a log index (lib/store/logBackend.js; built from a log that is not shared, and rebuilt where it is read)' },
   { test: (n) => n === 'setup-tips.json' || n === 'setup.json' || n.startsWith('setup-'), why: 'the setup record (setup-tips.json and what setup wrote)' },
   { test: (n) => n === 'missions' || n.endsWith('.md') || /mission|prompt|handover|bundle/.test(n), why: 'a mission or prompt file' },
   { test: (n) => /report|result/.test(n), why: 'a report (also track-result.md)' },

@@ -10,13 +10,16 @@
 //     every step is written to a small state file (merge-state-<id>.json in the data folder) as it starts and ends,
 //     so `ravenseat merge <id> --resume` knows which steps are left.
 //   * Two `ravenseat merge` at the same time could merge on top of each other. Now one merge runs at a time per data folder
-//     (the lock file merge.lock, with pid, host and start time).
+//     (the lock <dataFolder>/.mergeLock, with pid, host, start time, task and command).
 //
-// THE LOCK: created with the `wx` flag (exclusive create: only one process can create the file). A lock is stale when
-// the process that holds it is gone (same host, the pid no longer runs) or when it is older than maxAgeMs (any host:
-// a pid can be reused, and a pid on another machine cannot be checked). A stale lock is taken over: it is first
-// renamed to a unique name (only one process can rename the same file), the renamed content is compared with what
-// was judged stale, and only then is a new lock created. A lock is only removed by the process that holds it.
+// THE LOCK (LAGRING step 6: one lock implementation): a lib/queueLock.js folder, so the merge lock has the queue lock's
+// generation rule and takeover. A holder on this host is taken over the moment its pid is gone and never while it runs,
+// whatever its age (before, a live merge older than 6 h was taken over too; a stuck one is now released by the owner:
+// delete the folder). A holder on another host (a network data folder) is taken over after maxAgeMs (6 h). The task and
+// command ride in the token (queueLock meta), so a refusal names the merge that holds it. Only the holder's own token
+// (its nonce) is ever released.
+// A merge.lock FILE from an older version is still honoured by the old rule (staleReason): a live holder holds, a stale
+// one is removed before the new lock is taken.
 //
 // No I/O beyond the data folder and the lock and state files; git is reached through a `gitPath` callback, so the
 // rules can be tested without a repo.
@@ -25,6 +28,7 @@
 // =============================================================
 
 const fs = require('node:fs');
+const QL = require('./queueLock.js');
 const { renameWithRetry } = require('./stateFile.js');
 const os = require('node:os');
 const path = require('node:path');
@@ -32,11 +36,17 @@ const path = require('node:path');
 /** A merge with slow gates and a migration push can run for a long time; a lock older than this is stale anyway. */
 const MAX_AGE_MS = 6 * 60 * 60 * 1000;
 
-const LOCK_NAME = 'merge.lock';
+const LOCK_NAME = '.mergeLock';
+/** The lock file of the versions before the lock moved to lib/queueLock.js; still honoured (see acquire). */
+const LEGACY_NAME = 'merge.lock';
 
-/** The lock file in the data folder. */
+/** The lock (a lib/queueLock.js folder) in the data folder. */
 function lockFile(folder) {
   return path.join(folder, LOCK_NAME);
+}
+
+function legacyFile(folder) {
+  return path.join(folder, LEGACY_NAME);
 }
 
 /**
@@ -99,61 +109,38 @@ function readLock(file) {
 function acquire(folder, { task, command = 'merge', now = Date.now(), pid = process.pid, host = os.hostname(), alive = pidAlive, maxAgeMs = MAX_AGE_MS } = {}) {
   fs.mkdirSync(folder, { recursive: true });
   const file = lockFile(folder);
-  const lock = { pid, host, started: new Date(now).toISOString(), task, command };
+  // A merge.lock file from an older version: a live holder still holds (the old rule, staleReason), a stale one is
+  // removed, but only while it is the same bytes that were judged (a fresh one written in between is left alone).
   let tookOver = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      fs.writeFileSync(file, `${JSON.stringify(lock, null, 2)}\n`, { flag: 'wx' });
-      return { ok: true, file, lock, tookOver };
-    } catch (e) {
-      if (e.code !== 'EEXIST') throw e;
-    }
-    const seen = readLock(file);
-    if (seen.missing) continue; // released between the two calls: try again
+  const legacy = legacyFile(folder);
+  const seen = readLock(legacy);
+  if (!seen.missing) {
     const reason = staleReason(seen.holder, { now, host, alive, maxAgeMs, mtimeMs: seen.mtimeMs });
-    if (!reason) return { ok: false, file, holder: seen.holder };
-    // Take the stale lock over: rename it away (atomic; a second process taking it over at the same time gets ENOENT),
-    // then check that what was renamed is the lock that was judged stale and not a fresh one created in between.
-    const aside = `${file}.stale-${pid}-${now}-${attempt}`;
+    if (!reason) return { ok: false, file: legacy, holder: seen.holder };
     try {
-      fs.renameSync(file, aside);
-    } catch (e) {
-      if (e.code === 'ENOENT') continue;
-      throw e;
-    }
-    let moved = null;
-    try {
-      moved = fs.readFileSync(aside, 'utf8');
+      if (fs.readFileSync(legacy, 'utf8') === seen.text) fs.rmSync(legacy, { force: true });
     } catch {
-      /* read below as different */
+      /* gone meanwhile */
     }
-    if (moved !== seen.text) {
-      // Someone else's fresh lock: put it back (it is theirs) and report it as held.
-      try {
-        fs.renameSync(aside, file);
-      } catch {
-        /* they released it in the meantime */
-      }
-      const back = readLock(file);
-      return { ok: false, file, holder: back.holder ?? null };
-    }
-    fs.rmSync(aside, { force: true });
+    if (fs.existsSync(legacy)) return { ok: false, file: legacy, holder: readLock(legacy).holder ?? null };
     tookOver = { holder: seen.holder, reason };
   }
-  const last = readLock(file);
-  return { ok: false, file, holder: last.holder ?? null };
+  // One try (a held merge lock is an answer, not a reason to wait). staleAgeMs: another host's holder after 6 h.
+  const got = QL.acquire(file, { waitMs: 0, pid, hostname: host, isAlive: alive, now: () => now, staleAgeMs: maxAgeMs, meta: { task, command } });
+  if (!got.ok) return { ok: false, file, holder: holderOf(got.state?.tokens?.[0]?.owner) };
+  if (got.tookOver) tookOver = { holder: holderOf(got.previous), reason: got.tookOver };
+  return { ok: true, file, lock: got.me, tookOver };
 }
 
-/** Removes the lock, but only when it is still the one this process took (same pid, host and start time). */
+/** A token as the holder the messages show ({ task, command, pid, host, started }), or null when it cannot be read. */
+function holderOf(owner) {
+  return owner && typeof owner === 'object' ? { ...owner, host: owner.hostname } : null;
+}
+
+/** Gives the lock back, but only when it is still the one this process took (lib/queueLock.js: its own nonce). */
 function release(folder, lock) {
   if (!lock) return false;
-  const file = lockFile(folder);
-  const seen = readLock(file);
-  if (seen.missing || !seen.holder) return false;
-  const h = seen.holder;
-  if (h.pid !== lock.pid || h.host !== lock.host || h.started !== lock.started) return false;
-  fs.rmSync(file, { force: true });
-  return true;
+  return QL.release(lockFile(folder), lock);
 }
 
 /** The message when another merge holds the lock. */
@@ -163,8 +150,8 @@ function heldMessage({ file, holder, ravenseat = 'ravenseat', id }) {
     : 'another process (the lock file cannot be read)';
   return (
     `Another ${ravenseat} merge is running in this repo: ${who}. One merge at a time; nothing was done.\n` +
-    `Wait for it to finish, then run ${ravenseat} merge ${id} again. If you are sure no merge is running (the process is ` +
-    `gone and the lock was not taken over automatically, for example a merge on another machine), delete ${file}.`
+    `Wait for it to finish, then run ${ravenseat} merge ${id} again. A live merge is never taken over; if it hangs, ` +
+    `or it ran on another machine that is gone, stop it and delete ${file}.`
   );
 }
 
@@ -293,6 +280,7 @@ function markBefore(order, done, step) {
 module.exports = {
   MAX_AGE_MS,
   lockFile,
+  legacyFile,
   pidAlive,
   staleReason,
   acquire,

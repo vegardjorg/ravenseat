@@ -109,7 +109,8 @@ function project() {
   };
   const find = (id: string) =>
     (JSON.parse(fs.readFileSync(path.join(folder, 'queue.json'), 'utf8')) as { tasks: Task[] }).tasks.find((t) => t.id === id);
-  const lockFile = path.join(folder, 'merge.lock');
+  const lockFile = path.join(folder, '.mergeLock'); // a lib/queueLock.js folder (LAGRING step 6)
+  const legacyLock = path.join(folder, 'merge.lock'); // the lock file of older versions, still honoured
   const stateFile = (id: string) => path.join(folder, `merge-state-${id}.json`);
   const state = (id: string) => JSON.parse(fs.readFileSync(stateFile(id), 'utf8'));
   /** A track in review: branch queue/<id> from develop with the files committed. */
@@ -138,7 +139,7 @@ function project() {
     return g(['rev-parse', `queue/${id}`]);
   };
   const contains = (tip: string) => gTry(['merge-base', '--is-ancestor', tip, 'develop']).status === 0;
-  return { folder, repo, g, gTry, run, scenario, ranSteps, find, lockFile, stateFile, state, track, contains };
+  return { folder, repo, g, gTry, run, scenario, ranSteps, find, lockFile, legacyLock, stateFile, state, track, contains };
 }
 
 /** A pid that is certainly not running: a child that has exited. */
@@ -267,19 +268,21 @@ describe('ravenseat merge checks that the track tip is in the base before done (
   });
 });
 
+// These write a merge.lock FILE as an older version left it: lib/mergeLock.js judges it by the old rule
+// (staleReason), so a live holder still refuses and a stale one is taken over with the same message.
 describe('the merge lock: one ravenseat merge at a time (M8)', () => {
   it('a held lock refuses a second merge; nothing runs and the lock stays', () => {
     const p = project();
     p.track('A', { 'a.txt': 'from A\n' });
     const holder = { pid: process.pid, host: os.hostname(), started: new Date().toISOString(), task: 'OTHER', command: 'merge' };
-    fs.writeFileSync(p.lockFile, JSON.stringify(holder));
+    fs.writeFileSync(p.legacyLock, JSON.stringify(holder));
     const m = p.run('merge', 'A', '--without-fill');
     expect(m.code).toBe(1);
     expect(m.error).toMatch(/Another ravenseat merge is running in this repo: merge OTHER \(pid \d+ on .+, started /);
     expect(m.error).toContain('One merge at a time; nothing was done.');
     expect(p.ranSteps()).toEqual([]);
     expect(p.find('A')?.status).toBe('review');
-    expect(JSON.parse(fs.readFileSync(p.lockFile, 'utf8'))).toEqual(holder);
+    expect(JSON.parse(fs.readFileSync(p.legacyLock, 'utf8'))).toEqual(holder);
   });
 
   it('a stale lock is taken over: a dead pid on this host, or an old lock from another host', () => {
@@ -287,7 +290,7 @@ describe('the merge lock: one ravenseat merge at a time (M8)', () => {
     p.track('A', { 'a.txt': 'from A\n' });
     p.track('B', { 'b.txt': 'from B\n' });
     fs.writeFileSync(
-      p.lockFile,
+      p.legacyLock,
       JSON.stringify({ pid: deadPid(), host: os.hostname(), started: new Date().toISOString(), task: 'GONE', command: 'merge' }),
     );
     const m = p.run('merge', 'A', '--without-fill');
@@ -295,12 +298,13 @@ describe('the merge lock: one ravenseat merge at a time (M8)', () => {
     expect(m.code).toBe(0);
     expect(m.out).toMatch(/took over a stale merge lock \(merge GONE: the process \d+ on .+ is no longer running\)/);
     expect(m.out).toContain('merge GONE --resume');
-    expect(fs.existsSync(p.lockFile)).toBe(false);
+    expect(fs.existsSync(p.legacyLock)).toBe(false);
     const old = new Date(Date.now() - 7 * 3600_000).toISOString();
-    fs.writeFileSync(p.lockFile, JSON.stringify({ pid: process.pid, host: 'another-machine', started: old, task: 'FAR' }));
+    fs.writeFileSync(p.legacyLock, JSON.stringify({ pid: process.pid, host: 'another-machine', started: old, task: 'FAR' }));
     const m2 = p.run('merge', 'B', '--without-fill');
     expect(m2.code).toBe(0);
     expect(m2.out).toMatch(/took over a stale merge lock \(merge FAR: it is older than 360 min/);
+    expect(fs.existsSync(p.legacyLock)).toBe(false);
     expect(fs.existsSync(p.lockFile)).toBe(false);
   });
 

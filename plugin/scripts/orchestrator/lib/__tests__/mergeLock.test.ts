@@ -53,8 +53,8 @@ describe('acquire and release', () => {
     expect(a.ok).toBe(true);
     const b = ML.acquire(d, { task: 'B', now: NOW, pid: 200, host: 'h', alive: () => true });
     expect(b).toMatchObject({ ok: false, holder: { task: 'A', pid: 100, host: 'h' } });
-    // A foreign lock object is not released.
-    expect(ML.release(d, { ...a.lock, pid: 999 })).toBe(false);
+    // A foreign lock object (another nonce: the lock is a lib/queueLock.js token) is not released.
+    expect(ML.release(d, { ...a.lock, nonce: 'someone-else' })).toBe(false);
     expect(fs.existsSync(ML.lockFile(d))).toBe(true);
     expect(ML.release(d, a.lock)).toBe(true);
     expect(fs.existsSync(ML.lockFile(d))).toBe(false);
@@ -65,7 +65,10 @@ describe('acquire and release', () => {
     const b = ML.acquire(d, { task: 'B', now: NOW, pid: 200, host: 'h', alive: (pid: number) => pid !== 100 });
     expect(b.ok).toBe(true);
     expect(b.tookOver).toMatchObject({ holder: { task: 'A', pid: 100 } });
-    expect(JSON.parse(fs.readFileSync(ML.lockFile(d), 'utf8'))).toMatchObject({ task: 'B', pid: 200 });
+    // The folder holds B's token only.
+    const tokens = fs.readdirSync(ML.lockFile(d));
+    expect(tokens).toHaveLength(1);
+    expect(JSON.parse(fs.readFileSync(path.join(ML.lockFile(d), tokens[0]), 'utf8'))).toMatchObject({ task: 'B', pid: 200, command: 'merge' });
     expect(fs.readdirSync(d).filter((f) => f.includes('stale'))).toEqual([]);
   });
   it('the message names the holder and the lock file', () => {

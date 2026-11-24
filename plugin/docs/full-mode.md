@@ -222,7 +222,7 @@ fails once and passes on a rerun is recorded as flaky instead of freezing the ba
   on the track branch.
 - **Optional CI watch after a push** (`push.ciWatch`, off by default). Local first is the rule: push only when the
   local checks are green. The watch is a second net that turns a red CI run into one fix task.
-- **Merges that survive interruptions.** One merge runs at a time (`merge.lock`, a stale lock is taken over), a merge
+- **Merges that survive interruptions.** One merge runs at a time (`.mergeLock`, the lock of a merge whose process is gone is taken over), a merge
   refuses while git has a merge or rebase in progress, and after Ctrl-C, a crash or a stop `ravenseat merge <ID> --resume`
   finishes the remaining steps. `queue.json.prev` keeps the previous good queue state, and `<dataFolder>/snapshots/` keeps copies at a
   few ages (one hour up to a week, `stateSnapshots` in the config).
