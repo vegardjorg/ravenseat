@@ -4,7 +4,8 @@ These instructions are written TO Claude Code. The user has downloaded this repo
 into their project. Follow the steps in order, and ask the user where a step says ASK. Do not push anything.
 
 This is the vendored install: everything is copied into the project. The recommended way is the Claude Code plugin
-(`/plugin marketplace add vegardjorg/ravenseat`, `/plugin install ravenseat@ravenseat`, then `/ravenseat:setup`).
+(in a terminal: `claude plugin marketplace add vegardjorg/ravenseat`, then `claude plugin install ravenseat@ravenseat`,
+then `/ravenseat:setup` in Claude Code).
 If the user has not chosen, ASK which they want before you copy anything.
 
 ## 0. Check the prerequisites

@@ -95,6 +95,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **test:changed gives vitest fewer workers and 120 s timeouts on a busy machine, so load gives fewer false reds.** `testChanged.adaptLoad` `true`.
 - **`ravenseat store` lists the data folder's state files from one register, doctor names unknown entries and orphaned tmp files, and `store sweep --tmp [--dry]` removes the orphans on request.** Display and an explicit command, no setting.
 ### Changed
+- **Install instructions in plain words, three ways: paste one sentence and let Claude run the two commands, run them in a terminal (with how to open one), or `/plugin` in Claude Code.** In the desktop app `/plugin` only opens the settings page.
 - **Ready for the Claude plugin directory: the plugin has a listing icon (the raven seat logo), the README lists what Ravenseat runs, sends and fetches, and the Windows `.cmd` shim is stored with CRLF as is (`-text`), since the directory refuses `eol=crlf`.**
 - **The settings registry's rows live in one file per settings area (`lib/settings/`), put together by `lib/settingsRegistry.js` in the same order.** Internal structure only; no setting or output changes.
 - **The board server's API routes live in one module per route group under `queue-board/api/`; `queue-board.mjs` is the entry point and route map.** Internal structure only, no user-visible change.

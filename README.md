@@ -55,12 +55,36 @@ Ravenseat doesn't replace Claude Code. It provides the persistent coordination l
 so a conflicting merge can stop half done in your checkout), and Windows or Linux. macOS has not been tested yet. If
 you try it, reports of what works and what doesn't are welcome.
 
-**1. Install.** In Claude Code:
+**1. Install.** Pick one of these three ways. They do the same thing.
 
-```
-/plugin marketplace add vegardjorg/ravenseat
-/plugin install ravenseat@ravenseat
-```
+- **Easiest: let Claude do it.** Paste this into Claude Code (the desktop app or a terminal):
+
+  > Install the Ravenseat plugin for me: run `claude plugin marketplace add vegardjorg/ravenseat` and then
+  > `claude plugin install ravenseat@ravenseat`.
+
+  Claude shows you both commands and asks before it runs them. You never need to open a terminal yourself.
+
+- **In a terminal yourself.** Open one:
+  - Windows: press the Windows key, type `PowerShell`, press Enter.
+  - Mac: press Cmd+Space, type `Terminal`, press Enter.
+  - Linux: open your Terminal app.
+
+  Paste the first command, press Enter and wait until it is done. Then do the same with the second:
+
+  ```
+  claude plugin marketplace add vegardjorg/ravenseat
+  ```
+
+  ```
+  claude plugin install ravenseat@ravenseat
+  ```
+
+- **Already in Claude Code in a terminal:** type `/plugin marketplace add vegardjorg/ravenseat`, then
+  `/plugin install ravenseat@ravenseat`. (In the desktop app, `/plugin` only opens the settings page, so use one of
+  the ways above there.)
+
+What the two commands do: the first tells Claude Code where Ravenseat lives (this GitHub repository), the second
+installs it. Restart Claude Code if it was open. To check that it worked, `claude plugin list` shows `ravenseat`.
 
 **2. Set up your project.** *"Set up the queue."* or `/ravenseat:setup`. The guided setup fills in your project's
 checks with you and asks before changing settings. Not sure yet? *"Run ravenseat doctor."* reports what it finds

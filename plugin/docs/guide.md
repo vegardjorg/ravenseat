@@ -24,12 +24,23 @@ instead, and the part that does it.
 
 ## Install
 
-As a Claude Code plugin (recommended). In Claude Code:
+As a Claude Code plugin (recommended). The easiest way: paste this into Claude Code and let it run the commands (it
+asks first): *"Install the Ravenseat plugin for me: run `claude plugin marketplace add vegardjorg/ravenseat` and then
+`claude plugin install ravenseat@ravenseat`."* Or open a terminal yourself (Windows: Windows key, type `PowerShell`,
+Enter; Mac: Cmd+Space, type `Terminal`, Enter) and run these two commands, one at a time:
 
 ```
-/plugin marketplace add vegardjorg/ravenseat
-/plugin install ravenseat@ravenseat
+claude plugin marketplace add vegardjorg/ravenseat
 ```
+
+```
+claude plugin install ravenseat@ravenseat
+```
+
+The first adds this repository as a place to get plugins from; the second installs Ravenseat. It then works in the
+terminal and in the Claude desktop app (restart Claude Code if it was open). `claude plugin list` shows it. Inside
+Claude Code in a terminal, `/plugin marketplace add vegardjorg/ravenseat` and `/plugin install ravenseat@ravenseat` do
+the same; in the desktop app `/plugin` only opens the plugin settings page, so use the terminal there.
 
 For one project only, run `claude plugin install ravenseat@ravenseat --scope project` in a terminal in that project. That limits
 the plugin. The marketplace entry still goes in your user settings unless `claude plugin marketplace add` also gets
