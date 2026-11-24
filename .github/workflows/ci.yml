@@ -72,7 +72,9 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
-          name: vitest-shard-${{ matrix.shard }}
+          # The attempt in the name: a rerun of failed jobs keeps the first attempt's artifacts, and shards-complete
+          # must read the newest report of each shard (scripts/ci-shard-coverage.mjs, newestAttempts).
+          name: vitest-shard-${{ matrix.shard }}-attempt-${{ github.run_attempt }}
           path: vitest-shard-${{ matrix.shard }}.json
           if-no-files-found: ignore
           retention-days: 7

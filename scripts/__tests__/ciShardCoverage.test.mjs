@@ -156,6 +156,43 @@ describe('the command: exit codes', () => {
     expect(r.status).toBe(1);
   });
 
+  /** A rerun keeps the first attempt's artifacts: writes each report in its own artifact folder (name given). */
+  function setUpAttempts(folders) {
+    const { root, rdir } = setUp({});
+    for (const [folder, [name, json]] of Object.entries(folders)) {
+      fs.mkdirSync(path.join(rdir, folder));
+      fs.writeFileSync(path.join(rdir, folder, name), JSON.stringify(json));
+    }
+    return { root, rdir };
+  }
+
+  it('a rerun: only the newest attempt of each shard counts, so a red first attempt does not fail a green rerun', () => {
+    const { root, rdir } = setUpAttempts({
+      'vitest-shard-1-attempt-1': ['vitest-shard-1.json', report(EXPECTED.slice(0, 1))],
+      'vitest-shard-2-attempt-1': ['vitest-shard-2.json', report(EXPECTED.slice(1), { success: false, failedFile: EXPECTED[1] })],
+      'vitest-shard-2-attempt-2': ['vitest-shard-2.json', report(EXPECTED.slice(1))],
+    });
+    const r = run(['--list', path.join(dir, 'list.json'), '--root', root, '--reports', rdir, '--shards', '2', '--needs-result', 'success']);
+    expect(r.stdout + r.stderr).toMatch(/OK: 3 of 3/);
+    expect(r.status).toBe(0);
+  });
+
+  it('a rerun: a red newest attempt still fails, also when an older attempt was green', () => {
+    const { root, rdir } = setUpAttempts({
+      'vitest-shard-1-attempt-1': ['vitest-shard-1.json', report(EXPECTED.slice(0, 1))],
+      'vitest-shard-2-attempt-1': ['vitest-shard-2.json', report(EXPECTED.slice(1))],
+      'vitest-shard-2-attempt-10': ['vitest-shard-2.json', report(EXPECTED.slice(1), { success: false, failedFile: EXPECTED[1] })],
+    });
+    const r = run(['--list', path.join(dir, 'list.json'), '--root', root, '--reports', rdir, '--shards', '2']);
+    expect(r.status).toBe(1);
+    expect(r.stdout + r.stderr).toContain('not green');
+  });
+
+  it('ci.yml names each shard artifact with the run attempt, which newestAttempts reads', () => {
+    const yml = fs.readFileSync(path.join(path.dirname(SCRIPT), '..', '.github', 'workflows', 'ci.yml'), 'utf8');
+    expect(yml).toContain('name: vitest-shard-${{ matrix.shard }}-attempt-${{ github.run_attempt }}');
+  });
+
   it('exit 1 when a report is broken JSON, exit 2 on a usage error', () => {
     const { root, rdir } = setUp({ 'vitest-shard-1.json': '{ broken' });
     expect(run(['--list', path.join(dir, 'list.json'), '--root', root, '--reports', rdir, '--shards', '1']).status).toBe(1);

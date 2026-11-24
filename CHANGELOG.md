@@ -131,6 +131,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **Settings marks the command palette (`board.palette`) as having no effect while `board.shortcuts` is off.**
 - **Internal: `cli/merge.mjs` is split by step of the receive and merge flow into `cli/merge/`, with the old file as the map.** No change in behaviour.
 ### Fixed
+- **CI: rerunning a failed Windows shard turns the shard check green again.** Each shard report carries its run attempt, and the check reads only the newest one per shard.
 - **Dragging a Timeline bar with the mouse no longer selects text: a ghost follows the pointer and the landing row, insertion mark and place are shown.** Rides on `board.timelineDrag`, no new setting.
 - **The owner-question examples in the add-to-queue, review and plans skills carry the card fields, so a copied example is no longer refused.** No setting: they are examples.
 - Board settings: the "How to use the board" and "Keyboard shortcuts" buttons have a gap between them.

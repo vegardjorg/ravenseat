@@ -20,7 +20,8 @@
 // Usage: node scripts/ci-shard-coverage.mjs --list <list.json> --root <dir> --reports <dir> --shards <n>
 //                                           [--needs-result <success|failure|cancelled|skipped>]
 //   --reports  a folder; every *.json file under it (any depth: download-artifact puts each artifact in its own folder)
-//              is one shard report.
+//              is one shard report. After a rerun of failed jobs only the newest attempt of each report counts
+//              (the artifact folder ends in -attempt-<n>; see newestAttempts).
 // Exit code: 0 all ran and green, 1 not, 2 usage error.
 // =============================================================
 import fs from 'node:fs';
@@ -67,6 +68,23 @@ export function checkShards({ expected, shards, reports, needsResult }) {
   return { ok: !problems.length, lines };
 }
 
+/**
+ * Keeps only the newest attempt of each report. A rerun of failed jobs keeps the first attempt's artifacts, so the
+ * download holds both `vitest-shard-2-attempt-1/` (red) and `vitest-shard-2-attempt-2/` (the rerun). The attempt is
+ * read from the artifact folder name (`-attempt-<n>`, ci.yml names it with github.run_attempt); a folder without one
+ * counts as attempt 0. Reports are grouped by their file name (vitest-shard-<i>.json).
+ * @param {Array<{ file: string, folder?: string }>} reports
+ */
+export function newestAttempts(reports) {
+  const attemptOf = (r) => Number(/-attempt-(\d+)$/.exec(r.folder ?? '')?.[1] ?? 0);
+  const best = new Map();
+  for (const r of reports) {
+    const cur = best.get(r.file);
+    if (!cur || attemptOf(r) > attemptOf(cur)) best.set(r.file, r);
+  }
+  return [...best.values()];
+}
+
 /** Every *.json file under dir, at any depth, sorted. */
 function jsonFiles(dir) {
   const out = [];
@@ -107,13 +125,14 @@ function main(argv) {
   }
   let reports = [];
   try {
-    reports = jsonFiles(reportDir).map((f) => {
+    reports = newestAttempts(jsonFiles(reportDir).map((f) => {
+      const folder = path.basename(path.dirname(f));
       try {
-        return { file: path.basename(f), json: JSON.parse(fs.readFileSync(f, 'utf8')) };
+        return { file: path.basename(f), folder, json: JSON.parse(fs.readFileSync(f, 'utf8')) };
       } catch (e) {
-        return { file: path.basename(f), json: null, error: e.message };
+        return { file: path.basename(f), folder, json: null, error: e.message };
       }
-    });
+    }));
   } catch (e) {
     console.log(`FAIL: the report folder ${reportDir} cannot be read (${e.message})`);
     return 1;
