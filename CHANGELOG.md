@@ -126,6 +126,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **The lite help lists `undo <id>`, and bare `undo` first says it undoes the last queue edit and points to `undo <id>`.**
 - **Settings in lite puts `planReview.*` and `plans.checkpoint` under Full mode only, since they do nothing there.**
 - **Settings marks the command palette (`board.palette`) as having no effect while `board.shortcuts` is off.**
+- **Internal: `cli/merge.mjs` is split by step of the receive and merge flow into `cli/merge/`, with the old file as the map.** No change in behaviour.
 ### Fixed
 - **Dragging a Timeline bar with the mouse no longer selects text: a ghost follows the pointer and the landing row, insertion mark and place are shown.** Rides on `board.timelineDrag`, no new setting.
 - **The owner-question examples in the add-to-queue, review and plans skills carry the card fields, so a copied example is no longer refused.** No setting: they are examples.

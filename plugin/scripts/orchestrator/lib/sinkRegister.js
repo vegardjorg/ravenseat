@@ -34,7 +34,10 @@ const row = (file, route, token, what) => Object.freeze({ file, route, token, wh
 const SINKS = Object.freeze([
   // Stores agent text, through a redaction.
   row('lib/doneCheck.js', 'storeText', 'storeText(', 'the tail of a done command or gate run (done-<id>.md, gates-<id>.md, the fix brief)'),
-  row('cli/merge.mjs', 'storeText', 'storeText(', "the track's last answer (trackReply.md); gate and done tails through tailOf"),
+  // cli/merge.mjs is split by step (SPLIT-1): the receive and merge write sites live in cli/merge/.
+  row('cli/merge/receive.mjs', 'storeText', 'storeText(', "the track's last answer in the review package (trackReply.md)"),
+  row('cli/merge/evidence.mjs', 'tailOf', 'tailOf(', "the red quick gates' tail at receive and merge (gates-<id>.md); the done tail through lib/doneCheck.js"),
+  row('cli/merge/mergeSteps.mjs', 'tailOf', 'tailOf(', "the red quick gates' tail after the merge, in the base gate's report"),
   row('cli/run.mjs', 'tailOf', 'tailOf(', 'the done and gate tails in the fix brief'),
   row('log-time.mjs', 'storeText', 'storeText(', "the time log's remark (any agent can pass one)"),
   row('lib/askBundle.js', 'redact', 'redact(', 'the ask bundle: mission, report, handover, transcript tail'),
@@ -50,6 +53,7 @@ const SINKS = Object.freeze([
   // Names track-result.md only in the update task's mission text; it reads no agent text.
   row('lib/osv.js', 'metadata', null, 'the dependency audit cache: package names, versions and OSV.dev advisories, no agent text'),
   row('cli/orchestrator.mjs', 'metadata', null, "the orchestrator's own handover note and follow reports, no track text"),
+  row('cli/merge/blocks.mjs', 'metadata', null, "migr move rewrites the block number in ravenseat's own prompt files; names track-result.md only in a message"),
   row('hook-context.mjs', 'metadata', null, 'the pulse cursor and the cost guard state'),
   row('hook-track-context.mjs', 'metadata', null, 'per-agent state: which notices fired, compaction counts'),
   row('hook-track-end.mjs', 'metadata', null, 'per-agent state: the track id and the time of a block'),
