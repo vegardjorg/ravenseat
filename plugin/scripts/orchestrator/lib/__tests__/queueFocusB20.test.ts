@@ -300,7 +300,8 @@ describe('queue.mjs focus add / focus remove (against a copy)', () => {
 
 describe('the board accepts task steps', () => {
   it('the STEP regex of POST /api/focus takes task:<id>', () => {
-    const src = readFileSync(join(ORCH, 'queue-board.mjs'), 'utf8');
+    // POST /api/focus lives in queue-board/api/focus.mjs since SPLIT-1.
+    const src = readFileSync(join(CLIENT, 'api', 'focus.mjs'), 'utf8');
     const m = src.match(/const STEP =\s*\n?\s*(\/.*\/);/);
     expect(m).toBeTruthy();
     const STEP = (0, eval)(m![1]) as RegExp;

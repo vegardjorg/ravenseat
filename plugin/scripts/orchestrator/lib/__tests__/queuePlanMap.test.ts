@@ -519,6 +519,8 @@ describe('the wiring in the board', () => {
   const map = readFileSync(join(CLIENT, 'plans', 'map.js'), 'utf8');
   const plans = readFileSync(join(CLIENT, 'plans', 'plans.js'), 'utf8');
   const server = readFileSync(join(CLIENT, '..', 'queue-board.mjs'), 'utf8');
+  // The handler lives in queue-board/api/plans.mjs since SPLIT-1; the route line stays in queue-board.mjs.
+  const plansApi = readFileSync(join(CLIENT, 'api', 'plans.mjs'), 'utf8');
   const code = (s: string) => s.replace(/^\s*\/\/.*$/gm, '');
 
   it('map.js loads after queuePlanView.js and before plans.js, and the server serves it', () => {
@@ -534,8 +536,8 @@ describe('the wiring in the board', () => {
     expect(urls).toEqual(['/api/plan-prioritize']);
     expect(map).toContain("'X-Queue-Key'");
     expect(server).toContain("if (filePath === '/api/plan-prioritize') return planPrioritize(b);");
-    expect(server).toContain('PRIVACY.prioritizeCall(b.groups)');
-    expect(server).toContain("'--expect-changed'");
+    expect(plansApi).toContain('PRIVACY.prioritizeCall(b.groups)');
+    expect(plansApi).toContain("'--expect-changed'");
     // The rest of the room still does not write.
     expect(plans).not.toMatch(/method:\s*'POST'/);
   });

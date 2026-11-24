@@ -1185,7 +1185,8 @@ describe('queuePlan: prioritizeMany', () => {
 
   it('the board saves priorityMap with one prioritize-many call, without an undo loop', () => {
     // Normalize CRLF so the test also passes on a Windows checkout (core.autocrlf=true).
-    const board = readFileSync(join(__dirname, '..', '..', 'queue-board.mjs'), 'utf8').replace(/\r\n/g, '\n');
+    // planPrioritize lives in queue-board/api/plans.mjs since SPLIT-1.
+    const board = readFileSync(join(__dirname, '..', '..', 'queue-board', 'api', 'plans.mjs'), 'utf8').replace(/\r\n/g, '\n');
     const body = board.slice(board.indexOf('async function planPrioritize'));
     const fn = body.slice(0, body.indexOf('\n}\n'));
     expect(fn).toContain("'prioritize-many'");

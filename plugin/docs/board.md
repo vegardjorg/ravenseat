@@ -898,3 +898,6 @@ serves only the files in its allow list (`STATIC`), all with the same strict Con
 - `a11y.js`, `performance.js`, `graph.js`, `plan.js` and `mascot.js`: shared helpers and views with their own
   `window.Queue…` object; the pure rules they use are served from `lib/` (the same files the tests use).
 - `plans/`: the Plans room (see [plan register](plan-register.md)).
+- `api/`: the server's `/api/*` route handlers, one module per route group (tasks, focus, plans, plan edits,
+  actions, settings, views, and the shared write tools). `queue-board.mjs` stays the entry point and route map; these
+  files run only on the server and are never served (`STATIC` is an allow list).

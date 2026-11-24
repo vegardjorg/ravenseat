@@ -684,6 +684,9 @@ describe('queue.mjs with the calls from multi select (copy in a temporary folder
 describe('the wiring (index.html, queue-board.mjs and the new files)', () => {
   const html = readFileSync(join(CLIENT, 'index.html'), 'utf8');
   const server = readFileSync(join(CLIENT, '..', 'queue-board.mjs'), 'utf8');
+  // Since SPLIT-1 the handlers live in queue-board/api/ (plans.mjs: GET /api/plans; planEdits.mjs: the row edits).
+  const plansApi = readFileSync(join(CLIENT, 'api', 'plans.mjs'), 'utf8');
+  const planEdits = readFileSync(join(CLIENT, 'api', 'planEdits.mjs'), 'utf8');
   const plans = readFileSync(join(CLIENT, 'plans', 'plans.js'), 'utf8');
   const overview = readFileSync(join(CLIENT, 'plans', 'overview.js'), 'utf8');
   const work = readFileSync(join(CLIENT, 'plans', 'work.js'), 'utf8');
@@ -702,11 +705,11 @@ describe('the wiring (index.html, queue-board.mjs and the new files)', () => {
   it('write routes and live update in the server, and all writing goes via queue.mjs', () => {
     expect(server).toMatch(/filePath === '\/api\/plan-bulk'\) return planBulk\(b\)/);
     expect(server).toMatch(/filePath === '\/api\/plan-undo'\) return planUndo\(b\)/);
-    expect(server).toMatch(/searchParams\.get\('wait'\) === '1'/);
+    expect(plansApi).toMatch(/searchParams\.get\('wait'\) === '1'/);
     expect(server).toMatch(/fs\.watch\(FOLDER/);
-    const bulk = server.slice(
-      server.indexOf('async function planBulk'),
-      server.indexOf('async function planUndo'),
+    const bulk = planEdits.slice(
+      planEdits.indexOf('async function planBulk'),
+      planEdits.indexOf('async function planUndo'),
     );
     expect(bulk).toMatch(/PRIVACY\.planBulkCall/);
     expect(bulk).not.toMatch(/writeFileSync|renameSync/);

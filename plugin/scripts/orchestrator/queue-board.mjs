@@ -111,6 +111,22 @@
 // Environment (as queue.mjs): QUEUE_FOLDER (the queue's folder, smoke test against a copy), QUEUE_GIT (the repo branches are counted in, and where
 // the migrations folder and .claude/settings.json are read), QUEUE_TIME_LOG (the time log), QUEUE_PLAN_SOURCE_ROOT (the root documents
 // are read from).
+//
+// Where the parts live (SPLIT-1). This file is the entry point: it reads the arguments and the config, keeps the live
+// paths and caches (demo mode switches them), builds the state, statistics, plans and schedule data, serves the static
+// files and /open, runs demo mode, and maps every /api/ route to its handler (write() for POST, the GET lines in the
+// server). The handlers live in queue-board/api/, one module per route group:
+//   writeTools.mjs  the write plumbing: the queue.mjs runner, the write chain, the input checks, edit-many, the guard
+//                   rules and the weakening rule
+//   views.mjs       GET /api/state, since, schedule, statistics, follow; POST /api/seen; the Follow up page
+//   tasks.mjs       POST /api/bulk, undo, task-edit, move, lane; GET /api/task, archive
+//   focus.mjs       POST /api/focus, area
+//   plans.mjs       GET /api/plans, plan-search, doc, plan-check; POST /api/plan-prioritize, plan-new, plan-source
+//   planEdits.mjs   POST /api/plan-capture, plan-proposal, plan-bulk, plan-undo, lawyerPackage
+//   actions.mjs     POST /api/action; GET /api/cloudPackage, cloud-bundles
+//   settings.mjs    POST /api/limit, setting, guidance, checks, helper, helper-add, proposals, proposals-undo,
+//                   update-dismiss; GET /api/settings, checks
+// Every handler gets `ctx` (built once, just above the server) and a write also the per-call tools write() builds.
 // =============================================================
 
 import http from 'node:http';
@@ -122,7 +138,15 @@ import zlib from 'node:zlib';
 import { Buffer } from 'node:buffer';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { execFile, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
+import { writeTools } from './queue-board/api/writeTools.mjs';
+import { viewRoutes, FOLLOW_PAGE } from './queue-board/api/views.mjs';
+import { taskRoutes } from './queue-board/api/tasks.mjs';
+import { focusRoutes } from './queue-board/api/focus.mjs';
+import { planRoutes, resetPlanCheck } from './queue-board/api/plans.mjs';
+import { planEditRoutes } from './queue-board/api/planEdits.mjs';
+import { actionRoutes } from './queue-board/api/actions.mjs';
+import { settingRoutes } from './queue-board/api/settings.mjs';
 
 const require = createRequire(import.meta.url);
 const CS = require('./lib/cloudSetup.js');
@@ -142,14 +166,10 @@ const ES = require('./lib/eventStatistics.js');
 // The Plans space. The register is read with queuePlan.js, and what the board needs is made by queuePlanView.js (read only).
 const P = require('./lib/queuePlan.js');
 const PRIVACY = require('./lib/queuePlanView.js');
-const INBOX = require('./lib/planInbox.js');
-const PROPOSALS = require('./lib/planProposal.js');
 const KK = require('./lib/queueConfig.js');
 // The mascot's rules (the same file the browser gets at /queueMascot.js) and the weekly quota (the forecast).
 const M = require('./lib/queueMascot.js');
 const KAP = require('./lib/queueCapacity.js');
-// The "Follow up" entries (the same rules as queue.mjs follow; the board only reads follow.json).
-const F = require('./lib/queueFollow.js');
 // The update banner (a newer plugin version, or setup not run after an update). Served to the browser as /queueUpdate.js.
 const U = require('./lib/queueUpdate.js');
 // `ravenseat wait`'s heartbeat (lib/ownerWait.js): "Orchestrator listening" in "Waiting on you" while it is fresh.
@@ -176,8 +196,6 @@ function zonesNow(fresh) {
     return zf(o, { missionText: [inline, o.description ?? ''].filter(Boolean).join('\n') });
   };
 }
-// Cancel, decline and edit one task from the detail panel (the rules; queue.mjs cancel / edit write).
-const TE = require('./lib/queueTaskEdit.js');
 // The base gate's verdict (lib/baseHealth.js; ravenseat merge writes base-health.json, the board only reads it).
 const BH = require('./lib/baseHealth.js');
 // The batch push threshold (config().push): the unpushed merged tasks next to the base health in the status line.
@@ -187,17 +205,8 @@ const CONFIG = KK.config();
 // The modules that are on (features in queue.config.json, resolved once at start): sent with the state, so the board
 // hides what is off. A change in the file needs a restart of the board, like the rest of the configuration.
 const FEATURES = KK.features(CONFIG);
-const HELP = require('./lib/queueHelpers.js');
-// The custom helpers' files (sha256 against the approval); only read and hashed, never run.
-const HF = require('./lib/helperFiles.js');
-// The forecast box (Focus view, Statistics) and the "Auto-accept proposals" section in the gear.
+// The forecast box (Focus view, Statistics).
 const FC = require('./lib/queueForecast.js');
-const PR = require('./lib/queueProposals.js');
-const R = require('./lib/settingsRegistry.js');
-const SV = require('./lib/settingsView.js');
-// The item key "Build as gate" sends on the Checks tab, checked before it reaches the command line.
-const FINDING_REPEATS = require('./lib/findingRepeats.js');
-const QUICK_GATE = require('./lib/quickGate.js');
 // The decision overview (the flag note for stuck work; the board's Decisions view uses the same file in the browser).
 const DEC = require('./lib/queueDecisions.js');
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -233,8 +242,6 @@ const QARCH = require('./lib/queueArchive.js');
 // "Since you left" (roadmap 3e AW-1 to AW-3): the shared join and the server-side seen mark (GET /api/since, POST /api/seen).
 const AWAY = require('./lib/awaySummary.js');
 const SEEN = require('./lib/seenMark.js');
-// The task's short human summary and its own sources for the detail panel (/api/task; lib/taskDescription.js).
-const DESC = require('./lib/taskDescription.js');
 // The card's History in the detail panel (roadmap 0ø J5, lib/taskHistory.js): only data that already exists.
 const HIST = require('./lib/taskHistory.js');
 // The Timeline tab (roadmap TIDSLINJE T-A): the payload of GET /api/schedule (lib/queueTimeline.js over queueSchedule.js),
@@ -1806,1112 +1813,27 @@ function missionFor(o) {
   return { text: s, path: null };
 }
 
-// ---- queue.mjs (all writing) ---------------------------------------------------------------------------------------
-function queueMjs(args) {
-  // Demo mode: the run gets the demo folder as its whole world (lib/demoMode.js childEnv: every QUEUE_* path there,
-  // git locked out, no tokens) and its cwd there. The folder and every path are checked again first, so a link planted
-  // since demo mode started cannot send the write anywhere else.
-  let place = { cwd: ROOT, env: process.env };
-  if (demoOn) {
-    const safe = DEMO.checkRoot(REAL.FOLDER);
-    const loose = DEMO.unconfinedVariables(DEMO_PATHS);
-    if (!safe.ok || loose.length)
-      return Promise.resolve({ ok: false, code: -1, out: '', error: safe.message ?? `Not in demo mode: ${loose.join(', ')} would point outside the demo folder.` });
-    place = { cwd: DEMO_PATHS.root, env: DEMO.childEnv(process.env, DEMO_PATHS) };
-  }
-  return new Promise((resolve) => {
-    execFile(
-      process.execPath,
-      [QUEUE_MJS, ...args],
-      // RAVENSEAT_SURFACE: the decision rows in the time log (lib/decisionRows.js) say the answer came from the board.
-      { cwd: place.cwd, env: { ...place.env, RAVENSEAT_SURFACE: 'board' }, timeout: 30_000, windowsHide: true, maxBuffer: 4 << 20 },
-      (err, out, error) => {
-        resolve({
-          ok: !err,
-          // The exit code: 6 = the queue has changed since the preview (--expect-changed).
-          code: err ? (typeof err.code === 'number' ? err.code : -1) : 0,
-          out: String(out ?? '').trim(),
-          error: String(error ?? '').trim(),
-        });
-      },
-    );
-  });
-}
-
 /**
- * Where the board puts the temporary input files it hands to queue.mjs (--file): the system temp folder, or in demo mode
- * <dataFolder>/demo/tmp, so a demo write leaves nothing outside the demo folder. Throws when that place is not safe.
+ * Does a write action. Returns { status, answer }. The POST route map: each /api/ path and its handler in
+ * queue-board/api/. `c` is what one write call shares: the queue as it is now, the 400 answer, and `run`, which runs
+ * queue.mjs, logs one line and answers with the guard rules' info texts (`c.info`, set by the handler first).
  */
-function tmpDir() {
-  if (!demoOn) return os.tmpdir();
-  const c = DEMO.confined(DEMO_PATHS.root, path.join(DEMO_PATHS.tmp, 'x'));
-  if (!c.ok) throw new Error(`Not in demo mode: the demo folder is not safe (${c.reason})`);
-  fs.mkdirSync(DEMO_PATHS.tmp, { recursive: true });
-  return DEMO_PATHS.tmp;
-}
-
-// Writes run one at a time, so a move is always computed from the queue as it is after the previous write.
-let chain = Promise.resolve();
-function oneAtATime(fn) {
-  const p = chain.then(fn);
-  chain = p.catch(() => undefined);
-  return p;
-}
-
-const ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,40}$/;
-const PID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const idOrNull = (x) => (x == null ? null : ID.test(String(x)) ? String(x) : undefined);
-const pidOrNull = (x) => (x == null ? null : PID.test(String(x)) ? String(x) : undefined);
-// A text that starts with "-" would be read by queue.mjs as a flag; control characters (except line breaks) are removed.
-const cleanText = (x, max) =>
-  String(x ?? '')
-    .replace(/[\u0000-\u0009\u000b-\u001f\u007f]/g, ' ')
-    .trim()
-    .replace(/^-+\s*/, '')
-    .slice(0, max);
-
-/** Runs edit-many with the content in a temporary file (all or nothing), and cleans up the file afterwards. */
-async function editMany(content, run, what, extra = []) {
-  const tmp = path.join(tmpDir(), `queue-board-${process.pid}-${crypto.randomUUID()}.json`);
-  fs.writeFileSync(tmp, JSON.stringify(content));
-  try {
-    return await run(['edit-many', '--file', tmp, ...extra], what);
-  } finally {
-    fs.rmSync(tmp, { force: true });
-  }
-}
-
-/**
- * Runs a queue.mjs command that answers with one JSON line (--json). `data` is the last line parsed, or
- * null when the response was not JSON (then the error is in `error`/`out`).
- */
-async function queueJson(args) {
-  const r = await queueMjs(args);
-  let data = null;
-  try {
-    data = JSON.parse(r.out.split('\n').filter(Boolean).pop() ?? '');
-  } catch {
-    data = null;
-  }
-  return { ...r, data };
-}
-
-/** edit-many with the content in a temporary file and the response as JSON (all or nothing); the file is cleaned up afterwards. */
-async function editManyJson(content, extra) {
-  const tmp = path.join(tmpDir(), `queue-board-${process.pid}-${crypto.randomUUID()}.json`);
-  fs.writeFileSync(tmp, JSON.stringify(content));
-  try {
-    return await queueJson(['edit-many', '--file', tmp, '--json', ...extra]);
-  } finally {
-    fs.rmSync(tmp, { force: true });
-  }
-}
-
-/** The arguments to queue.mjs rank for a position from queueBoard.bulkPlan ({ top } | { bottom } | { over: id } | …). */
-function spaceArgs(space) {
-  if (space.top) return ['--top'];
-  if (space.bottom) return ['--bottom'];
-  if (space.over) return ['--over', space.over];
-  return ['--under', space.under];
-}
-
-/** The error text from a failed queue.mjs call (the JSON errors first, otherwise stderr/stdout). */
-const errorText = (r, standard) =>
-  (Array.isArray(r.data?.error) && r.data.error.length ? r.data.error.join('\n') : '') ||
-  r.error ||
-  r.out ||
-  standard;
-
-/**
- * The bulk action from the selection bar. The body: { action, ids[], val, dry, expect, confirm }.
- *   dry: true  → preview: what changes (queue.mjs edit-many/rank --dry, or queueBoard.packPreview
- *                 for "Pack into track"), the explanation, the guard rules and the queue's version `changed`. Writes nothing.
- *   otherwise   → the guard rules (stop 422, warning 409 without confirm), then queue.mjs with --expect-changed <expect>, so
- *                 an orchestrator that has changed the queue meanwhile is not overrun (409 with outdated: true).
- * The id list is the one the owner saw; the server never evaluates a search again.
- */
-async function bulk(b, queueNow) {
-  const no = (message) => ({ status: 400, answer: { ok: false, message } });
-  const action = String(b.action ?? '');
-  if (!T.BULK_ACTIONS.includes(action)) return no(`unknown bulk action ${action}`);
-  if (!Array.isArray(b.ids)) return no('invalid id-list');
-  const ids = b.ids.map(idOrNull);
-  if (!ids.length || ids.length > T.BULK_MAX || ids.some((x) => !x))
-    return no('invalid id-list');
-  const expectValue = b.expect == null ? null : String(b.expect);
-  if (expectValue != null && !Number.isFinite(Date.parse(expectValue))) return no('invalid expect');
-  const val = b.val && typeof b.val === 'object' && !Array.isArray(b.val) ? b.val : {};
-  if (val.title != null) val.title = cleanText(val.title, 200);
-  const queue = queueNow();
-  const plan = T.bulkPlan(queue, action, ids, val);
-  if (plan.error.length) return no(plan.error.join('\n'));
-  const assessment = { type: 'bulk', action, ids, val };
-
-  if (b.dry === true) {
-    let changes = [];
-    let warnings = [];
-    let error = [];
-    let pkg = null;
-    let changed = queue.changed ?? null;
-    if (plan.command === 'batch-pack') {
-      const p = T.packPreview(queue, ids, { newId: plan.newId, title: plan.title });
-      if (p.error.length) error = p.error;
-      else pkg = p;
-    } else {
-      const r =
-        plan.command === 'rank'
-          ? await queueJson(['rank', ...ids, ...spaceArgs(plan.space), '--dry', '--json'])
-          : await editManyJson(plan.content, ['--dry']);
-      if (r.ok && r.data?.ok) {
-        changes = r.data.changes ?? [];
-        warnings = r.data.warnings ?? [];
-        changed = r.data.changed ?? changed;
-      } else error = [errorText(r, 'ravenseat failed')];
-    }
-    const list = T.assess(queue, assessment, { now: Date.now() });
-    // T-B: a Timeline drop asks for the plan in words; only a rank (order) is played, and only when the dry run worked.
-    const effect =
-      b.plan_effect === true && plan.command === 'rank' && !error.length
-        ? { plan: planEffectOf(queue, QT.applyChanges(queue, changes), ids) }
-        : {};
-    return {
-      status: 200,
-      answer: {
-        ok: true,
-        dry: true,
-        ...effect,
-        changed,
-        recap: T.bulkSummary(queue, action, ids, val, changes),
-        lines: L.diffLines(changes, { max: 300 }),
-        field: changes.length,
-        warnings,
-        error,
-        package: pkg,
-        guard: list,
-        can: !error.length && !list.some((v) => v.level === 'stop'),
-      },
-    };
-  }
-
-  const v = guard(queue, assessment, {}, b);
-  if (v.stop) return v.stop;
-  const fv = expectValue ? ['--expect-changed', expectValue] : [];
-  let r;
-  if (plan.command === 'batch-pack')
-    r = await queueJson([
-      'batch',
-      'pack',
-      ...ids,
-      '--id',
-      plan.newId,
-      ...(plan.title ? ['--title', plan.title] : []),
-      ...fv,
-    ]);
-  else if (plan.command === 'rank')
-    r = await queueJson([
-      'rank',
-      ...ids,
-      ...spaceArgs(plan.space),
-      '--json',
-      '--by',
-      'theBoard',
-      ...fv,
-    ]);
-  else r = await editManyJson(plan.content, ['--by', 'theBoard', ...fv]);
-  quick = null;
-  const clock = new Date().toLocaleTimeString('en-GB');
-  const what = `bulk ${action} ${ids.length === 1 ? ids[0] : `${ids.length} tasks`}`;
-  console.log(`${clock} ${what}: ${r.ok ? 'ok' : `failed (${errorText(r, '?')})`}`);
-  if (!r.ok || (r.data && r.data.ok === false)) {
-    const outdated = r.code === 6 || r.data?.outdated === true;
-    return {
-      status: 409,
-      answer: {
-        ok: false,
-        outdated,
-        message: outdated
-          ? 'The queue has changed since the preview. Review the change again.'
-          : errorText(r, 'ravenseat failed'),
-      },
-    };
-  }
-  return {
-    status: 200,
-    answer: {
-      ok: true,
-      message: plan.command === 'batch-pack' ? r.out : `${r.data?.changed?.length ?? ids.length}`,
-      info: v.info,
-      // The entry in the changelog ("Undo" sends it back as --nr). Packing is not logged and cannot be undone.
-      log: r.data?.log ?? null,
-      new_id: plan.command === 'batch-pack' ? plan.newId : null,
-    },
-  };
-}
-
-/**
- * "Undo" (queue.mjs undo). { show: true } shows the last entry that can be undone and whether that works now;
- * otherwise it is undone, with { nr } when the board knows which entry (after a bulk action), so someone else's change is never
- * undone instead.
- */
-async function undo(b) {
-  if (b.show === true) {
-    const r = await queueJson(['undo', '--show', '--json']);
-    if (!r.data)
-      return { status: 500, answer: { ok: false, message: errorText(r, 'ravenseat failed') } };
-    return {
-      status: 200,
-      answer: {
-        ok: true,
-        can: r.data.ok === true,
-        error: r.data.error ?? [],
-        entry: r.data.entry ?? null,
-        lines: r.data.entry ? L.diffLines(r.data.entry.changes ?? [], { max: 300 }) : [],
-      },
-    };
-  }
-  const nr = b.nr == null ? null : Number(b.nr);
-  if (nr != null && !(Number.isInteger(nr) && nr > 0))
-    return { status: 400, answer: { ok: false, message: 'invalid nr' } };
-  const r = await queueJson(['undo', '--json', '--by', 'theBoard', ...(nr ? ['--nr', String(nr)] : [])]);
-  quick = null;
-  console.log(
-    `${new Date().toLocaleTimeString('en-GB')} undo${nr ? ` no. ${nr}` : ''}: ${r.ok ? 'ok' : `failed (${errorText(r, '?')})`}`,
-  );
-  if (!r.ok || r.data?.ok !== true)
-    return { status: 409, answer: { ok: false, message: errorText(r, 'ravenseat undo failed') } };
-  const p = r.data.entry;
-  return {
-    status: 200,
-    answer: { ok: true, message: `Undone ${p?.action ?? 'change'} (no. ${p?.nr ?? '?'})` },
-  };
-}
-
-/**
- * "Cancel task", "Decline" and "Edit" from the detail panel. The body: { type: 'cancel'|'decline'|'edit', id, reason?,
- * form?: { value?, content_min?, class? }, expect? }. The rules are in lib/queueTaskEdit.js (only waiting and proposed;
- * decline only a proposal; the edit checked with queueLogic.validate). The write is `queue.mjs cancel` or `queue.mjs edit`
- * with --by theBoard (and --expect-changed when the board sends it), both logged in the changelog: the answer has `log`,
- * which "Undo" sends back as { nr } to /api/undo, as after a bulk action.
- */
-async function taskEdit(b, queueNow) {
-  const no = (message) => ({ status: 400, answer: { ok: false, message } });
-  const type = String(b.type ?? '');
-  const id = idOrNull(b.id);
-  if (!id) return no('invalid id');
-  const expectValue = b.expect == null ? null : String(b.expect);
-  if (expectValue != null && !Number.isFinite(Date.parse(expectValue))) return no('invalid expect');
-  const fv = expectValue ? ['--expect-changed', expectValue] : [];
-  const queue = queueNow();
-  const o = (queue.tasks ?? []).find((x) => x.id === id);
-  let args;
-  if (type === 'cancel' || type === 'decline') {
-    const f = TE.cancelError(o);
-    if (f) return no(f === 'unknown task' ? `unknown task ${id}` : f);
-    if (type === 'decline' && o.status !== 'proposed') return no(`${id} is not a proposal (it is ${o.status})`);
-    const remark = TE.cancelRemark(b.reason, { declined: type === 'decline' });
-    // "Keep as not building" (roadmap 0f): decline --keep, only while catalog.captureAnswers is not off (read fresh,
-    // as the state is). queue.mjs checks the setting again and writes only a proposed draft.
-    const keep = type === 'decline' && b.keep === true ? ['--keep'] : [];
-    if (keep.length && CATALOG.setupOf(KK.config({ fresh: true })).captureAnswers === 'off')
-      return no('catalog.captureAnswers is off: the proposal is not kept as a "not building" entry');
-    args = ['cancel', id, '--remark', remark, ...keep, '--by', 'theBoard', '--json', ...fv];
-  } else if (type === 'edit') {
-    const p = TE.editPlan(queue, id, b.form);
-    if (p.error.length) return no(p.error.join('\n'));
-    args = ['edit', id, '--json', JSON.stringify(p.field), '--by', 'theBoard', '--answer-json', ...fv];
-  } else return no(`unknown action ${type}`);
-  const r = await queueJson(args);
-  quick = null;
-  console.log(
-    `${new Date().toLocaleTimeString('en-GB')} ${type} ${id}: ${r.ok && r.data?.ok === true ? 'ok' : `failed (${errorText(r, '?')})`}`,
-  );
-  if (!r.ok || r.data?.ok !== true) {
-    const outdated = r.code === 6 || r.data?.outdated === true;
-    return {
-      status: 409,
-      answer: {
-        ok: false,
-        outdated,
-        message: outdated
-          ? 'The queue has changed since you opened the task. Look at it again.'
-          : errorText(r, `ravenseat ${args[0]} failed`),
-      },
-    };
-  }
-  // A description over the soft limit is saved with a WARNING (lib/taskDescription.js); the board shows the line.
-  const warning = Array.isArray(r.data.descriptionWarning) ? r.data.descriptionWarning.join(' ') : '';
-  // decline --keep: the KEEP line (the draft's id, or why it was not written) goes to the owner as an info line.
-  const keepLine = typeof r.data.keep?.line === 'string' ? [r.data.keep.line] : [];
-  return {
-    status: 200,
-    answer: { ok: true, log: r.data.log ?? null, ...(warning ? { warning } : {}), ...(keepLine.length ? { info: keepLine } : {}) },
-  };
-}
-
-/**
- * A stage from the plan view: area:<oid>, project:<pid>, feature:<pid>/<name> or task:<id> (B20; the id in the form of ID
- * below). queue.mjs validates the rest (an unknown task id is refused there).
- */
-const STEP =
-  /^(area|project):[a-z0-9]+(?:-[a-z0-9]+)*$|^feature:[a-z0-9]+(?:-[a-z0-9]+)*\/[^\u0000-\u001f\u007f]{1,80}$|^task:[A-Za-z0-9][A-Za-z0-9._-]{0,40}$/;
-
-/**
- * "Save focus" from the plan view. The body: { plan: { order[], now_count?, rest?, to?, name?,
- * drag_with_dependencies?, pause?[], continue?[] }, dry, expect }.
- *   dry: true → preview (queueBoard.focusPreview on a copy: focus before and after, the stages, rest,
- *                dragged along, the pause changes and "Next up" after saving) and the queue's version `changed`. Writes nothing.
- *   otherwise  → queue.mjs focus save --expect-changed <expect> (all or nothing); 409 with outdated: true when the queue
- *                has changed since the preview.
- */
-async function focus(b, queueNow) {
-  const no = (message) => ({ status: 400, answer: { ok: false, message } });
-  // B21: one change from a card, the Selection or the panel (focusChange below) instead of a whole plan.
-  if (b.change != null) return focusChange(b, queueNow);
-  const p = b.plan && typeof b.plan === 'object' && !Array.isArray(b.plan) ? b.plan : null;
-  if (!p) return no('missing plan');
-  const list = (x) => (Array.isArray(x) ? x.map(String) : x == null ? [] : null);
-  const order = list(p.order);
-  const pause = list(p.pause);
-  const proceed = list(p.continue);
-  if (!order) return no('invalid step');
-  // The one focus step limit (QA-1c Q12), with the same message as `focus set`, `focus add` and the save itself.
-  if (order.length > L.FOCUS_STEPS_MAX) return no(L.FOCUS_STEPS_ERROR);
-  if (order.some((x) => !STEP.test(x))) return no('invalid step');
-  if (!pause || !proceed || [...pause, ...proceed].some((x) => !PID.test(x)))
-    return no('invalid project id in pause/continue');
-  if (p.rest != null && !L.FOCUS_REST.includes(p.rest))
-    return no('rest must be wait or fill');
-  const to = p.to == null || p.to === '' ? null : String(p.to).trim();
-  if (to != null && !/^\d{4}-\d\d-\d\d$/.test(to))
-    return no('the date must be in the form YYYY-MM-DD');
-  const nowCount = p.now_count == null ? null : Number(p.now_count);
-  if (nowCount != null && !Number.isInteger(nowCount)) return no('invalid now_count');
-  const expectValue = b.expect == null ? null : String(b.expect);
-  if (expectValue != null && !Number.isFinite(Date.parse(expectValue))) return no('invalid expect');
-  const name = cleanText(p.name, 200);
-  const input = {
-    order,
-    ...(nowCount != null ? { now_count: nowCount } : {}),
-    // B22: a plan without a rest is left to saveFocusPlan (the stored focus's rest, else focus.restDefault).
-    ...(p.rest != null ? { rest: p.rest } : {}),
-    to,
-    name: name || null,
-    drag_with_dependencies: p.drag_with_dependencies !== false,
-    // When the focus is done (lib/logic/focus.js setFocus): left out = the config focus.continueWhenEmpty decides.
-    ...(typeof p.continue_when_empty === 'boolean' ? { continue_when_empty: p.continue_when_empty } : {}),
-    pause,
-    continue: proceed,
-  };
-  const queue = queueNow();
-  if (b.dry === true) {
-    const f = T.focusPreview(queue, input, {
-      now: Date.now(),
-      uncommitted: uncommitted().uncommitted,
-    });
-    // T-B: a Timeline step drop asks for the plan in words: the same save on a copy, then both played forward.
-    let effect = {};
-    if (b.plan_effect === true && !f.error.length) {
-      let planText = null;
-      try {
-        const copy = L.cloneJson(queue);
-        L.saveFocusPlan(copy, input, new Date().toISOString());
-        planText = planEffectOf(queue, copy);
-      } catch {
-        planText = null;
-      }
-      effect = { plan: planText };
-    }
-    return {
-      status: 200,
-      answer: { ok: true, dry: true, changed: queue.changed ?? null, ...f, ...effect, can: !f.error.length },
-    };
-  }
-  const tmp = path.join(tmpDir(), `queue-board-${process.pid}-${crypto.randomUUID()}.json`);
-  fs.writeFileSync(tmp, JSON.stringify(input));
-  let r;
-  try {
-    r = await queueJson([
-      'focus',
-      'save',
-      '--file',
-      tmp,
-      '--json',
-      '--by',
-      'theBoard',
-      ...(expectValue ? ['--expect-changed', expectValue] : []),
-    ]);
-  } finally {
-    fs.rmSync(tmp, { force: true });
-  }
-  quick = null;
-  console.log(
-    `${new Date().toLocaleTimeString('en-GB')} focus save: ${r.ok ? 'ok' : `failed (${errorText(r, '?')})`}`,
-  );
-  if (!r.ok || r.data?.ok !== true) {
-    const outdated = r.code === 6 || r.data?.outdated === true;
-    return {
-      status: 409,
-      answer: {
-        ok: false,
-        outdated,
-        message: outdated
-          ? 'The queue has changed since the preview. Review the focus again.'
-          : errorText(r, 'ravenseat focus save failed'),
-      },
-    };
-  }
-  return {
-    status: 200,
-    answer: {
-      ok: true,
-      message: order.length ? 'Focus saved' : 'Focus removed',
-      info: r.data.warnings ?? [],
-      // T-B: the changelog entry of the save (Undo sends it back as --nr); null when nothing was logged.
-      log: r.data.log ?? null,
-    },
-  };
-}
-
-/**
- * B21: one focus change from a card, the Selection or the detail panel. The body: { change: { action: add|remove,
- * steps[], at? }, dry, expect }. A remove takes exactly one step; `at` (1-based place, add only) defaults to last.
- *   dry: true → preview (queueBoard.focusChangePreview: the B20 logic, queueLogic.addFocusStep / removeFocusStep, on a
- *               copy) and the queue's version `changed`. Writes nothing. A no-op (every step already there) cannot be saved.
- *   otherwise  → queue.mjs focus add|remove --json --expect-changed <expect>: the same code writes as in the CLI, one
- *               changelog entry (undo takes it back); 409 with outdated: true when the queue has changed since the preview.
- */
-async function focusChange(b, queueNow) {
-  const no = (message) => ({ status: 400, answer: { ok: false, message } });
-  const c = b.change && typeof b.change === 'object' && !Array.isArray(b.change) ? b.change : null;
-  if (!c) return no('missing change');
-  if (!T.FOCUS_CHANGES.includes(c.action)) return no('action must be add or remove');
-  const steps = Array.isArray(c.steps) ? c.steps.map(String) : null;
-  if (!steps?.length) return no('invalid step');
-  // More steps in one add than the whole focus may hold: the shared limit's message (addFocusStep checks the sum).
-  if (steps.length > L.FOCUS_STEPS_MAX) return no(L.FOCUS_STEPS_ERROR);
-  if (steps.some((x) => !STEP.test(x))) return no('invalid step');
-  if (c.action === 'remove' && steps.length !== 1) return no('remove takes exactly one step');
-  const at = c.at == null ? null : Number(c.at);
-  if (at != null && (c.action !== 'add' || !Number.isInteger(at) || at < 1)) return no('invalid position');
-  const expectValue = b.expect == null ? null : String(b.expect);
-  if (expectValue != null && !Number.isFinite(Date.parse(expectValue))) return no('invalid expect');
-  const queue = queueNow();
-  if (b.dry === true) {
-    const f = T.focusChangePreview(
-      queue,
-      { action: c.action, steps, at },
-      { now: Date.now(), uncommitted: uncommitted().uncommitted },
-    );
-    return {
-      status: 200,
-      answer: { ok: true, dry: true, changed: queue.changed ?? null, ...f, can: !f.error.length && !f.noop },
-    };
-  }
-  const r = await queueJson([
-    'focus',
-    c.action,
-    ...steps,
-    ...(at != null ? ['--at', String(at)] : []),
-    '--json',
-    '--by',
-    'theBoard',
-    ...(expectValue ? ['--expect-changed', expectValue] : []),
-  ]);
-  quick = null;
-  console.log(
-    `${new Date().toLocaleTimeString('en-GB')} focus ${c.action}: ${r.ok ? 'ok' : `failed (${errorText(r, '?')})`}`,
-  );
-  if (!r.ok || r.data?.ok !== true) {
-    const outdated = r.code === 6 || r.data?.outdated === true;
-    return {
-      status: 409,
-      answer: {
-        ok: false,
-        outdated,
-        message: outdated
-          ? 'The queue has changed since the preview. Review the change again.'
-          : errorText(r, `ravenseat focus ${c.action} failed`),
-      },
-    };
-  }
-  return {
-    status: 200,
-    answer: {
-      ok: true,
-      message: r.data.noop ? r.data.message : c.action === 'add' ? 'Added to focus' : 'Removed from focus',
-      info: r.data.warnings ?? [],
-    },
-  };
-}
-
-/**
- * The areas from the board. The body: { action: save|delete|move, oid, title?, description?, pid?, dry,
- * expect }. dry → the explanation (queueBoard.areaPlan tries on a copy); otherwise queue.mjs area … --expect-changed.
- */
-async function area(b, queueNow) {
-  const no = (message) => ({ status: 400, answer: { ok: false, message } });
-  const action = String(b.action ?? '');
-  if (!T.AREA_ACTIONS.includes(action)) return no(`unknown action ${action}`);
-  const oid = pidOrNull(b.oid === '' ? null : b.oid);
-  if (oid === undefined || (action !== 'move' && !oid)) return no('invalid area id');
-  const pid = action === 'move' ? pidOrNull(b.pid) : null;
-  if (action === 'move' && !pid) return no('invalid project id');
-  const expectValue = b.expect == null ? null : String(b.expect);
-  if (expectValue != null && !Number.isFinite(Date.parse(expectValue))) return no('invalid expect');
-  const queue = queueNow();
-  const plan = T.areaPlan(queue, {
-    action,
-    oid,
-    pid,
-    title: b.title == null ? null : cleanText(b.title, 200),
-    description: b.description == null ? null : cleanText(b.description, 500),
-  });
-  if (b.dry === true)
-    return {
-      status: 200,
-      answer: {
-        ok: true,
-        dry: true,
-        changed: queue.changed ?? null,
-        error: plan.error,
-        lines: plan.lines ?? [],
-        can: !plan.error.length,
-      },
-    };
-  if (plan.error.length) return { status: 409, answer: { ok: false, message: plan.error.join('\n') } };
-  const r = await queueMjs([...plan.args, ...(expectValue ? ['--expect-changed', expectValue] : [])]);
-  quick = null;
-  console.log(
-    `${new Date().toLocaleTimeString('en-GB')} ${plan.args.join(' ')}: ${r.ok ? 'ok' : `failed (${r.error || r.out})`}`,
-  );
-  if (!r.ok)
-    return {
-      status: 409,
-      answer: {
-        ok: false,
-        outdated: r.code === 6,
-        message:
-          r.code === 6
-            ? 'The queue has changed since the preview. Review the change again.'
-            : r.error || r.out || 'ravenseat area failed',
-      },
-    };
-  return { status: 200, answer: { ok: true, message: r.out } };
-}
-
-/**
- * Turns the `queue.mjs plan prioritize` calls from queuePlanView.prioritizeCall (which has checked and cleaned the groups) into
- * the list `plan prioritize-many --file` takes: [{ id, priority, category?, reason? }]. The arguments are
- * ['plan', 'prioritize', ...ids, priority, --category k, --reason g, …flag].
- */
-function prioritizeList(call) {
-  const out = [];
-  for (const args of call) {
-    const first = args.findIndex((x, i) => i >= 2 && String(x).startsWith('--'));
-    const end = first < 0 ? args.length : first;
-    const priority = args[end - 1];
-    const after = (flag) => {
-      const k = args.indexOf(flag, end);
-      return k < 0 ? null : args[k + 1];
-    };
-    const category = after('--category');
-    const reason = after('--reason');
-    for (const id of args.slice(2, end - 1))
-      out.push({
-        id,
-        priority,
-        ...(category ? { category: [category] } : {}),
-        ...(reason ? { reason } : {}),
-      });
-  }
-  return out;
-}
-
-/**
- * "Save the priorities" from the priority map. The body: { groups: [{ priority, category[],
- * reason, ids[] }], dry, expect }. queuePlanView.prioritizeCall checks the groups; the whole draft then goes in ONE
- * `queue.mjs plan prioritize-many --file` call (--set-by owner: the owner sits at the board), under one lock and with one
- * changelog entry, so one save is one undo. All or nothing is done by queue.mjs.
- *   dry: true → the call with --dry (writes nothing): the changes, the warnings, the errors and the plan register's version
- *                `changed` (which the preview sends back as `expect`).
- *   otherwise  → the call with --expect-changed <expect>, so another session that has changed the register meanwhile stops
- *                the save (409 outdated).
- */
-async function planPrioritize(b) {
-  const no = (message) => ({ status: 400, answer: { ok: false, message } });
-  const { error, call } = PRIVACY.prioritizeCall(b.groups);
-  if (error.length) return no(error.join('\n'));
-  const expectValue = b.expect == null ? null : String(b.expect);
-  if (expectValue != null && !Number.isFinite(Date.parse(expectValue))) return no('invalid expect');
-  const list = prioritizeList(call);
-  const tmp = path.join(tmpDir(), `queue-board-${process.pid}-${crypto.randomUUID()}.json`);
-  fs.writeFileSync(tmp, JSON.stringify(list));
-  let r;
-  try {
-    r = await queueJson([
-      'plan',
-      'prioritize-many',
-      '--file',
-      tmp,
-      '--set-by',
-      'owner',
-      '--by',
-      'theBoard',
-      '--json',
-      ...(b.dry === true ? ['--dry'] : expectValue ? ['--expect-changed', expectValue] : []),
-    ]);
-  } finally {
-    fs.rmSync(tmp, { force: true });
-  }
-
-  if (b.dry === true) {
-    const ok = r.data?.ok === true;
-    return {
-      status: 200,
-      answer: {
-        ok: true,
-        dry: true,
-        changed: ok ? (r.data.changed ?? null) : null,
-        changes: ok ? (r.data.changes ?? []) : [],
-        warnings: ok ? (r.data.warnings ?? []) : (r.data?.warnings ?? []),
-        error: ok ? [] : [errorText(r, 'ravenseat plan prioritize-many failed')],
-        can: ok,
-      },
-    };
-  }
-
-  const log = (ok) =>
-    console.log(`${new Date().toLocaleTimeString('en-GB')} plan prioritize-many (the map): ${ok}`);
-  if (!(r.ok && r.data?.ok === true)) {
-    const outdated = r.code === 6 || r.data?.outdated === true;
-    log('failed');
-    return {
-      status: 409,
-      answer: {
-        ok: false,
-        outdated,
-        message: outdated
-          ? 'The plan register has changed since the preview. Review the draft again.'
-          : errorText(r, 'ravenseat plan prioritize-many failed'),
-      },
-    };
-  }
-  log(`ok (${list.length} entries)`);
-  return {
-    status: 200,
-    answer: {
-      ok: true,
-      message: 'The priorities are saved (one change in the changelog).',
-      log: r.data.log != null ? [r.data.log] : [],
-    },
-  };
-}
-
-// ---- The Unregistered box -----------------------------------------------------------------------
-// Both writes go via queue.mjs (same lock, atomic write, changelog and `plan undo`) with the owner option
-// (--set-by owner, --by theBoard). dry = preview (--dry); otherwise --expect-changed <expect> from
-// the preview, so a session that has changed the register meanwhile gives 409 with outdated: true.
-const expectValid = (x) => x == null || Number.isFinite(Date.parse(String(x)));
-function planWriteAnswer(r, what, okText) {
-  const clock = new Date().toLocaleTimeString('en-GB');
-  if (r.ok && r.data?.ok === true) {
-    if (!r.data.dry) console.log(`${clock} ${what}: ok`);
-    return {
-      status: 200,
-      answer: {
-        ok: true,
-        dry: r.data.dry === true,
-        changes: r.data.changes ?? [],
-        warnings: r.data.warnings ?? [],
-        changed: r.data.changed ?? null,
-        log: r.data.log ?? null,
-        message: r.data.dry ? null : okText,
-      },
-    };
-  }
-  const outdated = r.code === 6 || r.data?.outdated === true;
-  console.log(`${clock} ${what}: failed`);
-  return {
-    status: outdated ? 409 : 400,
-    answer: {
-      ok: false,
-      outdated,
-      warnings: r.data?.warnings ?? [],
-      message: outdated
-        ? 'The plan register has changed since the preview. Review and preview again.'
-        : errorText(r, `queue.mjs ${what} failed`),
-    },
-  };
-}
-
-async function planNew(b) {
-  const no = (message) => ({ status: 400, answer: { ok: false, message } });
-  if (!expectValid(b.expect)) return no('invalid expect');
-  const { entry, error } = PRIVACY.newEntryFromForm(b.form, b.path);
-  if (error.length) return no(error.join('\n'));
-  const tmp = path.join(tmpDir(), `queue-board-${process.pid}-${crypto.randomUUID()}.json`);
-  fs.writeFileSync(tmp, JSON.stringify(entry));
-  try {
-    const r = await queueJson(PRIVACY.newEntryArgs(tmp, { dry: b.dry === true, expect: b.expect }));
-    return planWriteAnswer(r, `plan new ${entry.id}`, `New plan entry ${entry.id} with the source ${b.path}.`);
-  } finally {
-    fs.rmSync(tmp, { force: true });
-  }
-}
-
-async function planSource(b) {
-  const no = (message) => ({ status: 400, answer: { ok: false, message } });
-  if (!expectValid(b.expect)) return no('invalid expect');
-  const id = String(b.id ?? '');
-  if (!/^PL-[A-Za-z0-9\u00C6\u00D8\u00C5\u00E6\u00F8\u00E5-]{1,60}$/.test(id)) return no('invalid plan entry');
-  // The sources are read from plans.json now; queue.mjs refuses (exit 6) if the register has changed after the preview.
-  const reg = fs.existsSync(PLAN_FILE)
-    ? P.normalize(JSON.parse(fs.readFileSync(PLAN_FILE, 'utf8')))
-    : P.emptyRegister();
-  const entry = (reg.entries ?? []).find((p) => p.id === id);
-  if (!entry) return no(`unknown plan entry ${id}`);
-  const { sources, error } = PRIVACY.sourceBonus(entry, b.path, b.anchor);
-  if (error.length) return no(error.join('\n'));
-  const r = await queueJson(PRIVACY.sourceArgs(id, sources, { dry: b.dry === true, expect: b.expect }));
-  return planWriteAnswer(r, `plan edit ${id} (source)`, `${b.path} is added as a source on ${id}.`);
-}
-
-// ---- Quick capture ("+ New plan", P6 of the Plans rework) ----------------------------------------------------
-// POST /api/plan-capture { title, text? }. Saved at once, without a preview: a capture only adds an entry to the Inbox
-// (lib/planInbox.js), and the answer's `log` is what "Undo" sends to POST /api/plan-undo { nr }. The write goes via
-// queue.mjs plan capture (same lock, changelog and undo), with the text in a temporary file so it never goes on a
-// command line. The same title again while it waits in the Inbox writes nothing (`duplicate`). No --expect-changed:
-// adding never conflicts with a change made meanwhile, and the CLI picks a free id under the lock; a refusal still
-// comes back as 409 (planWriteAnswer). Off with features.plans.inbox.
-async function planCapture(b) {
-  const no = (message, status = 400) => ({ status, answer: { ok: false, message } });
-  if (!FEATURES.plans || !FEATURES['plans.inbox'])
-    return no('Quick capture is off (features.plans.inbox in queue.config.json).', 403);
-  const c = INBOX.captureInput(b);
-  if (c.error.length) return no(c.error.join('\n'));
-  const tmp = path.join(tmpDir(), `queue-board-${process.pid}-${crypto.randomUUID()}.json`);
-  fs.writeFileSync(tmp, JSON.stringify({ title: c.title, text: c.text }));
-  try {
-    const r = await queueJson(['plan', 'capture', '--file', tmp, '--json', '--by', 'theBoard']);
-    const id = r.data?.entry?.id ?? null;
-    const dup = r.data?.duplicate ?? null;
-    const out = planWriteAnswer(
-      r,
-      `plan capture ${id ?? ''}`.trim(),
-      dup ? `Already in the inbox as ${dup}.` : 'Added to the inbox. Claude sorts it the next time plans are worked on.',
-    );
-    if (out.answer.ok) Object.assign(out.answer, { id, duplicate: dup });
-    return out;
-  } finally {
-    fs.rmSync(tmp, { force: true });
-  }
-}
-
-// ---- Confirming Claude's proposals (P7 of the Plans rework) ------------------------------------------------------
-// POST /api/plan-proposal { action: accept|decline|merge, id, edits?, reason?, to?, expect }. The owner's click on an
-// Inbox row: lib/planProposal.js boardCall checks the body and gives the call (queue.mjs plan accept|decline|merge with
-// --set-by owner and --by theBoard, so nothing is applied without the owner's click). Saved at once (one changelog
-// entry; the answer's `log` is what Undo sends to POST /api/plan-undo), with --expect-changed from the register the
-// owner looked at, so a session that changed it meanwhile gives 409 with outdated: true (planWriteAnswer). The edits
-// and the reason go in a temporary file, never on a command line. Off with features.plans.inbox.
-async function planProposal(b) {
-  const no = (message, status = 400) => ({ status, answer: { ok: false, message } });
-  if (!FEATURES.plans || !FEATURES['plans.inbox'])
-    return no('The Inbox is off (features.plans.inbox in queue.config.json).', 403);
-  const c = PROPOSALS.boardCall(b);
-  if (c.error.length) return no(c.error.join('\n'));
-  const tmp = c.file ? path.join(tmpDir(), `queue-board-${process.pid}-${crypto.randomUUID()}.json`) : null;
-  if (tmp) fs.writeFileSync(tmp, JSON.stringify(c.file));
-  const done = {
-    accept: `Accepted: ${c.id} has left the inbox.`,
-    decline: `Declined: ${c.id} is dropped.`,
-    merge: `Merged ${c.id} into ${b.to}.`,
-  };
-  try {
-    const r = await queueJson(c.args(tmp));
-    const out = planWriteAnswer(r, `plan ${c.action} ${c.id}`, done[c.action]);
-    // there is no preview here: the owner looked at the row, so the 409 says that
-    if (out.answer.outdated)
-      out.answer.message = 'The plan register has changed since you looked. The board shows it again; check the row and try once more.';
-    return out;
-  } finally {
-    if (tmp) fs.rmSync(tmp, { force: true });
-  }
-}
-
-// ---- Multi select and change in the row -----------------------------------------------------------
-// POST /api/plan-bulk { action, ids, priority?, category?, reason?, project?, maturity?, to?, dry, expect }.
-// The calls are made and checked by queuePlanView.planBulkCall (always queue.mjs, with the owner option and --by theBoard). dry =
-// preview (--dry on every call). Otherwise the calls are written one after the other with --expect-changed from
-// the preview (and then from the previous call); if one fails, the written ones are undone newest first (`plan undo --nr`), so
-// the save becomes all or nothing. The response has the changelog numbers (`log`), which POST /api/plan-undo { nr } undoes.
-async function planBulk(b) {
-  const no = (message) => ({ status: 400, answer: { ok: false, message } });
-  const { error, call } = PRIVACY.planBulkCall(b);
-  if (error.length) return no(error.join('\n'));
-  if (!expectValid(b.expect)) return no('invalid expect');
-  const what = `plan ${b.action} (theBoard, ${call.length} call)`;
-  const log = (ok) => console.log(`${new Date().toLocaleTimeString('en-GB')} ${what}: ${ok}`);
-  if (b.dry === true) {
-    const changes = [];
-    const warnings = [];
-    const errorOut = [];
-    let changed = null;
-    for (const args of call) {
-      const r = await queueJson([...args, '--dry']);
-      if (r.data?.ok === true) {
-        changes.push(...(r.data.changes ?? []));
-        warnings.push(...(r.data.warnings ?? []));
-        if (changed == null) changed = r.data.changed ?? null;
-      } else errorOut.push(errorText(r, `queue.mjs ${args[1]} failed`));
-    }
-    return {
-      status: 200,
-      answer: {
-        ok: true,
-        dry: true,
-        changed,
-        changes,
-        warnings,
-        error: errorOut,
-        can: !errorOut.length,
-      },
-    };
-  }
-  const written = [];
-  let version = b.expect == null ? null : String(b.expect);
-  for (const args of call) {
-    const r = await queueJson([...args, ...(version ? ['--expect-changed', version] : [])]);
-    if (r.ok && r.data?.ok === true) {
-      if (r.data.log != null) written.push(r.data.log);
-      version = r.data.changed ?? version;
-      continue;
-    }
-    const outdated = r.code === 6 || r.data?.outdated === true;
-    const notUndone = [];
-    for (const nr of [...written].reverse()) {
-      const a = await queueJson(['plan', 'undo', '--nr', String(nr), '--json', '--by', 'theBoard']);
-      if (!(a.ok && a.data?.ok === true)) {
-        notUndone.push(nr);
-        break;
-      }
-    }
-    log(`failed${written.length ? `, undone ${written.length - notUndone.length}` : ''}`);
-    const reason = outdated
-      ? 'The plan register has changed since the preview. Review and preview again.'
-      : errorText(r, `queue.mjs ${args[1]} failed`);
-    return {
-      status: 409,
-      answer: {
-        ok: false,
-        outdated,
-        message: notUndone.length
-          ? `${reason}\nSomething was saved and could not be undone automatically (changelog no. ${written.join(', ')}). Use ravenseat plan undo.`
-          : reason,
-      },
-    };
-  }
-  log('ok');
-  return {
-    status: 200,
-    answer: {
-      ok: true,
-      log: written,
-      message: `Saved: ${PRIVACY.bulkText(b, { projects: planCache?.data?.projects ?? {} })}.`,
-    },
-  };
-}
-
-async function planUndo(b) {
-  const { error, call } = PRIVACY.undoCall(b.nr);
-  if (error.length) return { status: 400, answer: { ok: false, message: error.join('\n') } };
-  let undone = 0;
-  for (const args of call) {
-    const r = await queueJson(args);
-    if (!(r.ok && r.data?.ok === true)) {
-      console.log(
-        `${new Date().toLocaleTimeString('en-GB')} plan undo (board): failed after ${undone}`,
-      );
-      return {
-        status: 409,
-        answer: {
-          ok: false,
-          undone,
-          message: `${errorText(r, 'ravenseat plan undo failed')}${undone ? ` (${undone} of ${call.length} are undone)` : ''}`,
-        },
-      };
-    }
-    undone += 1;
-  }
-  console.log(`${new Date().toLocaleTimeString('en-GB')} plan undo (board): ${undone}`);
-  return {
-    status: 200,
-    answer: {
-      ok: true,
-      undone,
-      message: `Undone (${undone === 1 ? 'one change' : `${undone} changes`}).`,
-    },
-  };
-}
-
-// The lawyer package. dry = preview (the text, and whether the file already exists); otherwise the draft is written
-// atomically to the path queuePlan.lawyerPackage gives (relative to the main tree). A file that exists with other content
-// is replaced only with `replace: true`. The file is a draft from the plan register: nothing is sent anywhere, and
-// the plan register does not change (it is written only via queue.mjs).
-function lawyerPackageWrite(b) {
-  if (typeof P.lawyerPackage !== 'function')
-    return { status: 404, answer: { ok: false, message: 'The lawyer package does not exist in this version.' } };
-  const reg = fs.existsSync(PLAN_FILE)
-    ? P.normalize(JSON.parse(fs.readFileSync(PLAN_FILE, 'utf8')))
-    : P.emptyRegister();
-  const queue = fs.existsSync(FILE) ? QARCH.withArchive(JSON.parse(fs.readFileSync(FILE, 'utf8')), FOLDER) : {};
-  const pk = P.lawyerPackage(reg, queue, { now: new Date() });
-  const file = path.join(SOURCE_ROOT, ...pk.path.split('/'));
-  const folder = path.dirname(file);
-  // Path guard: the path must lie inside the main tree, and neither the folder nor the file can be a symlink (then the write could
-  // end up somewhere else).
-  if (!path.resolve(file).startsWith(path.resolve(SOURCE_ROOT) + path.sep))
-    return { status: 400, answer: { ok: false, message: `${pk.path}: outside the project.` } };
-  for (const x of [folder, file])
-    if (fs.existsSync(x) && fs.lstatSync(x).isSymbolicLink())
-      return {
-        status: 400,
-        answer: { ok: false, message: `${pk.path}: symlinks are not written to.` },
-      };
-  const exists = fs.existsSync(file);
-  const equal = exists && fs.readFileSync(file, 'utf8') === pk.text;
-  if (b.dry === true)
-    return {
-      status: 200,
-      answer: {
-        ok: true,
-        dry: true,
-        path: pk.path,
-        text: pk.text,
-        points: pk.points,
-        exists,
-        equal,
-      },
-    };
-  if (exists && !equal && b.replace !== true)
-    return {
-      status: 409,
-      answer: {
-        ok: false,
-        confirm: true,
-        message: `${pk.path} already exists with other content (maybe edited by hand). Replace it?`,
-      },
-    };
-  fs.mkdirSync(folder, { recursive: true });
-  const tmp = `${file}.${process.pid}.${crypto.randomUUID()}.tmp`;
-  fs.writeFileSync(tmp, pk.text);
-  require('./lib/stateFile.js').renameWithRetry(tmp, file);
-  const n = pk.points.length;
-  console.log(`${new Date().toLocaleTimeString('en-GB')} lawyerPackage ${pk.path}: ${n} points`);
-  return {
-    status: 200,
-    answer: {
-      ok: true,
-      path: pk.path,
-      points: pk.points,
-      message: `The lawyer package is saved in ${pk.path} (${n} ${n === 1 ? 'point' : 'points'}). It has not been sent.`,
-    },
-  };
-}
-
-// Unregistered documents (= `queue.mjs plan check --json`, read only). The check reads documents and git, so the response
-// is cached until plans.json changes or two minutes have passed.
-let checkCache = null;
-async function planCheck() {
-  let mt = 0;
-  try {
-    mt = fs.statSync(PLAN_FILE).mtimeMs;
-  } catch {
-    mt = 0;
-  }
-  const key = `${mt}|${Math.floor(Date.now() / 120_000)}`;
-  if (checkCache?.key === key) return checkCache.answer;
-  const r = await queueJson(['plan', 'check', '--json']);
-  if (!(r.ok && r.data?.ok === true))
-    return { ok: false, message: errorText(r, 'ravenseat plan check failed') };
-  const unregistered = (r.data.unregistered ?? []).filter((s) => typeof s === 'string');
-  const answer = { ok: true, unregistered, groups: PRIVACY.unregisteredGroups(unregistered) };
-  checkCache = { key, answer };
-  return answer;
-}
-
-/**
- * The guard rules (queueBoard.assess) before a write action. Returns { stop: { status, answer } } when the action is not to
- * be done yet (422 stop, 409 warning without `confirm: true`), otherwise { info: [text] } which is sent with the response.
- */
-function guard(queue, action, context, b) {
-  const list = T.assess(queue, action, { now: Date.now(), ...context });
-  const texts = (level) => list.filter((v) => v.level === level).map((v) => v.text);
-  if (texts('stop').length)
-    return {
-      stop: {
-        status: 422,
-        answer: { ok: false, guard: list, message: texts('stop').join('\n') },
-      },
-    };
-  if (texts('warning').length && b.confirm !== true)
-    return {
-      stop: {
-        status: 409,
-        answer: { ok: false, confirm: true, guard: list, message: texts('warning').join('\n') },
-      },
-    };
-  return { info: texts('info') };
-}
-
-/** Does this value weaken the row's guard against both the default and the value now (lib/settingsView.js needsConfirm)? */
-function needsWeakenConfirm(row, value, queue) {
-  const config = KK.config({ fresh: true }); // the CLI writes the file, so the file is what counts
-  const mode = config.mode === 'lite' ? 'lite' : 'full';
-  return SV.needsConfirm(row, value, {
-    now: SV.valueOf(row, { config, queue }),
-    standard: SV.standardOf(row, { config, mode }),
-  });
-}
-
-/**
- * The server half of the weakening rule: a value that weakens a guard is refused with 422 and the row's warning texts
- * (protects, whyNot, changes) unless the body carries confirm: 'weaken'. The board's dialog shows the same texts and only
- * its completed slide sends that confirm, so a script or a stale page cannot switch a guard off with one request.
- * Returns the refusal { status, answer } or null.
- */
-function weakenCheck(row, value, queue, b) {
-  if (!row || !needsWeakenConfirm(row, value, queue) || b?.confirm === 'weaken') return null;
-  return {
-    status: 422,
-    answer: {
-      ok: false,
-      weaken: true,
-      key: row.key,
-      title: row.title,
-      message: `This weakens a guard (${row.key} ${SV.valueText(row, value)}). Nothing was changed.`,
-      protects: row.protects,
-      whyNot: row.whyNot,
-      changes: row.changes,
-      storeText: SV.STORE_TEXT[row.store],
-    },
-  };
-}
-
-/** Does a write action. Returns { status, answer }. */
 async function write(filePath, b) {
   const queueNow = () => JSON.parse(fs.readFileSync(FILE, 'utf8'));
-  let info = [];
-  const run = async (args, what) => {
-    const r = await queueMjs(args);
-    quick = null;
-    const clock = new Date().toLocaleTimeString('en-GB');
-    console.log(`${clock} ${what}: ${r.ok ? 'ok' : `failed (${r.error || r.out})`}`);
-    return r.ok
-      ? { status: 200, answer: { ok: true, message: r.out, info } }
-      : { status: 409, answer: { ok: false, message: r.error || r.out || 'ravenseat failed' } };
+  const c = {
+    info: [],
+    queueNow,
+    no: (message) => ({ status: 400, answer: { ok: false, message } }),
+    run: async (args, what) => {
+      const r = await queueMjs(args);
+      quick = null;
+      const clock = new Date().toLocaleTimeString('en-GB');
+      console.log(`${clock} ${what}: ${r.ok ? 'ok' : `failed (${r.error || r.out})`}`);
+      return r.ok
+        ? { status: 200, answer: { ok: true, message: r.out, info: c.info } }
+        : { status: 409, answer: { ok: false, message: r.error || r.out || 'ravenseat failed' } };
+    },
   };
-  const no = (message) => ({ status: 400, answer: { ok: false, message } });
 
   // Bulk actions from the selection bar and "Undo".
   if (filePath === '/api/bulk') return bulk(b, queueNow);
@@ -2935,493 +1857,26 @@ async function write(filePath, b) {
   if (filePath === '/api/plan-undo') return planUndo(b);
   // The lawyer package (local draft, never sent).
   if (filePath === '/api/lawyerPackage') return lawyerPackageWrite(b);
-  // The update banner's X (board/start.js): the same dismissal as `ravenseat update dismiss` (lib/queueUpdate.js), so
-  // other browsers and the CLI line stay quiet about that version too.
-  // "Since you left": the seen mark (AW-3), set by Decisions on screen a few seconds or "Mark seen" (lib/seenMark.js).
-  if (filePath === '/api/seen') {
-    const r = SEEN.writeSeen(FOLDER, { by: 'board' });
-    if (!r.ok) return { status: 500, answer: { ok: false, message: `could not write seen.json (${r.error})` } };
-    return { status: 200, answer: { ok: true, seen: r.seen } };
-  }
-  if (filePath === '/api/update-dismiss') {
-    if (!U.parse(b.version)) return no('invalid version');
-    if (!U.dismiss(fs, UPDATE_CACHE, String(b.version)))
-      return { status: 500, answer: { ok: false, message: 'could not write update-check.json' } };
-    quick = null;
-    return { status: 200, answer: { ok: true, message: `The notice about ravenseat ${b.version} is hidden until a newer version is out.` } };
-  }
-
-  if (filePath === '/api/move') {
-    const id = idOrNull(b.id);
-    const over = idOrNull(b.over);
-    const under = idOrNull(b.under);
-    if (!id || over === undefined || under === undefined) return no('invalid id');
-    const space = { over, under, top: b.top === true };
-    const queue = queueNow();
-    const r = T.newBonus(queue, id, space);
-    if (r.error) return no(r.error);
-    const v = guard(queue, { type: 'move', id, ...space }, {}, b);
-    if (v.stop) return v.stop;
-    info = v.info;
-    // A move is the owner's edit (owner 22.11): --by theBoard, so the moved tasks get edited_at (cli/taskEdit.mjs).
-    // "Boost dependencies too": the card and the open dependencies are moved in one edit-many call.
-    if (b.boost === true) {
-      const l = T.boostBonus(queue, id, space);
-      if (l.error) return no(l.error);
-      const changes = Object.entries(l.changes);
-      if (changes.length > 1)
-        return editMany(
-          { tasks: changes.map(([oid, t]) => ({ id: oid, priority_bonus: t })) },
-          run,
-          `move ${id} with dependencies (${changes.map(([oid, t]) => `${oid} ${t}`).join(', ')})`,
-          ['--by', 'theBoard'],
-        );
-    }
-    return run(
-      ['edit', id, '--json', JSON.stringify({ priority_bonus: r.bonus }), '--by', 'theBoard'],
-      `move ${id} (priority_bonus ${r.bonus})`,
-    );
-  }
-  if (filePath === '/api/limit') {
-    const name = String(b.name ?? '');
-    if (!L.LIMIT_NAME.includes(name)) return no(`unknown setting ${name}`);
-    // The value goes unchanged to queue.mjs (as a positional argument, never through a shell), so queue.mjs's validation and
-    // message apply. Here only what can never be a value is stopped.
-    const val = String(b.val ?? '').trim();
-    if (!val || val.length > 20 || /[\u0000-\u001f\u007f]/.test(val))
-      return no('write a value');
-    const v = guard(
-      queueNow(),
-      { type: 'limit', name, val },
-      { usageToday: statistics().data.keyFigures.usageToday },
-      b,
-    );
-    if (v.stop) return v.stop;
-    info = v.info;
-    return run(['limit', name, val], `limit ${name} ${val}`);
-  }
-  // One registry row from the gear (lib/settingsRegistry.js, edit "set"): goes through `ravenseat settings set <key> <value>`,
-  // which writes the file the row's store names and keeps its form. A value that weakens a guard is refused with 422 and
-  // the row's three warning texts unless the body carries confirm: 'weaken' (the warning dialog's completed slide); then
-  // the owner's flags are passed, and the CLI writes the setting-weakened row to the time log. A limit goes through the
-  // /api/limit path, so its guard rules (queueBoard.assess) still apply.
-  if (filePath === '/api/setting') {
-    const key = typeof b?.key === 'string' ? b.key : '';
-    const row = R.rowFor(key);
-    if (!row) return no(`unknown setting ${key}`);
-    if (row.edit !== 'set') return no(`${key} is not set from the board (${row.edit === 'file' ? 'edit the file' : 'read only'})`);
-    const raw = String(b.value ?? '').trim();
-    if (!raw || raw.length > 40 || /[ -]/.test(raw)) return no('write a value');
-    if (key.startsWith('limits.')) return write('/api/limit', { ...b, name: key.slice('limits.'.length), val: raw });
-    const queue = queueNow();
-    const p = SV.parseValue(row, raw, { limits: queue.limits });
-    if ('error' in p) return no(p.error);
-    const w = weakenCheck(row, p.value, queue, b);
-    if (w) return w;
-    const weak = b.confirm === 'weaken' && needsWeakenConfirm(row, p.value, queue);
-    return run(
-      ['settings', 'set', key, raw, ...(weak ? ['--i-understand', '--by', 'owner'] : [])],
-      `setting ${key} ${raw}${weak ? ' (weakened, confirmed)' : ''}`,
-    );
-  }
-  // The guidance switch in General: goes through `ravenseat guidance` (queue.json, under the lock).
-  if (filePath === '/api/guidance') {
-    if (!['guided', 'quiet'].includes(b?.mode)) return no('mode must be guided or quiet');
-    return run(['guidance', b.mode], `guidance ${b.mode}`);
-  }
-  // The Checks tab: every write goes through `ravenseat checks ...` (or `ravenseat kickstart gates`). "plan" is --approved, because the
-  // owner's click on this board (behind the key) is the yes. The key only names a file in the catalog.
-  if (filePath === '/api/checks') {
-    checksReport = { time: 0, report: null };
-    if (b?.action === 'on' || b?.action === 'off') return run(['checks', b.action], `checks ${b.action}`);
-    if (b?.action === 'gates') return run(['kickstart', 'gates', '--apply'], 'kickstart gates');
-    // The stack packs: the click on "Turn on" is the owner's yes (lib/reviewPacks.js, cli/checks.mjs packs).
-    if (b?.action === 'packs') return run(['checks', 'packs', '--apply'], 'checks packs');
-    // "Build as gate" on the card ledger-recipes: one proposed gate task for a due class and area (lib/findingRepeats.js
-    // itemKey checks the key before it reaches the command line; queue.mjs reads the entry again and applies the cap).
-    if (b?.action === 'build-gate') {
-      const item = FINDING_REPEATS.itemKey(b.item);
-      if (!item) return no('invalid item');
-      return run(['checks', 'build-gate', item], `checks build-gate ${item}`);
-    }
-    // The card quick-gate-add: only the guard's id comes from the board (lib/quickGate.js itemId); queue.mjs reads the
-    // command from the registry, can only ADD it to gates.quick, and never runs it.
-    if (b?.action === 'quick-add') {
-      const item = QUICK_GATE.itemId(b.item);
-      if (!item) return no('invalid item');
-      return run(['checks', 'quick-add', item], `checks quick-add ${item}`);
-    }
-    const key =typeof b?.key === 'string' && /^[a-z0-9][a-z0-9-]{0,59}$/.test(b.key) ? b.key : null;
-    if (!key) return no('invalid suggestion');
-    if (b.action === 'plan') return run(['checks', 'plan', key, '--approved'], `checks plan ${key}`);
-    // "Set aside, keep as not building" (roadmap 0f): dismiss --keep, refused while catalog.captureAnswers is off.
-    if (b.action === 'dismiss' && b.keep === true) {
-      if (CATALOG.setupOf(KK.config({ fresh: true })).captureAnswers === 'off')
-        return no('catalog.captureAnswers is off: the card is not kept as a "not building" entry');
-      const r = await run(['checks', 'dismiss', key, '--keep'], `checks dismiss ${key} --keep`);
-      // The KEEP line (the draft's id, or why it was not written) goes to the owner as an info line.
-      const kept = String(r.answer.message ?? '').split(/\r?\n/).filter((l) => l.startsWith('KEEP:'));
-      if (r.answer.ok && kept.length) r.answer.info = [...(r.answer.info ?? []), ...kept];
-      return r;
-    }
-    if (b.action === 'dismiss' || b.action === 'restore') return run(['checks', b.action, key], `checks ${b.action} ${key}`);
-    // An opt-in check's "Turn on" (lib/optInChecks.js): queue.mjs resolves the card's own setting, never one from the body.
-    if (b.action === 'setting') return run(['checks', 'turn-on', key], `checks turn-on ${key}`);
-    return no('action must be plan, dismiss, restore, setting, gates, packs, build-gate, quick-add, on or off');
-  }
-  // The "Helper agents" tab: a switch goes through `ravenseat helpers on|off <agent>` (queue.json, under the lock).
-  // A custom helper that is not approved for its file as it is now is refused here (and again in queue.mjs).
-  if (filePath === '/api/helper') {
-    const { setup } = HF.verifiedSetup(CONFIG, queueNow(), MAIN_TREE);
-    const h = T.helperSwitchArgs(b, Object.keys(setup), setup);
-    if (h.error) return no(h.error);
-    return run(h.args, `helper ${h.args[2]} ${h.args[1]}`);
-  }
-  // "Add helper": a pasted path goes to `ravenseat helpers add` (queue.mjs reads, copies, hashes and scans the file; the helper
-  // stays off). Approving is never possible from the board: that is Claude's review and the owner's yes, in the CLI.
-  // "Auto-accept proposals" in the gear: the rules go through `ravenseat proposals auto ...` and Undo through
-  // `ravenseat proposals undo <id>` (queue.json under the lock, the same validation as the CLI).
-  if (filePath === '/api/proposals') {
-    const h = PR.boardArgs(b);
-    if (h.error) return no(h.error);
-    // Switching auto-accept on from off weakens a guard (the registry row's weakens): refused without the dialog's yes.
-    // After that yes the owner flags go to the CLI, which applies the same rule (cli/settings.mjs guardWeakening) and
-    // logs the setting-weakened row; without them `proposals auto on` refuses as well.
-    if (b.enabled === true) {
-      const row = R.rowFor('proposals.autoAccept.enabled');
-      const queue = queueNow();
-      const w = weakenCheck(row, true, queue, b);
-      if (w) return w;
-      if (needsWeakenConfirm(row, true, queue)) return run([...h.args, '--i-understand', '--by', 'owner'], `proposals auto ${h.args[2]}`);
-    }
-    return run(h.args, `proposals auto ${h.args[2]}`);
-  }
-  if (filePath === '/api/proposals-undo') {
-    const id = idOrNull(b.id);
-    if (!id) return no('invalid id');
-    return run(['proposals', 'undo', id], `proposals undo ${id}`);
-  }
-  if (filePath === '/api/helper-add') {
-    const h = T.helperAddArgs(b);
-    if (h.error) return no(h.error);
-    return run(h.args, `helper add ${h.args[2]}`);
-  }
-  if (filePath === '/api/lane') {
-    const pid = pidOrNull(b.pid);
-    const over = pidOrNull(b.over);
-    const under = pidOrNull(b.under);
-    if (!pid || over === undefined || under === undefined) return no('invalid project id');
-    const lanes = T.projectLanes(queueNow()).filter((x) => x.movable);
-    const r = T.laneBonus(lanes, pid, { over, under });
-    if (r.error) return no(r.error);
-    const changes = Object.entries(r.changes);
-    if (changes.length === 1)
-      return run(
-        ['project', pid, '--priority', String(changes[0][1])],
-        `lane ${pid} (priority ${changes[0][1]})`,
-      );
-    // Several projects at once: edit-many is all or nothing.
-    const projects = Object.fromEntries(changes.map(([p, t]) => [p, { priority_bonus: t }]));
-    return editMany(
-      { projects },
-      run,
-      `lane ${pid} (${changes.map(([p, t]) => `${p} ${t}`).join(', ')})`,
-    );
-  }
-  if (filePath === '/api/action') {
-    const type = String(b.type ?? '');
-    if (type === 'pause' || type === 'continue') {
-      const pid = pidOrNull(b.pid);
-      if (!pid) return no('invalid project id');
-      const v = guard(queueNow(), { type, pid }, {}, b);
-      if (v.stop) return v.stop;
-      info = v.info;
-      return run(['project', pid, `--${type}`], `${type} ${pid}`);
-    }
-    // An answer to an owner question ("Waiting on you"). The answer is required (guard rule 15); the id must exist in
-    // the queue (a task waits on it, or it is registered in `question`), so the board never resolves something unknown.
-    if (type === 'resolve') {
-      const queue = queueNow();
-      const sp = String(b.sp ?? '');
-      const known =
-        L.validQuestionId(sp) &&
-        (Object.hasOwn(queue.question ?? {}, sp) ||
-          (queue.tasks ?? []).some((o) => (o.waiting_on ?? []).includes(sp)));
-      if (!known) return no('unknown question');
-      const answer = cleanText(b.answer, 4000);
-      // "Keep as design choice" (roadmap 0z Z-A): resolve --keep, only while catalog.captureAnswers is not off (read
-      // fresh, as the state is). queue.mjs checks the setting again and writes only a proposed draft.
-      const keep = b.keep === true ? ['--keep'] : [];
-      if (keep.length && CATALOG.setupOf(KK.config({ fresh: true })).captureAnswers === 'off')
-        return no('catalog.captureAnswers is off: the answer is not kept as a design choice');
-      // A choice button ({ choice: <1-based number> }): the server checks that the question has that choice, and
-      // queue.mjs resolve --choice stores the choice's text (with the free text field as a note, when filled in).
-      if (b.choice != null) {
-        const n = Number(b.choice);
-        const choices = queue.question?.[sp]?.choices;
-        if (!Number.isInteger(n) || !Array.isArray(choices) || n < 1 || n > choices.length)
-          return no('unknown choice');
-        const v = guard(queue, { type, sp, text: choices[n - 1] }, {}, b);
-        if (v.stop) return v.stop;
-        info = v.info;
-        return run(
-          ['resolve', sp, '--choice', String(n), ...(answer ? ['--answer', answer] : []), ...keep, '--by', 'owner'],
-          `resolve ${sp} (choice ${n})`,
-        );
-      }
-      const v = guard(queue, { type, sp, text: answer }, {}, b);
-      if (v.stop) return v.stop;
-      info = v.info;
-      return run(['resolve', sp, '--answer', answer, ...keep, '--by', 'owner'], `resolve ${sp}`);
-    }
-    // QA ok and approve for several at once (queue.mjs takes lists; all or nothing).
-    if ((type === 'qa-ok' || type === 'approve') && Array.isArray(b.ids)) {
-      const ids = b.ids.map(idOrNull);
-      if (!ids.length || ids.length > 500 || ids.some((x) => !x)) return no('invalid id list');
-      // --by owner, as resolve: the actor is the same whether the owner answers here or with /ravenseat:decide.
-      const args = type === 'qa-ok' ? ['qa', 'ok', ...ids, '--by', 'owner'] : ['approve', ...ids, '--by', 'owner'];
-      return run(args, `${type} ${ids.length === 1 ? ids[0] : `${ids.length} tasks`}`);
-    }
-    // "Started in cloud" for a bundle (the chosen cards) goes in one queue.mjs call (all or nothing).
-    if (type === 'cloud-start' && Array.isArray(b.ids)) {
-      const ids = b.ids.map(idOrNull);
-      if (!ids.length || ids.length > 10 || ids.some((x) => !x)) return no('invalid id list');
-      return run(['cloud', 'start', ...ids], `cloud start ${ids.join(' ')}`);
-    }
-    // The batch queue from the panel. "Add to batch queue" and "Take out of batch queue" go via edit-many (same rules
-    // as add/edit, queueLogic.batchedError; all or nothing; the changelog makes them undoable), "Pack" via
-    // queue.mjs batch pack (same class, never D+, same owner question). `expect` = the queue's `changed` from the preview:
-    // queue.mjs refuses (409) when the queue has changed since.
-    if ((type === 'batch-in' || type === 'batch-out') && Array.isArray(b.ids)) {
-      const ids = b.ids.map(idOrNull);
-      if (!ids.length || ids.length > 500 || ids.some((x) => !x)) return no('invalid id list');
-      const expectValue = b.expect == null ? null : String(b.expect);
-      if (expectValue != null && !Number.isFinite(Date.parse(expectValue))) return no('invalid expect');
-      return editMany(
-        { tasks: ids.map((x) => ({ id: x, batched: type === 'batch-in' })) },
-        run,
-        `${type} ${ids.length === 1 ? ids[0] : `${ids.length} tasks`}`,
-        ['--by', 'theBoard', ...(expectValue ? ['--expect-changed', expectValue] : [])],
-      );
-    }
-    if (type === 'batch-pack' && Array.isArray(b.ids)) {
-      const ids = b.ids.map(idOrNull);
-      const newId = idOrNull(b.new_id);
-      if (ids.length < 2 || ids.length > 50 || ids.some((x) => !x))
-        return no('invalid id list');
-      if (!newId) return no('invalid new id');
-      const title = cleanText(b.title, 200);
-      return run(
-        ['batch', 'pack', ...ids, '--id', newId, ...(title ? ['--title', title] : [])],
-        `batch pack ${ids.join(' ')} → ${newId}`,
-      );
-    }
-    // The gear's switches: the same `ravenseat board-setting cloud|blocked on|off` Claude Code runs (queue.json board.showCloud
-    // and board.blockedColumn).
-    // The gear's Cloud section: the same commands Claude Code runs. cloud set checks the value.
-    if (type === 'cloud-switch') {
-      if (typeof b.on !== 'boolean') return no('invalid cloud switch');
-      return run(['cloud', b.on ? 'on' : 'off'], `cloud ${b.on ? 'on' : 'off'}`);
-    }
-    if (type === 'cloud-setting') {
-      const key = cleanText(b.key, 40);
-      const value = cleanText(String(b.value ?? ''), 40);
-      if (!key || !value) return no('invalid cloud setting');
-      // The weakening rule, as in /api/setting: collect auto weakens a guard (owner decision 2026-11-12), so it is refused
-      // with 422 and the row's texts until the dialog's yes; then the owner's flags go to the CLI, which logs the row.
-      // A key or value the registry does not know goes to cloud set unchanged, which refuses it with its own message.
-      const row = R.rowFor(`cloud.${key}`);
-      const p = row ? SV.parseValue(row, value, {}) : null;
-      if (row && p && !('error' in p)) {
-        const queue = queueNow();
-        const w = weakenCheck(row, p.value, queue, b);
-        if (w) return w;
-        if (b.confirm === 'weaken' && needsWeakenConfirm(row, p.value, queue))
-          return run(['cloud', 'set', key, value, '--i-understand', '--by', 'owner'], `cloud set ${key} ${value} (weakened, confirmed)`);
-      }
-      return run(['cloud', 'set', key, value], `cloud set ${key} ${value}`);
-    }
-    // The board switches the gear can set, and the word `ravenseat board-setting` takes for each. Any other name is refused.
-    if (type === 'board-switch') {
-      const word = { showCloud: 'cloud', blockedColumn: 'blocked' }[b.name];
-      if (typeof b.name !== 'string' || !Object.hasOwn(KK.BOARD_SWITCHES, b.name) || !word || typeof b.on !== 'boolean')
-        return no('invalid board switch');
-      return run(['board-setting', word, b.on ? 'on' : 'off'], `board-setting ${word} ${b.on ? 'on' : 'off'}`);
-    }
-    const id = idOrNull(b.id);
-    if (!id) return no('invalid id');
-    // "Started in cloud", "Completed in cloud" and "Cancel cloud" go via queue.mjs cloud … (the suitability, the git check of
-    // the branch and the limit on cloud sessions are there).
-    if (type === 'cloud-start') {
-      const execution = cleanText(b.execution, 300);
-      if (execution && /\s/.test(execution)) return no('the link or session id cannot contain whitespace');
-      return run(
-        ['cloud', 'start', id, ...(execution ? ['--run', execution] : [])],
-        `cloud start ${id}`,
-      );
-    }
-    if (type === 'cloud-done') {
-      const branch = cleanText(b.branch, 100);
-      if (branch && (!BRANCH_PATTERN.test(branch) || branch.includes('..'))) return no('invalid branch name');
-      return run(['cloud', 'done', id, ...(branch ? ['--branch', branch] : [])], `cloud done ${id}`);
-    }
-    if (type === 'cloud-cancel') return run(['cloud', 'cancel', id], `cloud cancel ${id}`);
-    // "Flag for the orchestrator" on stuck work in the Decisions view: a blocker reason (ravenseat block <id> other) with a
-    // fixed note, the same command /ravenseat:decide runs (lib/queueDecisions.js cliArgs). Never over an open blocker.
-    if (type === 'requeue') return run(['set', id, 'waiting'], `set ${id} waiting (started without an agent)`);
-    if (type === 'flag-stuck') {
-      const o = (queueNow().tasks ?? []).find((x) => x.id === id);
-      if (!o) return no(`unknown task ${id}`);
-      if (L.openBlockOf(o)) return no(`${id} already has an open blocker (${L.openBlockOf(o).code})`);
-      return run(['block', id, 'other', '--note', DEC.FLAG_NOTE], `block ${id} other (flagged stuck)`);
-    }
-    // The context the guard rules need: the orchestrator cursor (pick) and commits on the branch (release).
-    const queue = queueNow();
-    const o = (queue.tasks ?? []).find((x) => x.id === id);
-    const context = {};
-    if (type === 'pick') context.orchestrator = L.orchestratorStatus(readJson(CURSOR));
-    if (type === 'release' && o) {
-      const branch = branchFor(o);
-      context.branches = { [branch]: branchInfo(branch) };
-      context.branchPrefix = BRANCH_PREFIX;
-    }
-    const v = guard(queue, { type, id, text: b.text }, context, b);
-    if (v.stop) return v.stop;
-    info = v.info;
-    if (type === 'pick') {
-      const by = cleanText(b.by, 60);
-      if (!by) return no('write who is picking');
-      return run(['pick', id, '--by', by], `pick ${id}`);
-    }
-    if (type === 'release') return run(['release', id], `release ${id}`);
-    if (type === 'qa-ok') return run(['qa', 'ok', id, '--by', 'owner'], `qa ok ${id}`);
-    if (type === 'approve') return run(['approve', id, '--by', 'owner'], `approve ${id}`);
-    if (type === 'track-answer') {
-      const text = cleanText(b.text, 2000);
-      if (!text) return no('write your answer');
-      return run(['resume', id, '--reason', 'context', '--answer', text, '--by', 'owner'], `resume ${id} with the owner's answer`);
-    }
-    if (type === 'qa-deviation') {
-      const text = cleanText(b.text, 2000);
-      if (!text) return no('write what is wrong, and where');
-      return run(['qa', 'deviation', id, text, '--by', 'owner'], `qa deviation ${id}`);
-    }
-    return no(`unknown action ${type}`);
-  }
+  // "Since you left": the seen mark (AW-3).
+  if (filePath === '/api/seen') return seen(b, c);
+  // The update banner's X: the same dismissal as `ravenseat update dismiss`.
+  if (filePath === '/api/update-dismiss') return updateDismiss(b, c);
+  // A card dragged on the board, and a project lane (tasks.mjs).
+  if (filePath === '/api/move') return move(b, c);
+  // The gear, the Checks tab, the helper agents and auto-accept (settings.mjs).
+  if (filePath === '/api/limit') return limit(b, c);
+  if (filePath === '/api/setting') return setting(b, c);
+  if (filePath === '/api/guidance') return guidance(b, c);
+  if (filePath === '/api/checks') return checks(b, c);
+  if (filePath === '/api/helper') return helper(b, c);
+  if (filePath === '/api/proposals') return proposals(b, c);
+  if (filePath === '/api/proposals-undo') return proposalsUndo(b, c);
+  if (filePath === '/api/helper-add') return helperAdd(b, c);
+  if (filePath === '/api/lane') return lane(b, c);
+  // The card and inbox actions: pause, resolve, QA, approve, pick, release, batch, cloud, switches (actions.mjs).
+  if (filePath === '/api/action') return action(b, c);
   return { status: 404, answer: { ok: false, message: 'unknown address' } };
 }
-
-// ---- Follow up: read only ----------------------------------------------------------------------------------------
-/** The entries with the status as it applies today (queueFollow.effectiveStatus), the open ones first, and the lines show prints. */
-function followData() {
-  const reg = fs.existsSync(FOLLOW_FILE)
-    ? F.normalize(JSON.parse(fs.readFileSync(FOLLOW_FILE, 'utf8')))
-    : F.emptyRegister();
-  return F.boardData(reg, F.dayDate(new Date()));
-}
-
-// The page is a shell without data (CSP: only script and style from 'self'); the script fetches /api/follow with the key
-// (the same sessionStorage key as the board) and builds the view with textContent, never innerHTML, so text from the
-// entries is never read as HTML. Colors from /theme.css (the palette in lib/queueBoard.js), light and dark.
-// A function: escHtml and TITLE are defined further down (and the title is read once per request, which is cheap).
-const followHtml = () => `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Follow up · ${escHtml(TITLE)}</title>
-<link rel="stylesheet" href="/theme.css">
-<link rel="stylesheet" href="/follow.css">
-</head>
-<body>
-<header><h1>Follow up</h1><a href="/">Back to the queue</a></header>
-<p id="lines" class="lines"></p>
-<main id="entries"><p>Loading ...</p></main>
-<script src="/follow.js"></script>
-</body>
-</html>
-`;
-const FOLLOW_CSS = `body { font-family: system-ui, sans-serif; margin: 0 auto; max-width: 960px; padding: 16px;
-  background: var(--color-surface-container-low); color: var(--color-on-surface); }
-header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
-a { color: var(--color-primary); }
-.lines { white-space: pre-line; color: var(--color-on-surface-variant); }
-article { background: var(--color-surface-container-lowest); border: 1px solid var(--color-outline-variant);
-  border-radius: 12px; padding: 12px 16px; margin: 12px 0; }
-article.to-report { border-color: var(--color-error); }
-.status { font-weight: 600; }
-article.to-report .status { color: var(--color-error); }
-h2 { font-size: 1.05rem; margin: 0 0 4px; overflow-wrap: anywhere; }
-ul { margin: 4px 0 8px; padding-left: 20px; }
-li, p { overflow-wrap: anywhere; }
-.small { color: var(--color-on-surface-variant); font-size: 0.9rem; }
-`;
-const FOLLOW_JS = `'use strict';
-(function () {
-  var KEY = 'queue-board-key';
-  function getKey() {
-    var m = /[#&]key=([A-Za-z0-9_-]+)/.exec(location.hash);
-    if (m) {
-      sessionStorage.setItem(KEY, m[1]);
-      history.replaceState(null, '', location.pathname + location.search);
-    }
-    return sessionStorage.getItem(KEY);
-  }
-  function el(tag, text, cls) {
-    var e = document.createElement(tag);
-    if (text != null) e.textContent = text;
-    if (cls) e.className = cls;
-    return e;
-  }
-  function list(rows) {
-    var ul = el('ul');
-    rows.forEach(function (r) { ul.appendChild(el('li', r)); });
-    return ul;
-  }
-  function values(l) {
-    if (!l.values) return '';
-    return ' [' + Object.keys(l.values).map(function (k) { return k + '=' + l.values[k]; }).join(', ') + ']';
-  }
-  function entry(p) {
-    var a = el('article', null, p.status);
-    a.appendChild(el('h2', p.id + ': ' + p.title));
-    var st = p.decided ? 'closed (' + p.status + ')' : p.status === 'to-report' ? 'TO REPORT' : p.status;
-    a.appendChild(el('div', st + ' · ' + p.start + ' -> ' + p.end + ' · owner ' + p.owner, 'status'));
-    a.appendChild(el('p', p.why));
-    a.appendChild(el('div', 'Goals', 'small'));
-    a.appendChild(list(p.goals.map(function (m) {
-      return m.name + ': ' + m.how + ' (expected: ' + m.expected + ')';
-    })));
-    var log = p.log.slice(-10).map(function (l) {
-      return String(l.at).slice(0, 16).replace('T', ' ') + ' ' + l.source + ': ' + (l.text || '') + values(l);
-    });
-    a.appendChild(el('div', 'Log (' + p.log.length + (p.log.length > 10 ? ', the last 10' : '') + ')', 'small'));
-    a.appendChild(log.length ? list(log) : el('p', '(empty)', 'small'));
-    if (p.decision) a.appendChild(el('p', 'Owner decision: ' + p.decision));
-    if (p.report) a.appendChild(el('p', 'Report: ' + p.report, 'small'));
-    else if (p.status === 'to-report') a.appendChild(el('p', 'Run: ravenseat follow report ' + p.id, 'small'));
-    return a;
-  }
-  var target = document.getElementById('entries');
-  fetch('/api/follow', { headers: { 'X-Queue-Key': getKey() || '' } })
-    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
-    .then(function (s) {
-      target.textContent = '';
-      if (!s.ok) { target.appendChild(el('p', s.d.message || 'Could not fetch the follow-up entries.')); return; }
-      document.getElementById('lines').textContent = s.d.lines.join('\\n');
-      if (!s.d.entries.length)
-        target.appendChild(el('p', 'No follow-up entries. Add one: ravenseat follow add --file <json>.'));
-      s.d.entries.forEach(function (p) { target.appendChild(entry(p)); });
-    })
-    .catch(function () { target.textContent = 'Could not fetch the follow-up entries.'; });
-})();
-`;
-// path -> [type, () => body]
-const FOLLOW_PAGE = {
-  '/follow': ['text/html; charset=utf-8', followHtml],
-  '/follow.css': ['text/css; charset=utf-8', () => FOLLOW_CSS],
-  '/follow.js': ['text/javascript; charset=utf-8', () => FOLLOW_JS],
-};
 
 // ---- HTTP -------------------------------------------------------------------------------------------------------
 const SECURITY = {
@@ -3624,7 +2079,7 @@ function resetCaches() {
   backtestCache = { key: null, data: null };
   planCache = null;
   tidyCache = null;
-  checkCache = null;
+  resetPlanCheck();
   demoCountCache = { key: null, count: 0, archived: 0 };
   // The live update watched the old data folder: close it (the next wait watches the new one) and answer the waiters.
   if (planGuard) {
@@ -3756,6 +2211,63 @@ async function writeOrDemo(filePath, b) {
   return write(filePath, b);
 }
 
+// ---- The route modules (queue-board/api/) ---------------------------------------------------------------------
+// ctx is what the handlers read from this file: the live paths and caches as getters (demo mode switches them, so a
+// handler reads the value of the moment, as it did when it lived here), the two cache resets, the constants, the data
+// builders, the JSON answer and the write plumbing (writeTools.mjs). It is built once and copies nothing.
+const ctx = {
+  get FILE() {
+    return FILE;
+  },
+  get FOLDER() {
+    return FOLDER;
+  },
+  get CURSOR() {
+    return CURSOR;
+  },
+  get PLAN_FILE() {
+    return PLAN_FILE;
+  },
+  get SOURCE_ROOT() {
+    return SOURCE_ROOT;
+  },
+  get FOLLOW_FILE() {
+    return FOLLOW_FILE;
+  },
+  get demoOn() {
+    return demoOn;
+  },
+  get planSearch() {
+    return planSearch;
+  },
+  get realConfig() {
+    return realConfig;
+  },
+  get planCache() {
+    return planCache;
+  },
+  clearQuick() {
+    quick = null;
+  },
+  clearChecksReport() {
+    checksReport = { time: 0, report: null };
+  },
+  BRANCH_PATTERN, BRANCH_PREFIX, CONFIG, DEMO_PATHS, FEATURES, MAIN_TREE, QUEUE_MJS, REAL, ROOT, TITLE, UPDATE_CACHE,
+  branchFor, branchInfo, checksReportNow, demoNow, escHtml, historyFor, json, missionFor, planEffectOf, plans,
+  readJson, scheduleData, setup, sinceData, state, statistics, tidySummary, uncommitted, waitOnPlans, write,
+};
+const WRITE_TOOLS = writeTools(ctx);
+Object.assign(ctx, WRITE_TOOLS);
+const { queueMjs, oneAtATime } = WRITE_TOOLS;
+const { getState, getFollow, getSince, getSchedule, getStatistics, seen } = viewRoutes(ctx);
+const { bulk, undo, taskEdit, move, lane, getTask, getArchive } = taskRoutes(ctx);
+const { focus, area } = focusRoutes(ctx);
+const { planPrioritize, planNew, planSource, getPlans, getPlanSearch, getDoc, getPlanCheck } = planRoutes(ctx);
+const { planCapture, planProposal, planBulk, planUndo, lawyerPackageWrite } = planEditRoutes(ctx);
+const { action, getCloudPackage, getCloudBundles } = actionRoutes(ctx);
+const { updateDismiss, limit, setting, guidance, checks, helper, proposals, proposalsUndo, helperAdd, getChecks, getSettings } =
+  settingRoutes(ctx);
+
 const server = http.createServer(async (req, res) => {
   try {
     // DNS rebinding: a foreign page that points its name to 127.0.0.1 sends its own Host.
@@ -3819,7 +2331,7 @@ const server = http.createServer(async (req, res) => {
       // Follow up: the read view (the shell without data; the data is fetched from /api/follow behind the key).
       if (FOLLOW_PAGE[filePath] && FEATURES.follow) {
         const [type, body] = FOLLOW_PAGE[filePath];
-        return send(res, 200, type, body(), { 'Cache-Control': 'no-cache' });
+        return send(res, 200, type, body(ctx), { 'Cache-Control': 'no-cache' });
       }
       if (STATIC[filePath]) {
         const [file, type] = STATIC[filePath];
@@ -3869,214 +2381,22 @@ const server = http.createServer(async (req, res) => {
       if (no) return json(res, no.status, no.answer);
     }
 
-    if (req.method === 'GET' && filePath === '/api/state') {
-      try {
-        const t = state();
-        // The demo field is outside the state cache (the offer follows the real queue and demo-offer.json), so it is part
-        // of the version: a change in it reaches the open board on its next poll.
-        const demo = demoNow(demoOn ? realConfig : KK.config({ fresh: true }));
-        const version = `${t.version}|demo:${demo.on ? 1 : 0}${demo.offer ? 1 : 0}${demo.setting ? 1 : 0}`;
-        if (url.searchParams.get('version') === version) return json(res, 200, { version, unchanged: true });
-        return json(res, 200, { version, data: { ...t.data, demo } });
-      } catch (e) {
-        return json(res, 503, {
-          ok: false,
-          message: `Could not read the queue (${e?.code ?? e?.message ?? 'unknown error'}).`,
-        });
-      }
-    }
-    if (req.method === 'GET' && filePath === '/api/follow' && FEATURES.follow) {
-      try {
-        return json(res, 200, followData());
-      } catch (e) {
-        return json(res, 503, {
-          ok: false,
-          message: `Could not read the follow-up entries (${e?.code ?? e?.message ?? 'unknown error'}).`,
-        });
-      }
-    }
-    // "Since you left" (AW-2): ?window=last-seen|24h|7d (else the setting), ?from=<ms> keeps the visit's window.
-    if (req.method === 'GET' && filePath === '/api/since') {
-      try {
-        const w = url.searchParams.get('window');
-        const f = Number(url.searchParams.get('from'));
-        return json(res, 200, sinceData({ choice: AWAY.WINDOWS.includes(w) ? w : null, from: url.searchParams.has('from') && Number.isFinite(f) ? f : null }));
-      } catch (e) {
-        return json(res, 503, { ok: false, message: `Could not build "Since you left" (${e?.code ?? e?.message ?? 'unknown error'}).` });
-      }
-    }
-    // The Timeline tab (T-A): the schedule played forward, read only. "unchanged" when the client has this version.
-    if (req.method === 'GET' && filePath === '/api/schedule') {
-      try {
-        const d = scheduleData();
-        if (url.searchParams.get('version') === d.version) return json(res, 200, { version: d.version, unchanged: true });
-        return json(res, 200, { ok: true, version: d.version, data: d });
-      } catch (e) {
-        return json(res, 503, {
-          ok: false,
-          message: `Could not build the timeline (${e?.code ?? e?.message ?? 'unknown error'}).`,
-        });
-      }
-    }
-    if (req.method === 'GET' && filePath === '/api/statistics') {
-      try {
-        const s = statistics();
-        if (url.searchParams.get('version') === s.version)
-          return json(res, 200, { version: s.version, unchanged: true });
-        return json(res, 200, { version: s.version, data: s.data });
-      } catch (e) {
-        return json(res, 503, {
-          ok: false,
-          message: `Could not build the statistics (${e?.code ?? e?.message ?? 'unknown error'}).`,
-        });
-      }
-    }
-    // The Plans space (read only). "unchanged" when nothing is new since the version the client has.
-    if (req.method === 'GET' && filePath === '/api/plans') {
-      try {
-        let pl = plans();
-        // Wait=1 holds the response until something has changed (live update).
-        if (
-          url.searchParams.get('wait') === '1' &&
-          url.searchParams.get('version') === pl.version
-        ) {
-          await waitOnPlans(res);
-          if (res.destroyed || res.writableEnded) return;
-          pl = plans();
-        }
-        if (url.searchParams.get('version') === pl.version)
-          return json(res, 200, { version: pl.version, unchanged: true });
-        return json(res, 200, { version: pl.version, data: pl.data });
-      } catch (e) {
-        return json(res, 503, {
-          ok: false,
-          message: `Could not read the plan register (${e?.code ?? e?.message ?? 'unknown error'}).`,
-        });
-      }
-    }
-    // P5: the plans whose plan document contains the search, with the matching sentence (read only). Only the plan
-    // source of each entry (the document folders), through the /api/doc guard; nothing is read while the Plans room or
-    // plans.searchDocuments is off. The search text is never logged and never part of an error message.
-    if (req.method === 'GET' && filePath === '/api/plan-search') {
-      try {
-        const pl = plans();
-        if (!FEATURES.plans || pl.data.view?.searchDocuments === false)
-          return json(res, 200, { ok: true, enabled: false, hits: [], partial: false });
-        const r = planSearch(pl.data.entries ?? [], String(url.searchParams.get('q') ?? '').slice(0, 120));
-        return json(res, 200, { ok: true, enabled: true, version: pl.version, ...r });
-      } catch (e) {
-        return json(res, 503, {
-          ok: false,
-          message: `Could not search the plan documents (${e?.code ?? 'unknown error'}).`,
-        });
-      }
-    }
-    // One markdown document for the reading view (read only; the path guard is queueBoard.readDocument).
-    if (req.method === 'GET' && filePath === '/api/doc') {
-      const r = T.readDocument(SOURCE_ROOT, url.searchParams.get('path'), { fs, path });
-      if (!r.ok) return json(res, r.status, { ok: false, message: r.message });
-      return json(res, 200, r);
-    }
-    // The Unregistered box (= queue.mjs plan check --json, only the unregistered documents).
-    if (req.method === 'GET' && filePath === '/api/plan-check') {
-      const r = await planCheck();
-      return json(res, r.ok ? 200 : 503, r);
-    }
-    if (req.method === 'GET' && filePath === '/api/checks') {
-      const r = await checksReportNow(url.searchParams.get('fresh') === '1');
-      return json(res, r.ok ? 200 : 503, r);
-    }
-    if (req.method === 'GET' && filePath === '/api/settings') {
-      try {
-        const queue = JSON.parse(fs.readFileSync(FILE, 'utf8'));
-        const stat = statistics().data;
-        // Fresh: `settings set` and `mode` change queue.config.json through the CLI, so the file is what counts.
-        const config = KK.config({ fresh: true });
-        const mode = config.mode === 'lite' ? 'lite' : 'full';
-        const migrations = !!config.migrations?.folder;
-        return json(res, 200, {
-          ok: true,
-          mode,
-          field: T.settings(queue, { migrations, mode }),
-          // Every registry row by category (lib/settingsView.js): value, default, storage place, Advanced and full-only
-          // marks, and the weakened guards for the banner.
-          registry: T.settingsGroups(queue, { config, migrations }),
-          guidance: require('./lib/guidance.js').modeOf(queue),
-          checksPanel: require('./lib/guidance.js').checksPanelOn(queue),
-          usageToday: stat.keyFigures.usageToday,
-          night: L.nightGuard(queue),
-          setup: setup(queue, stat),
-          // Settings > Project: what `ravenseat tidy --execute` would remove (the doctor's count) and the command.
-          tidy: tidySummary(queue, config),
-          // The "Helper agents" tab: one row per helper with the switch, when it runs and the measurement.
-          // A custom helper is checked against its approved sha256 (Needs review, Changed since approval).
-          helpers: HELP.helperRows(CONFIG, queue, { hashes: HF.currentHashes(CONFIG, queue, MAIN_TREE) }),
-          // "Auto-accept proposals": the rules in force and the log with Undo per row (lib/queueProposals.js).
-          autoAccept: PR.boardData(CONFIG.proposals?.autoAccept, queue),
-        });
-      } catch (e) {
-        return json(res, 503, {
-          ok: false,
-          message: `Could not read the settings (${e?.code ?? e?.message ?? 'unknown error'}).`,
-        });
-      }
-    }
-    if (req.method === 'GET' && filePath === '/api/task') {
-      const id = idOrNull(url.searchParams.get('id'));
-      if (!id) return json(res, 400, { ok: false, message: 'invalid id' });
-      const queue = JSON.parse(fs.readFileSync(FILE, 'utf8'));
-      // An archived task (lib/queueArchive.js) is found too, read-only and marked so.
-      const o = (queue.tasks ?? []).find((x) => x.id === id) ?? QARCH.lookup(FOLDER, id);
-      if (!o) return json(res, 404, { ok: false, message: `unknown task ${id}` });
-      const mission = missionFor(o);
-      const branch = branchFor(o);
-      const archived = o.archived_at ? { archived: true, archived_at: o.archived_at, task: o } : {};
-      // The description (or null) and the task's own sources ({ path, anchor, role }), drawn as text by the panel.
-      return json(res, 200, {
-        ok: true,
-        mission,
-        branch: { name: branch, ...branchInfo(branch) },
-        ...DESC.panelFields(o),
-        ...archived,
-        // J5: the card's History (lib/taskHistory.js), ids, codes, counts and times only; null = could not be built.
-        history: historyFor(o, queue),
-      });
-    }
-    // The archived tasks (lib/queueArchive.js) for the board's history and search: ?q= matches id, title, project and
-    // feature (case blind), newest first, at most 50. Read-only.
-    if (req.method === 'GET' && filePath === '/api/archive') {
-      const q = String(url.searchParams.get('q') ?? '').trim().toLowerCase().slice(0, 100);
-      const all = QARCH.load(FOLDER).tasks;
-      const hit = (o) => !q || [o.id, o.title, o.project, o.feature].some((v) => String(v ?? '').toLowerCase().includes(q));
-      const tasks = all
-        .filter(hit)
-        .sort((x, y) => String(y.done ?? y.archived_at ?? '').localeCompare(String(x.done ?? x.archived_at ?? '')))
-        .slice(0, 50)
-        .map((o) => ({ id: o.id, title: o.title ?? null, status: o.status, project: o.project ?? null, feature: o.feature ?? null, done: o.done ?? null, archived_at: o.archived_at ?? null }));
-      return json(res, 200, { ok: true, total: all.length, tasks });
-    }
-    // The cloud package ("Copy cloud package"), made by queue.mjs cloud-package (which refuses when the task is not suitable).
-    // Several ids (?id=A&id=B) = a bundle in one cloud session; the cap (4 tasks, about 120 min) is enforced by queue.mjs.
-    if (req.method === 'GET' && filePath === '/api/cloudPackage') {
-      const ids = url.searchParams.getAll('id').map(idOrNull);
-      if (!ids.length || ids.length > 10 || ids.some((x) => !x))
-        return json(res, 400, { ok: false, message: 'invalid id' });
-      const r = await queueMjs(['cloud-package', ...ids]);
-      if (!r.ok) return json(res, 409, { ok: false, message: r.error || 'ravenseat cloud-package failed' });
-      return json(res, 200, { ok: true, text: r.out });
-    }
-
-    // The "Cloud" view: proposed bundles with a ready cloud start command (= `queue.mjs cloud-bundles --json`).
-    if (req.method === 'GET' && filePath === '/api/cloud-bundles') {
-      const r = await queueMjs(['cloud-bundles', '--json']);
-      if (!r.ok)
-        return json(res, 500, { ok: false, message: r.error || 'ravenseat cloud-bundles failed' });
-      try {
-        return json(res, 200, { ok: true, data: JSON.parse(r.out) });
-      } catch {
-        return json(res, 500, { ok: false, message: 'invalid response from ravenseat cloud-bundles' });
-      }
-    }
+    // The read routes: each GET /api/ path and its handler in queue-board/api/.
+    if (req.method === 'GET' && filePath === '/api/state') return await getState(req, res, url);
+    if (req.method === 'GET' && filePath === '/api/follow' && FEATURES.follow) return await getFollow(req, res, url);
+    if (req.method === 'GET' && filePath === '/api/since') return await getSince(req, res, url);
+    if (req.method === 'GET' && filePath === '/api/schedule') return await getSchedule(req, res, url);
+    if (req.method === 'GET' && filePath === '/api/statistics') return await getStatistics(req, res, url);
+    if (req.method === 'GET' && filePath === '/api/plans') return await getPlans(req, res, url);
+    if (req.method === 'GET' && filePath === '/api/plan-search') return await getPlanSearch(req, res, url);
+    if (req.method === 'GET' && filePath === '/api/doc') return await getDoc(req, res, url);
+    if (req.method === 'GET' && filePath === '/api/plan-check') return await getPlanCheck(req, res, url);
+    if (req.method === 'GET' && filePath === '/api/checks') return await getChecks(req, res, url);
+    if (req.method === 'GET' && filePath === '/api/settings') return await getSettings(req, res, url);
+    if (req.method === 'GET' && filePath === '/api/task') return await getTask(req, res, url);
+    if (req.method === 'GET' && filePath === '/api/archive') return await getArchive(req, res, url);
+    if (req.method === 'GET' && filePath === '/api/cloudPackage') return await getCloudPackage(req, res, url);
+    if (req.method === 'GET' && filePath === '/api/cloud-bundles') return await getCloudBundles(req, res, url);
 
     if (req.method !== 'POST') return json(res, 405, { ok: false, message: 'unknown method' });
     // A write call must come from the board itself: Origin and a JSON body. A browser always sends Origin on a POST, so
