@@ -34,7 +34,10 @@ function abs(p, { platform = process.platform } = {}) {
     const gb = /^\/([a-zA-Z])(\/|$)/.exec(s);
     if (gb) s = `${gb[1]}:/${s.slice(3)}`;
   }
-  return path.resolve(s).replace(/\\/g, '/').replace(/(.)\/+$/, '$1');
+  // win32 rules for a win32 path also when the host is not Windows (a simulated platform in tests, CI on Linux):
+  // path.resolve on Linux reads "C:/x" as a relative name. On a Windows host path.win32 is path, so nothing changes.
+  const resolve = platform === 'win32' ? path.win32.resolve : path.resolve;
+  return resolve(s).replace(/\\/g, '/').replace(/(.)\/+$/, '$1');
 }
 
 /** The real path of the longest part of `a` (abs form) that exists, with the rest appended as written. */
