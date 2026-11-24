@@ -901,3 +901,7 @@ serves only the files in its allow list (`STATIC`), all with the same strict Con
 - `api/`: the server's `/api/*` route handlers, one module per route group (tasks, focus, plans, plan edits,
   actions, settings, views, and the shared write tools). `queue-board.mjs` stays the entry point and route map; these
   files run only on the server and are never served (`STATIC` is an allow list).
+- `data/`: what those routes send, built on the server, one module per group: `tracks.mjs` (git, base health, push
+  batch and the agent badges), `state.mjs` (the board's state), `statistics.mjs` (the time log, Statistics, History,
+  Timeline and "Since you left"), `plans.mjs` (the plan register and its live update) and `setup.mjs` (the update
+  banner and the setup panel). Each keeps its own caches; like `api/`, never served.

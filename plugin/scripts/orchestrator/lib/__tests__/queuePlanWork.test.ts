@@ -706,7 +706,8 @@ describe('the wiring (index.html, queue-board.mjs and the new files)', () => {
     expect(server).toMatch(/filePath === '\/api\/plan-bulk'\) return planBulk\(b\)/);
     expect(server).toMatch(/filePath === '\/api\/plan-undo'\) return planUndo\(b\)/);
     expect(plansApi).toMatch(/searchParams\.get\('wait'\) === '1'/);
-    expect(server).toMatch(/fs\.watch\(FOLDER/);
+    // The live update's watcher lives in queue-board/data/plans.mjs since SPLIT-1b (the live data folder via ctx).
+    expect(readFileSync(join(CLIENT, 'data', 'plans.mjs'), 'utf8')).toMatch(/fs\.watch\(ctx\.FOLDER/);
     const bulk = planEdits.slice(
       planEdits.indexOf('async function planBulk'),
       planEdits.indexOf('async function planUndo'),

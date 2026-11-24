@@ -113,9 +113,17 @@
 // are read from).
 //
 // Where the parts live (SPLIT-1). This file is the entry point: it reads the arguments and the config, keeps the live
-// paths and caches (demo mode switches them), builds the state, statistics, plans and schedule data, serves the static
-// files and /open, runs demo mode, and maps every /api/ route to its handler (write() for POST, the GET lines in the
-// server). The handlers live in queue-board/api/, one module per route group:
+// paths (demo mode switches them), serves the static files, the logo, the mascot and /open, runs demo mode, starts the
+// server, and maps every /api/ route to its handler (write() for POST, the GET lines in the server). The data the routes
+// send is built in queue-board/data/ (SPLIT-1b), one module per group, each with its own caches and reset:
+//   tracks.mjs      the git reads (branches, git status, base health, push batch, reverted commits) and the agent
+//                   badges (silent, spinning, without an agent, waiting on approval, tool trouble, reviews k/n)
+//   state.mjs       state() for GET /api/state, the Checks report, the zones per task, missionFor
+//   statistics.mjs  the time log rows, statistics(), usage, a card's History, the Timeline (scheduleData,
+//                   planEffectOf) and "Since you left" (sinceData)
+//   plans.mjs       plans() for GET /api/plans, the plan document readers, the live update (waitOnPlans)
+//   setup.mjs       the update banner, the setup panel, the tidy line, readJson
+// The handlers live in queue-board/api/, one module per route group:
 //   writeTools.mjs  the write plumbing: the queue.mjs runner, the write chain, the input checks, edit-many, the guard
 //                   rules and the weakening rule
 //   views.mjs       GET /api/state, since, schedule, statistics, follow; POST /api/seen; the Follow up page
@@ -126,12 +134,12 @@
 //   actions.mjs     POST /api/action; GET /api/cloudPackage, cloud-bundles
 //   settings.mjs    POST /api/limit, setting, guidance, checks, helper, helper-add, proposals, proposals-undo,
 //                   update-dismiss; GET /api/settings, checks
-// Every handler gets `ctx` (built once, just above the server) and a write also the per-call tools write() builds.
+// Every data module and handler gets `ctx` (built once, just above the server) and a write also the per-call tools
+// write() builds. Both folders run only on the server and are never served (STATIC is an allow list).
 // =============================================================
 
 import http from 'node:http';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import zlib from 'node:zlib';
@@ -147,68 +155,24 @@ import { planRoutes, resetPlanCheck } from './queue-board/api/plans.mjs';
 import { planEditRoutes } from './queue-board/api/planEdits.mjs';
 import { actionRoutes } from './queue-board/api/actions.mjs';
 import { settingRoutes } from './queue-board/api/settings.mjs';
+import { tracksData } from './queue-board/data/tracks.mjs';
+import { stateData } from './queue-board/data/state.mjs';
+import { statisticsData } from './queue-board/data/statistics.mjs';
+import { plansData } from './queue-board/data/plans.mjs';
+import { setupData } from './queue-board/data/setup.mjs';
 
 const require = createRequire(import.meta.url);
-const CS = require('./lib/cloudSetup.js');
 const T = require('./lib/queueBoard.js');
-const G = require('./lib/queueGit.js');
-const L = require('./lib/queueLogic.js');
-const S = require('./lib/queueStatistics.js');
-// The reworked Statistics sections (top row, Cost and tokens, Machine, Quality), the finding log and the quota reading.
-const SX = require('./lib/statisticsSections.js');
-const FL = require('./lib/findingLog.js');
-const RL = require('./lib/rateLimits.js');
-const TK = require('./lib/timeCost.js');
-// The flow rows (fixRound, mergeConflict, baseGate, triage, push, load) and their figures for the Statistics tab.
-const ER = require('./lib/eventRows.js');
-const GL = require('./lib/guardLog.js');
-const ES = require('./lib/eventStatistics.js');
-// The Plans space. The register is read with queuePlan.js, and what the board needs is made by queuePlanView.js (read only).
-const P = require('./lib/queuePlan.js');
-const PRIVACY = require('./lib/queuePlanView.js');
 const KK = require('./lib/queueConfig.js');
-// The mascot's rules (the same file the browser gets at /queueMascot.js) and the weekly quota (the forecast).
+// The mascot's rules (the same file the browser gets at /queueMascot.js).
 const M = require('./lib/queueMascot.js');
-const KAP = require('./lib/queueCapacity.js');
 // The update banner (a newer plugin version, or setup not run after an update). Served to the browser as /queueUpdate.js.
 const U = require('./lib/queueUpdate.js');
-// `ravenseat wait`'s heartbeat (lib/ownerWait.js): "Orchestrator listening" in "Waiting on you" while it is fresh.
-const OW = require('./lib/ownerWait.js');
-// The project catalog's settings (catalog.captureAnswers: "Keep as design choice" in Decisions, roadmap 0z Z-A).
-const CATALOG = require('./lib/catalog.js');
-// "Not building" in Decisions (roadmap 0f, lib/notBuilding.js boardEntries): the catalog's entries, read only.
-const NOT_BUILDING = require('./lib/notBuilding.js');
-// The sensitive zones a task meets (PG-5, lib/catalogZones.js): the badge on the card and the panel fact.
-const ZONES = require('./lib/catalogZones.js');
-// The switch for door and blast radius (mergeDanger.show): off hides a stored record from every card.
-const DOOR = require('./lib/doorShow.js');
-
-/**
- * The accepted zones per task for the board (PG-5), or null when zones.detect is off or no zone exists. The board reads
- * no mission files: the inline mission and the description stand in for the mission text.
- */
-function zonesNow(fresh) {
-  if (demoOn) return null; // the demo has no catalog, and the real one is never read for it
-  const zf = ZONES.zonesOnDisk({ root: MAIN_TREE, dataFolder: FOLDER, cfg: fresh });
-  if (zf.empty) return null;
-  return (o) => {
-    const inline = typeof o.mission === 'string' && !/\.md$/i.test(o.mission.trim()) ? o.mission : '';
-    return zf(o, { missionText: [inline, o.description ?? ''].filter(Boolean).join('\n') });
-  };
-}
-// The base gate's verdict (lib/baseHealth.js; ravenseat merge writes base-health.json, the board only reads it).
-const BH = require('./lib/baseHealth.js');
-// The batch push threshold (config().push): the unpushed merged tasks next to the base health in the status line.
-const PB = require('./lib/pushBatch.js');
 
 const CONFIG = KK.config();
 // The modules that are on (features in queue.config.json, resolved once at start): sent with the state, so the board
 // hides what is off. A change in the file needs a restart of the board, like the rest of the configuration.
 const FEATURES = KK.features(CONFIG);
-// The forecast box (Focus view, Statistics).
-const FC = require('./lib/queueForecast.js');
-// The decision overview (the flag note for stuck work; the board's Decisions view uses the same file in the browser).
-const DEC = require('./lib/queueDecisions.js');
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 // The project root (two folders above scripts/orchestrator/). The queue lives in the main tree, as for queue.mjs: if the board runs from a
 // worktree, config().root already points to the main tree.
@@ -235,49 +199,9 @@ const DEMO_OFFER = require('./lib/demoOffer.js');
 const DEMO_PATHS = DEMO.paths(REAL.FOLDER);
 /** Is demo mode on? In memory only: a restarted board always starts on the real queue. */
 let demoOn = false;
-// The time log's monthly archives (lib/timeLogArchive.js, owner decision B5): read across them, windowed where it can.
-const TA = require('./lib/timeLogArchive.js');
-// The archive of done tasks (lib/queueArchive.js, owner decision B5): statistics, plans and lookups by id read it too.
+// The archive of done tasks (lib/queueArchive.js, owner decision B5): the demo offer counts the real one.
 const QARCH = require('./lib/queueArchive.js');
-// "Since you left" (roadmap 3e AW-1 to AW-3): the shared join and the server-side seen mark (GET /api/since, POST /api/seen).
-const AWAY = require('./lib/awaySummary.js');
-const SEEN = require('./lib/seenMark.js');
-// The card's History in the detail panel (roadmap 0ø J5, lib/taskHistory.js): only data that already exists.
-const HIST = require('./lib/taskHistory.js');
-// The Timeline tab (roadmap TIDSLINJE T-A): the payload of GET /api/schedule (lib/queueTimeline.js over queueSchedule.js),
-// the quota cap the way `ravenseat schedule` takes it, and the load-aware slots (memory only, no CPU sampling here).
-const QT = require('./lib/queueTimeline.js');
-const SCHED = require('./lib/queueSchedule.js');
-// T-C: the uncertainty band per focus step and the backtest (board.timelineUncertainty).
-const UNC = require('./lib/scheduleUncertainty.js');
-const LOADS = require('./lib/loadSlots.js');
 
-/**
- * The history of one task for /api/task: the queue with its archive, the cached time log rows (flow rows and the track
- * gate runs) and the review rows of the finding log. Null when it cannot be built (the panel then says so; the rest of
- * the answer is unchanged).
- */
-function historyFor(o, queue) {
-  try {
-    const log = timeLogRows();
-    let findings = [];
-    try {
-      findings = FL.read(null, { since: o.added_at ?? null, includeArchive: true }).rows;
-    } catch {
-      findings = []; // no finding log yet: the review rounds are left out
-    }
-    return HIST.taskHistory({ task: o, queue, rows: [...(log.events ?? []), ...(log.trackGates ?? [])], findings, now: Date.now() });
-  } catch {
-    return null;
-  }
-}
-const archiveMtime = () => {
-  try {
-    return fs.statSync(QARCH.archiveFile(FOLDER)).mtimeMs;
-  } catch {
-    return 0;
-  }
-};
 const QUEUE_MJS = path.join(HERE, 'queue.mjs');
 const CLIENT = path.join(HERE, 'queue-board');
 // Base branch (the integration branch) and the remote, for "commits ahead" and "changed since push".
@@ -444,97 +368,8 @@ const openFailedLine = (error) =>
   `Could not open a browser (${error}). Run ${require('./lib/projectRoot.js').cliCommand()} board open when one is ` +
   'available, or set board.hideKey false in queue.config.json to print the link with its key (a weakened guard).';
 
-// ---- The update banner (lib/queueUpdate.js) ------------------------------------------------------------------------
-// The installed version: the plugin manifest (setupSources finds it), or ravenseat-version.json next to the scripts in a vendored
-// install (install.mjs writes it). Read once: a plugin update installs into a new folder, so this board keeps its version.
-const INSTALL = (() => {
-  const src = T.setupSources(HERE, GIT_ROOT, (f) => fs.existsSync(f));
-  let version = null;
-  try {
-    const file = src.manifest ?? path.join(HERE, 'ravenseat-version.json');
-    version = JSON.parse(fs.readFileSync(file, 'utf8')).version ?? null;
-  } catch {
-    version = null;
-  }
-  return { mode: src.mode, version };
-})();
-const UPDATE_CACHE = path.join(FOLDER, 'update-check.json');
-const SETUP_RECORD = path.join(FOLDER, 'setup.json');
-// The published version. Fetched at start and then at most once per 24 hours (the cache on disk); null when unknown,
-// turned off or on any error (no message: the banner simply does not show).
-let latestPublished = null;
-async function refreshLatest() {
-  if (typeof globalThis.fetch !== 'function') return;
-  const r = await U.latestVersion({
-    config: CONFIG,
-    env: process.env,
-    cacheFile: UPDATE_CACHE,
-    fs,
-    fetch: globalThis.fetch,
-  });
-  if (r) latestPublished = r.latest;
-}
-/** What the banner says now (null = nothing). The setup record is read on every state build (a tiny file). */
-const updateNotice = () =>
-  // In demo mode the demo banner has the top; the update notice comes back on the real board.
-  demoOn ? null : U.notice({
-    mode: INSTALL.mode,
-    installed: INSTALL.version,
-    latest: latestPublished,
-    setupVersion: U.readSetupRecord(fs, SETUP_RECORD),
-    projectFolder: MAIN_TREE,
-    // The version closed on the board or with `ravenseat update dismiss` (the same file as the cache).
-    dismissed: U.dismissedVersion(fs, UPDATE_CACHE),
-  });
-
 // ---- The colors (the neutral palette in lib/queueBoard.js) ----------------------------------------------------------
 const THEME_CSS = T.themeCss(T.PALETTE);
-
-// ---- Git (uncommitted files in the main tree, the branches <branchPrefix><id>) ----------------------------------
-const realGitRead = G.makeGit(REAL.GIT_ROOT);
-// Demo mode has no git: every read answers "nothing" (null), so branches and diffs are empty in the demo.
-const gitRead = (args) => (demoOn ? null : realGitRead(args));
-const BRANCH_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,80}$/;
-const BRANCH_PREFIX = String(CONFIG.branchPrefix ?? 'queue/');
-/** The branch a task is built on: `branch` in the queue, otherwise <branchPrefix><id>. */
-const branchFor = (o) => o.branch ?? `${BRANCH_PREFIX}${o.id}`;
-
-/** Commits ahead of baseBranch on the branch and the time of the last one (the same question queue.mjs asks). */
-function branchInfo(branch) {
-  if (!BRANCH_PATTERN.test(branch)) return { exists: false, commits: 0, lastCommit: null };
-  if (gitRead(['rev-parse', '-q', '--verify', `refs/heads/${branch}`]) == null)
-    return { exists: false, commits: 0, lastCommit: null };
-  const commits = Number(String(gitRead(['rev-list', '--count', `${BASE}..${branch}`]) ?? '0').trim());
-  const last = commits > 0 ? String(gitRead(['log', '-1', '--format=%cI', branch]) ?? '').trim() : '';
-  return { exists: true, commits: commits || 0, lastCommit: last || null };
-}
-
-// git status in a large repo takes time: read it again at most every minute.
-// At the same time <remote>/<baseBranch> is read, and the paths changed locally since it (for "Suitable for cloud").
-let gitStatus = { time: 0, uncommitted: [], error: false, pushedHead: null, sincePush: [] };
-function uncommitted() {
-  if (demoOn) return gitStatus; // reset to empty when demo mode starts (useDemo), never read from git in the demo
-  if (Date.now() - gitStatus.time > 60_000) {
-    const u = G.readUncommitted(gitRead);
-    const pushedHead =
-      String(gitRead(['rev-parse', '-q', '--verify', `refs/remotes/${REMOTE}/${BASE}`]) ?? '').trim() ||
-      null;
-    const sincePush = pushedHead
-      ? String(gitRead(['diff', '--name-only', `refs/remotes/${REMOTE}/${BASE}...${BASE}`]) ?? '')
-          .split('\n')
-          .map((s) => s.trim())
-          .filter(Boolean)
-      : [];
-    gitStatus = {
-      time: Date.now(),
-      uncommitted: u ? u.map((x) => x.path) : [],
-      error: u == null,
-      pushedHead,
-      sincePush,
-    };
-  }
-  return gitStatus;
-}
 
 // ---- The logo ---------------------------------------------------------------------------------------------------
 // The project can put its own logo in the queue folder (logo.webp, logo.png or logo.svg, same folder as queue.json, so
@@ -593,1225 +428,6 @@ function mascotPhrases() {
   }
   return r.phrases;
 }
-// The usage from the time log (night cost and the weekly quota), computed again only when the time log has changed.
-let usageCache = { key: null, list: [] };
-function usage() {
-  const log = timeLogRows();
-  if (usageCache.key !== log.key) usageCache = { key: log.key, list: TK.usageEvents(log.rows) };
-  return usageCache.list;
-}
-/** The summary the mascot fills its placeholders from (queueMascot.numbers). null on error (the mascot skips numbers). */
-function mascotNumbers(queue) {
-  try {
-    const events = usage();
-    let quotaPct = null;
-    // Only with a calibrated weekly quota (queue.mjs capacity); otherwise {p} and "quota-90" are skipped.
-    if (queue.capacity?.usd_per_100 != null || queue.capacity?.calibrations?.length) {
-      try {
-        quotaPct = KAP.forecast({ queue, events }).pct;
-      } catch {
-        quotaPct = null;
-      }
-    }
-    return M.numbers(queue, { events, quotaPct });
-  } catch {
-    return null;
-  }
-}
-
-// ---- SILENT tracks (the badge on the card): the same rule as queue.mjs show (queueLogic.silentTracks), measured with
-// lib/trackActivity.js. The measurement (git, a capped mtime walk per running track) is cached for 60 s per task set, so a
-// refresh of the board does not walk the worktrees again.
-let silentCache = { time: 0, key: null, list: [] };
-/** Tracks marked running with no agent (the Decisions card). Cached like the silent ones, since it asks git. */
-const noAgentCache = { time: 0, list: [] };
-function withoutAgentNow(queue) {
-  if (Date.now() - noAgentCache.time < 60_000) return noAgentCache.list;
-  let list = [];
-  try {
-    list = L.noAgentTracks(queue, {
-      worktreeBranches: new Set(G.readWorktrees(gitRead).map((w) => w.branch).filter(Boolean)),
-      reportOf: (o) => L.findTrackReport(o.id, o.scratchpad ? [o.scratchpad] : []).report,
-      rows: () => {
-        try {
-          return TK.readRows(TA.readText(TIME_LOG, { from: TA.activeFrom(queue.tasks) }));
-        } catch {
-          return [];
-        }
-      },
-      lastCommitMs: (o) => {
-        const s = String(gitRead(['log', '-1', '--format=%ct', `refs/heads/${o.branch}`, '--']) ?? '').trim();
-        return /^\d+$/.test(s) ? Number(s) * 1000 : null;
-      },
-    });
-  } catch (e) {
-    console.error(`the agent check failed: ${e?.message ?? e}`);
-  }
-  noAgentCache.time = Date.now();
-  noAgentCache.list = list;
-  return list;
-}
-
-// ---- Tracks that wait on a permission prompt (hook-approval-wait.mjs saves the agent; lib/approvalWait.js) ---------
-/**
- * The running tasks whose agent waits on an approval. The agent is mapped to its task by the time log, and when the log
- * has only the agent id (its start row was written before the transcript existed), by the mission at the start of the
- * agent's transcript.
- */
-/**
- * How an agent id is tied to its running task: the time log first, then the mission at the start of the agent's
- * transcript. Null when no task is running or in review. Shared by the approval waits and the tool trouble.
- */
-function agentMapping(queue) {
-  const running = (queue.tasks ?? []).filter((o) => o.status === 'running' || o.status === 'review').map((o) => o.id);
-  if (!running.length) return null;
-  const AW = require('./lib/approvalWait.js');
-  const ACT = require('./lib/trackActivity.js');
-  let rows = [];
-  try {
-    rows = TK.readRows(TA.readText(TIME_LOG, { from: TA.activeFrom(queue.tasks) }));
-  } catch {
-    rows = []; // no time log yet: the mission in the transcript can still tie the agent to its task
-  }
-  const agentTask = new Map();
-  for (const [id, x] of ACT.agentsByTask(rows, running)) for (const a of x.agents) agentTask.set(a, id);
-  const root = ACT.transcriptsRoot(MAIN_TREE);
-  const taskOf = (agentId) => {
-    const p = ACT.findTranscript(root, agentId);
-    return p ? AW.missionTask(AW.readHead(p), running, TK) : null;
-  };
-  return { agentTask, taskOf, root, ACT };
-}
-
-/** The running tasks whose agent auto mode refused, or that fails the same tool again and again (lib/toolTrouble.js). */
-function toolTroubleNow(queue) {
-  try {
-    const TT = require('./lib/toolTrouble.js');
-    const state = TT.read(FOLDER);
-    if (!Object.keys(state).length) return [];
-    const m = agentMapping(queue);
-    return m ? TT.troubleTasks(state, { agentTask: m.agentTask, taskOf: m.taskOf }) : [];
-  } catch (e) {
-    console.error(`the tool trouble check failed: ${e?.message ?? e}`);
-    return [];
-  }
-}
-
-function approvalNow(queue) {
-  try {
-    const AW = require('./lib/approvalWait.js');
-    const waits = AW.read(FOLDER);
-    if (!Object.keys(waits).length) return [];
-    const m = agentMapping(queue);
-    if (!m) return [];
-    const { agentTask, taskOf, root, ACT } = m;
-    return AW.waitingTasks(waits, {
-      agentTask,
-      taskOf,
-      mtimeOf: (agentId) => {
-        const p = ACT.findTranscript(root, agentId);
-        try {
-          return p ? fs.statSync(p).mtimeMs : null;
-        } catch {
-          return null;
-        }
-      },
-    });
-  } catch (e) {
-    console.error(`the approval check failed: ${e?.message ?? e}`);
-    return [];
-  }
-}
-
-// ---- The review progress on a card in Review (0l bolk 4) ---------------------------------------------------------
-// The merge gate (lib/reviewItems.js reviewGate) stops a merge while a reviewer receive chose has not reported, or
-// reports H>0. The card shows the same verdict as "reviews k/n" before anyone runs merge. The reviewer transcripts are
-// read only when the agents or the receive change (the key), and only the reviewer types: a track transcript is never
-// opened here. review.requireFindings false: no badge, like no gate.
-let reviewsCache = { key: null, list: [] };
-/**
- * A transcript, or null when it is missing or over 50 MB (the CLI reads up to 300 MB, cli/tracks.mjs readTranscript;
- * the board must not stall on one, so a reviewer with a larger transcript shows as missing here, never as reported).
- */
-function readSmallTranscript(filePath) {
-  try {
-    if (!filePath || fs.statSync(filePath).size > 50 * 1024 * 1024) return null;
-    return fs.readFileSync(filePath, 'utf8');
-  } catch {
-    return null;
-  }
-}
-function reviewsNow(queue) {
-  const RI = require('./lib/reviewItems.js');
-  if (!RI.requireOn(CONFIG)) return [];
-  const tasks = (queue.tasks ?? []).filter(
-    (o) => o.status === 'review' && Array.isArray(o.review_reviewers) && o.review_reviewers.length,
-  );
-  if (!tasks.length) return [];
-  try {
-    const ACT = require('./lib/trackActivity.js');
-    let rows = [];
-    try {
-      rows = TK.readRows(TA.readText(TIME_LOG, { from: TA.activeFrom(tasks) }));
-    } catch {
-      /* no time log: no reviewer has reported */
-    }
-    const per = tasks.map((o) => {
-      const { secure, uncertainOnes } = L.agentsForTask(rows, o.id, { from: o.started ?? o.picked_at ?? o.added_at ?? null });
-      const agents = [...secure, ...uncertainOnes.map((x) => ({ ...x, uncertain: true }))].filter(
-        (x) => L.REVIEWER_TYPES.includes(x.type) || o.review_reviewers.includes(x.type),
-      );
-      return { o, agents };
-    });
-    const key = JSON.stringify(
-      per.map(({ o, agents }) => [o.id, o.review_at ?? o.t_receive ?? null, o.review_reviewers, agents.map((x) => [x.agent, x.row?.time])]),
-    );
-    if (reviewsCache.key === key) return reviewsCache.list;
-    const root = ACT.transcriptsRoot(MAIN_TREE);
-    const list = [];
-    for (const { o, agents } of per) {
-      const read = [];
-      for (const x of agents) {
-        const text = readSmallTranscript(ACT.findTranscript(root, x.agent));
-        if (!text || (x.uncertain && !L.missionNamesTask(text, o.id))) continue;
-        read.push({ ...x, text });
-      }
-      const p = RI.progress({
-        required: o.review_reviewers,
-        since: o.review_at ?? o.t_receive ?? null,
-        reports: RI.reportsOf(read, o.review_reviewers, L),
-      });
-      if (p) list.push({ id: o.id, ...p });
-    }
-    reviewsCache = { key, list };
-    return list;
-  } catch (e) {
-    console.error(`the review progress failed: ${e?.message ?? e}`);
-    return [];
-  }
-}
-
-function silentNow(queue) {
-  const limitMin = L.silentMinFor(queue);
-  const running = (queue.tasks ?? []).filter((o) => L.silentWatched(o));
-  const key = `${limitMin}|${running.map((o) => `${o.id}:${o.started ?? ''}:${o.attempts?.at(-1)?.reserved ?? ''}`).join(',')}`;
-  if (silentCache.key === key && Date.now() - silentCache.time < 60_000) return silentCache.list;
-  let list = [];
-  try {
-    if (limitMin > 0 && running.length) {
-      const ACT = require('./lib/trackActivity.js');
-      const worktrees = G.readWorktrees(gitRead).filter((w) => w.branch);
-      const worktreeBranches = new Set(worktrees.map((w) => w.branch));
-      const candidates = L.silentCandidates(queue, worktreeBranches);
-      if (candidates.length) {
-        const now = Date.now();
-        let rows = [];
-        try {
-          rows = TK.readRows(TA.readText(TIME_LOG, { from: TA.activeFrom(candidates) }));
-        } catch {
-          /* no time log: the other sources still count */
-        }
-        const agents = ACT.agentsByTask(
-          rows,
-          candidates.map((o) => o.id),
-        );
-        const root = ACT.transcriptsRoot(MAIN_TREE);
-        const lastActivity = {};
-        for (const o of candidates)
-          lastActivity[o.id] = ACT.lastActivity({
-            branch: o.branch,
-            worktree: worktrees.find((w) => w.branch === o.branch)?.path ?? null,
-            trackDirs: o.scratchpad ? [path.join(o.scratchpad, o.id)] : [],
-            agents: agents.get(o.id) ?? null,
-            findTranscript: (agentId) => ACT.findTranscript(root, agentId),
-            git: gitRead,
-            freshMs: now - limitMin * 60_000,
-          }).ms;
-        list = L.silentTracks(queue, {
-          worktreeBranches,
-          lastActivity,
-          hasReport: (o) => L.reportSinceStart(o, L.findTrackReport(o.id, o.scratchpad ? [o.scratchpad] : []).report),
-          now,
-          limitMin,
-        });
-      }
-    }
-  } catch (e) {
-    console.error(`the silence check failed: ${e?.message ?? e}`);
-  }
-  silentCache = { time: Date.now(), key, list };
-  return list;
-}
-
-// ---- SPINNING tracks (the Decisions card after an hour): the same rule as ravenseat show (lib/trackSpin.js), cached 60 s.
-let spinCache = { time: 0, key: null, list: [] };
-function spinningNow(queue, silent) {
-  const SP = require('./lib/trackSpin.js');
-  const limitMin = SP.spinMinFor(queue);
-  const running = (queue.tasks ?? []).filter((o) => L.silentWatched(o));
-  const key = `${limitMin}|${running.map((o) => `${o.id}:${o.started ?? ''}`).join(',')}|${(silent ?? []).map((x) => x.id).join(',')}`;
-  if (spinCache.key === key && Date.now() - spinCache.time < 60_000) return spinCache.list;
-  let list = [];
-  try {
-    const worktreeBranches = new Set(G.readWorktrees(gitRead).map((w) => w.branch).filter(Boolean));
-    const candidates = limitMin > 0 ? L.silentCandidates(queue, worktreeBranches) : [];
-    if (candidates.length) {
-      const ACT = require('./lib/trackActivity.js');
-      let rows = [];
-      try {
-        rows = TK.readRows(TA.readText(TIME_LOG, { from: TA.activeFrom(candidates) }));
-      } catch {
-        /* no time log: no agents to measure */
-      }
-      const agents = ACT.agentsByTask(rows, candidates.map((o) => o.id));
-      const root = ACT.transcriptsRoot(MAIN_TREE);
-      const skip = new Set((silent ?? []).map((x) => x.id));
-      const measures = {};
-      const lastCommit = {};
-      for (const o of candidates) {
-        if (skip.has(o.id) || L.reportSinceStart(o, L.findTrackReport(o.id, o.scratchpad ? [o.scratchpad] : []).report)) continue;
-        const newest = [...(agents.get(o.id)?.agents ?? [])]
-          .map((id) => ACT.findTranscript(root, id))
-          .filter(Boolean)
-          .map((p) => ({ p, ms: fs.statSync(p).mtimeMs }))
-          .sort((p, q) => q.ms - p.ms)[0];
-        const m = newest ? SP.measure(newest.p) : null;
-        if (!m) continue;
-        measures[o.id] = m;
-        const s = String(gitRead(['log', '-1', '--format=%ct', `refs/heads/${o.branch}`, '--']) ?? '').trim();
-        lastCommit[o.id] = /^\d+$/.test(s) ? Number(s) * 1000 : null;
-      }
-      list = SP.spinningTracks(queue, { candidates, measures, lastCommit, skip, limitMin });
-    }
-  } catch (e) {
-    console.error(`the spinning check failed: ${e?.message ?? e}`);
-  }
-  spinCache = { time: Date.now(), key, list };
-  return list;
-}
-
-// ---- The base health (the base gate's verdict for the current base tip) ------------------------------------------
-const BASE_SETUP = BH.baseGateSetup(CONFIG);
-let baseTipCache = { time: 0, tip: null };
-/** { status, tip, fixTask, text } or null when the base gate is off. The tip is read at most once a minute. */
-function baseHealthNow() {
-  if (!BASE_SETUP.enabled) return null;
-  try {
-    if (Date.now() - baseTipCache.time > 60_000)
-      baseTipCache = { time: Date.now(), tip: String(gitRead(['rev-parse', '-q', '--verify', `refs/heads/${BASE}`]) ?? '').trim() || null };
-    return BH.boardHealth({ state: BH.readState(BASE_HEALTH_FILE), tip: baseTipCache.tip, setup: BASE_SETUP, branch: BASE });
-  } catch {
-    return null;
-  }
-}
-
-// ---- The push batch (merged tasks not on <remote>/<baseBranch>, lib/pushBatch.js) ------------------------------------
-const PUSH_SETUP = PB.pushSetup(CONFIG);
-let pushBatchCache = { time: 0, batch: null, blocked: [], fullGate: 'off' };
-/** What push-check would stop on besides the base: external commits and a remote ahead of us, and the full gate on the tip. */
-function pushStops(from, to, batch) {
-  if (!batch) return { blocked: [], fullGate: 'off' };
-  const raw = G.readFirstParents(gitRead, { from, to }) ?? [];
-  const plan = L.pushPlan(G.classify(gitRead, raw, { from }).reverse());
-  const behind = Number(String(gitRead(['rev-list', '--count', `${to}..${from}`]) ?? '0').trim()) || 0;
-  return {
-    blocked: PB.blockedTexts({ external: plan.externalOnes.length, behind, from: `${REMOTE}/${BASE}`, to: BASE, mode: PUSH_SETUP.mode }),
-    fullGate: require('./lib/gateEvidence.js').fullGateVerdict({ folder: FOLDER, sha: batch.tip, cfg: CONFIG }),
-  };
-}
-/** { verdict, tasks, minTasks, text } or null (no remote ref yet, or git failed). git is read at most once a minute. */
-function pushBatchNow(baseHealth) {
-  try {
-    if (Date.now() - pushBatchCache.time > 60_000) {
-      const from = `refs/remotes/${REMOTE}/${BASE}`;
-      const to = `refs/heads/${BASE}`;
-      const batch = PB.readBatch(gitRead, { from, to, prefix: BRANCH_PREFIX, withCommits: false });
-      pushBatchCache = { time: Date.now(), batch, ...pushStops(from, to, batch) };
-    }
-    // The health is the base gate's verdict for the tip (red blocks); unknown when the gate is off.
-    return PB.boardBatch({
-      batch: pushBatchCache.batch,
-      setup: PUSH_SETUP,
-      health: baseHealth?.status ?? 'unknown',
-      fullGate: pushBatchCache.fullGate,
-      blocked: pushBatchCache.blocked,
-    });
-  } catch {
-    return null;
-  }
-}
-
-// ---- The checks overview (`queue.mjs kickstart --json`, lib/kickstart.js) --------------------------------------------
-// It reads git and the files, so it runs in the background at most once a minute, and the board shows the last answer.
-let checksCache = { time: 0, data: null, running: false };
-function checksNow() {
-  if (demoOn) return null; // kickstart reads the repo: never in the demo
-  if (!checksCache.running && Date.now() - checksCache.time > 60_000) {
-    checksCache.running = true;
-    queueMjs(['kickstart', '--json']).then((r) => {
-      let data = null;
-      try {
-        const j = r.ok ? JSON.parse(r.out) : null;
-        data = j && { steps: j.steps.map(({ key, state, title, why, how }) => ({ key, state, title, why, how })), next: j.next, knownBugs: j.knownBugs };
-      } catch {
-        /* no overview this round */
-      }
-      checksCache = { time: Date.now(), data, running: false };
-    });
-  }
-  return checksCache.data;
-}
-
-/**
- * The "Not building" entries of the main tree's catalog (roadmap 0f) and a key for the state cache: the names and
- * times of the decisions folder and of the owner's record. Read only, and [] on any trouble (the view is display only).
- */
-let notBuildingCache = { key: null, list: [] };
-function notBuildingNow() {
-  // The catalog is the real project's (MAIN_TREE): the demo shows none.
-  if (demoOn) return { key: 'demo', list: [], groups: [] };
-  try {
-    const dir = path.join(MAIN_TREE, ...CATALOG.DIR.split('/'));
-    const ledgerFile = path.join(FOLDER, CATALOG.LEDGER_FILE);
-    const stamp = (f) => {
-      try {
-        return fs.statSync(f).mtimeMs;
-      } catch {
-        return 0; // error-ignored: a missing file is part of the key as 0
-      }
-    };
-    let names = [];
-    try {
-      names = fs.readdirSync(path.join(dir, 'decisions')).sort();
-    } catch {
-      names = []; // error-ignored: no catalog, no entries
-    }
-    const key = JSON.stringify([names.map((n) => [n, stamp(path.join(dir, 'decisions', n))]), stamp(ledgerFile)]);
-    if (key === notBuildingCache.key) return notBuildingCache;
-    let ledger = CATALOG.emptyLedger();
-    try {
-      ledger = CATALOG.parseLedger(fs.readFileSync(ledgerFile, 'utf8'));
-    } catch {
-      ledger = CATALOG.emptyLedger(); // error-ignored: no record means every entry is unconfirmed
-    }
-    const cat = CATALOG.readCatalog(dir);
-    // groups: the other entries by kind (roadmap 0å KD-0, lib/catalog.js boardGroups), for "Project catalog" in Decisions.
-    notBuildingCache = { key, list: NOT_BUILDING.boardEntries(cat, ledger), groups: CATALOG.boardGroups(cat, ledger) };
-    return notBuildingCache;
-  } catch (e) {
-    console.error(`the "not building" list failed: ${e?.message ?? e}`);
-    return { key: 'error', list: [], groups: [] };
-  }
-}
-
-/** The Checks tab's switch. Unreadable queue: on, so the tab is not lost to a passing read error. */
-function checksPanelNow() {
-  try {
-    return require('./lib/guidance.js').checksPanelOn(JSON.parse(fs.readFileSync(FILE, 'utf8')));
-  } catch {
-    return true;
-  }
-}
-
-// ---- The Checks tab (`queue.mjs checks --json`, lib/checksCatalog.js) ---------------------------------------------------
-// Runs when the tab asks, at most once a minute unless the tab asks for a fresh one (Read again, after a write).
-let checksReport = { time: 0, report: null };
-async function checksReportNow(fresh) {
-  if (!fresh && checksReport.report && Date.now() - checksReport.time < 60_000) return { ok: true, report: checksReport.report };
-  const r = await queueMjs(['checks', '--json']);
-  if (!r.ok) return { ok: false, message: r.error || r.out || 'ravenseat checks failed' };
-  try {
-    const answer = JSON.parse(r.out);
-    // Switched off, the answer is {off:true}: no report, so the view has nothing to draw while the tab goes away.
-    const report = answer.off ? null : answer;
-    checksReport = { time: Date.now(), report };
-    return { ok: true, report };
-  } catch {
-    return { ok: false, message: 'ravenseat checks gave an answer that could not be read' };
-  }
-}
-
-/**
- * The red marker on the Checks tab: an open suggestion with high priority, unless checksPanel.marker is off. The report is
- * read in the background (at most every two minutes), so the state never waits for it; null until the first answer.
- */
-let markerRunning = false;
-function checksMarkerNow(panelOn) {
-  if (!panelOn || demoOn) return false; // no background checks run in the demo
-  if (!markerRunning && Date.now() - checksReport.time > 120_000) {
-    markerRunning = true;
-    checksReportNow(false)
-      .catch(() => null)
-      .finally(() => {
-        markerRunning = false;
-      });
-  }
-  const r = checksReport.report;
-  return r ? r.marker !== false && (r.important ?? 0) > 0 : null;
-}
-
-// ---- The state (cheap: rebuilt only when queue.json, git status or the logo has changed) -----------------------------
-// git status is read again every minute, so the state (age, night pause, "Next up") is recomputed at least that often.
-let quick = null;
-function state() {
-  const fresh = KK.config({ fresh: true }); // the gear changes it through the CLI, so the file is what counts
-  const mtime = fs.statSync(FILE).mtimeMs;
-  const g = uncommitted();
-  const logo = findLogo() != null;
-  const mascotFile = MASCOT_MODE !== 'off' && isFile(MASCOT_FILE);
-  // With a daily quota, "Next up" needs today's usage (the time log, via the cached statistics).
-  const stat = quick?.budget ? statistics().version : null;
-  const update = updateNotice();
-  const updateKey = JSON.stringify(update);
-  // The base health: the file's time and the base tip (read with git status, at most once a minute) are in the key.
-  const baseHealth = baseHealthNow();
-  const pushBatch = pushBatchNow(baseHealth);
-  // The Checks tab's switch (lib/guidance.js checksPanelOn: its own setting, otherwise the guidance). Off: no overview, so
-  // the status line and the first-run card have nothing to say.
-  const checksPanel = checksPanelNow();
-  const checks = checksPanel ? checksNow() : null;
-  const checksMarker = checksMarkerNow(checksPanel);
-  const baseKey = JSON.stringify([baseHealth, pushBatch, checks, checksPanel, checksMarker]);
-  // Is a `ravenseat wait` listening (its heartbeat is fresh)? Read every time, so the line flips without a queue change.
-  const listening = OW.heartbeatState(FOLDER).listening;
-  // How the side panel sits on a wide screen (board.panelMode, QA-1c Q5): read fresh and part of the cache key, so a
-  // change in the gear reaches the open board on its next poll without a restart.
-  const panelMode = KK.boardPanelMode(fresh);
-  // The display switches (roadmap 0ø J1, J3, J4: tab title count, shortcuts, quick filters), read fresh the same way.
-  const display = KK.boardDisplay(fresh);
-  // The Timeline tab's settings (T-A: board.timeline, .timelineHorizonDays, .timelineRows), read fresh the same way.
-  const timeline = KK.boardTimeline(fresh);
-  const displayKey = JSON.stringify([display, timeline]);
-  // catalog.captureAnswers (roadmap 0z Z-A): read fresh and part of the cache key like panelMode, so `settings set`
-  // shows or hides "Keep as design choice" on the next poll.
-  const captureAnswers = CATALOG.setupOf(fresh).captureAnswers;
-  // The "Not building" list (roadmap 0f): the decisions folder's names and times and the owner's record are the key,
-  // so a new draft or an accept shows on the next poll.
-  const notBuilding = notBuildingNow();
-  // zones.detect (PG-5): read fresh and part of the key. The zones themselves live in the decisions folder, whose names,
-  // times and the owner's record are already notBuilding.key.
-  const zonesDetect = ZONES.zonesSetup(fresh).detect;
-  // mergeDanger.show (lib/doorShow.js): read fresh and part of the key; off hides a stored door and blast radius.
-  const doorOn = DOOR.on(fresh);
-  if (
-    quick &&
-    quick.notBuildingKey === notBuilding.key &&
-    quick.zonesDetect === zonesDetect &&
-    quick.doorOn === doorOn &&
-    quick.listening === listening &&
-    quick.panelMode === panelMode &&
-    quick.displayKey === displayKey &&
-    quick.captureAnswers === captureAnswers &&
-    quick.mtime === mtime &&
-    quick.updateKey === updateKey &&
-    quick.baseKey === baseKey &&
-    quick.gitTime === g.time &&
-    quick.logo === logo &&
-    quick.mascotFile === mascotFile &&
-    quick.stat === stat
-  )
-    return quick;
-  const queue = DOOR.hideStored(JSON.parse(fs.readFileSync(FILE, 'utf8')), fresh);
-  const branches = {};
-  for (const o of queue.tasks ?? []) {
-    if (o.status !== 'picked') continue;
-    const branch = branchFor(o);
-    branches[branch] = branchInfo(branch);
-  }
-  const budget = queue.limits?.dailyBudget != null;
-  const s = budget ? statistics() : null;
-  // The board shows the queue as if done focus stages were already taken out (queueLogic.focusWithoutDone; nothing
-  // is written, that is done by queue.mjs focus clean and receive/set/fill). The whole board is computed on the same
-  // focus, so the stage numbers on the cards match the focus line.
-  let focusEval = null;
-  let showQueue = queue;
-  try {
-    const fe = L.focusWithoutDone(queue);
-    focusEval = new Map(fe.evaluation.map((t) => [t.stage, t]));
-    if (fe.focus) showQueue = { ...queue, focus: fe.focus };
-  } catch (e) {
-    console.error(`the focus evaluation failed: ${e?.message ?? e}`);
-  }
-  const data = {
-    ...T.board(showQueue, {
-      captureAnswers,
-      zonesFor: zonesNow(fresh),
-      // The Blocked column (board.blockedColumn): the server moves the stuck tasks there, so no card is in two columns.
-      blockedColumn: KK.boardSwitches(CONFIG, queue).blockedColumn,
-      uncommitted: g.uncommitted,
-      branches,
-      branchPrefix: BRANCH_PREFIX,
-      // Aging work against p85 for the class (only from queue.json).
-      ageLimits: S.ageBounds(queue),
-      // SILENT tracks (the badge on the card; cached 60 s).
-      silent: silentNow(queue),
-      // SPINNING tracks (a Decisions card after an hour; cached 60 s, as the silent ones).
-      spinning: spinningNow(queue, silentNow(queue)),
-      // "reviews k/n" on a card in Review: the merge gate's verdict (cached on the agents and the receive).
-      reviews: reviewsNow(queue),
-      withoutAgent: withoutAgentNow(queue),
-      // Tracks that stand still on a permission prompt (not cached: one small file, and the card should go at once).
-      approval: approvalNow(queue),
-      // Tracks that auto mode refused, or that fail the same tool again and again (one small file, not cached either).
-      toolTrouble: toolTroubleNow(queue),
-      baseRed: baseHealth?.status === 'red',
-      dailyUsage: s?.data.keyFigures.usageToday,
-      // Suitability with the same rules as queue.mjs cloud-package (queueLogic.cloudSuitable).
-      cloud: {
-        pushedHead: g.pushedHead,
-        changed: [...g.sincePush, ...g.uncommitted],
-        mission: missionFor,
-      },
-    }),
-    gitError: g.error,
-    logo,
-    // The mascot: the mode, whether the phrase file exists (the board fetches /mascot again when it appears), and the
-    // numbers for the placeholders. With mode off nothing is computed.
-    mascot: { mode: MASCOT_MODE, file: mascotFile },
-    mascotNumbers: MASCOT_MODE === 'off' ? null : mascotNumbers(queue),
-    title: TITLE,
-    baseBranch: BASE,
-    // The update banner (lib/queueUpdate.js): null, or a newer version and/or "run ravenseat setup --settings".
-    update,
-    // The base branch's health (lib/baseHealth.js boardHealth): null when the base gate is off; the status line shows it.
-    baseHealth,
-    // The push batch (lib/pushBatch.js boardBatch): "4 of 10 tasks, NOT YET"; null without a remote ref.
-    pushBatch,
-    // The checks overview: the steps of `ravenseat kickstart`; null until the first answer is in.
-    checks,
-    // Does the Checks tab show (`ravenseat checks on|off`)?
-    checksPanel,
-    // The red dot on the Checks tab (a high suggestion is open; `ravenseat checks marker off` hides it).
-    checksMarker,
-    // The module switches (lib/queueConfig.js features): the board hides the tabs, buttons and rows of those that are off.
-    // The cloud switch is read fresh, so the gear can turn it on without a restart. The other modules are read at start.
-    features: { ...FEATURES, cloud: KK.featureOn('cloud', fresh) },
-    cloudSettings: CS.cloudSettingsView(fresh.cloud)
-      .filter((s) => s.inGear !== false)
-      .map(({ key, label, kind, choices, value, help }) => ({ key, label, kind, choices, value, help })),
-    // The board's own switches (lib/queueConfig.js boardSwitches; queue.json board wins): showCloud = the Cloud tab.
-    boardSwitches: KK.boardSwitches(CONFIG, queue),
-    // The forecast box in the Focus view (lib/queueForecast.js, a fixed seed so the version stays stable).
-    forecast: boardForecast(showQueue),
-    // `ravenseat wait` runs and will start an orchestrator turn when the owner acts (lib/ownerWait.js heartbeatState).
-    listening,
-    // The side panel's mode on a wide screen: "float" (over the board, default) or "beside" (the board makes room).
-    panelMode,
-    // board.titleCount, .shortcuts, .quickFilters (lib/queueConfig.js boardDisplay).
-    boardDisplay: display,
-    // The Timeline tab: shown, its horizon in days and its default rows (lib/queueConfig.js boardTimeline).
-    boardTimeline: timeline,
-  };
-  // Each step gets status and rests; a step with only rests shows them in the title and the label (the focus line
-  // reads the label, the cards and the panel the title), not as an empty step.
-  if (focusEval && Array.isArray(data.focus?.stage))
-    data.focus.stage = data.focus.stage.map((t) => {
-      const e = focusEval.get(t.stage);
-      if (!e) return t;
-      const extra = { status: e.status, rests: e.rests, open: e.open };
-      if (e.status === 'done-with-rests') {
-        const types = new Map();
-        for (const r of e.rests) types.set(r.type, (types.get(r.type) ?? 0) + 1);
-        const text = [...types].map(([type, n]) => `${n} ${type}`).join(', ');
-        const suffix = ` (done, rests: ${text})`;
-        return { ...t, ...extra, title: `${t.title}${suffix}`, label: `${t.label ?? t.title}${suffix}` };
-      }
-      if (e.status === 'done')
-        return { ...t, ...extra, title: `${t.title} (done)`, label: `${t.label ?? t.title} (done)` };
-      return { ...t, ...extra };
-    });
-  const version = crypto.createHash('sha1').update(JSON.stringify(data)).digest('hex').slice(0, 16);
-  // The "Not building" entries for Decisions (board/decide.js notBuildingPart): drafts first, then decided ones.
-  data.notBuilding = notBuilding.list;
-  // The other catalog entries grouped by kind (board/decide.js catalogPart, roadmap 0å KD-0); the same cache key.
-  data.catalogGroups = notBuilding.groups ?? [];
-  quick = {
-    mtime,
-    gitTime: g.time,
-    logo,
-    mascotFile,
-    budget,
-    stat: s?.version ?? null,
-    listening,
-    panelMode,
-    displayKey,
-    captureAnswers,
-    zonesDetect,
-    doorOn,
-    notBuildingKey: notBuilding.key,
-    updateKey,
-    baseKey,
-    version,
-    data,
-  };
-  return quick;
-}
-
-// ---- The statistics: the time log is read only when it has changed, the result is cached -------------
-let logCache = { key: null, rows: [], events: [], error: null };
-function timeLogRows() {
-  // The current file and the monthly archives (lib/timeLogArchive.js): the statistics read all of it, so a rotation
-  // changes no number; the key changes when either does.
-  const key = TA.signature(TIME_LOG);
-  if (key === 'missing') return { key: 'missing', rows: [], events: [], error: 'ENOENT' };
-  if (logCache.key !== key) {
-    // Only the "done" rows are needed (usage and context); the gate rows (most of them) are dropped at once.
-    let text;
-    try {
-      text = TA.readText(TIME_LOG);
-    } catch (e) {
-      return { key: 'missing', rows: [], events: [], error: e?.code ?? 'does not exist' };
-    }
-    const all = TK.readRows(text);
-    const rows = all.filter((r) => r?.event === 'done');
-    // The flow rows apart (boardFlow), so the "done" rows stay exactly as before.
-    const events = all.filter((r) => ER.EVENTS.has(r?.event));
-    // The guards' decisions and the overrides (lib/guardLog.js), for "Guard decisions last 7 days".
-    const guards = all.filter((r) => GL.OVERRIDES.includes(r?.event) || r?.event === GL.EVENTS.deny || r?.event === GL.EVENTS.ask);
-    // S3: the gate and flakyGate rows in a slim form (the numbers only, never an excerpt), for the Machine and Quality
-    // sections; the compaction rows only as time and scope.
-    const gates = [];
-    const compacts = [];
-    // "Since you left" (lib/awaySummary.js): a track's red gate runs as time, track, kind and the red command names only.
-    const redGates = [];
-    // The card's History (lib/taskHistory.js, J5): every track gate run, red and green, in the same slim form.
-    const trackGates = [];
-    for (const r of all) {
-      if (r?.event === 'gate' || r?.event === 'flakyGate') gates.push(SX.slimGateRow(r));
-      else if (r?.event === 'compact' && r.scope !== 'session') compacts.push({ time: r.time });
-      if (r?.event === 'gate' && r.track) {
-        const slim = { time: r.time, event: 'gate', track: r.track, kind: r.kind ?? null, ok: r.ok === false ? false : r.ok === true, failed: r.failed ?? [] };
-        trackGates.push(slim);
-        if (r.ok === false) redGates.push(slim);
-      }
-    }
-    logCache = { key, rows, events, guards, gates, compacts, redGates, trackGates, error: null };
-  }
-  return logCache;
-}
-
-/** The forecast for the board; an error never stops the state or the statistics (the box is then left out). */
-function boardForecast(queue) {
-  try {
-    return FC.boardForecast(queue);
-  } catch (e) {
-    console.error(`the forecast failed: ${e?.message ?? e}`);
-    return null;
-  }
-}
-
-/** The plan register for the flow figures (the findings' causes), or null when it is missing or cannot be read. */
-function flowPlans() {
-  try {
-    return fs.existsSync(PLAN_FILE) ? P.normalize(JSON.parse(fs.readFileSync(PLAN_FILE, 'utf8'))) : null;
-  } catch {
-    return null; // error-ignored: the findings are one input of the right-first-time figure
-  }
-}
-
-let revertedCache = { time: 0, commits: new Set() };
-/** The commits reverted on the base. Read at most once a minute, like the base tip. */
-function revertedNow() {
-  if (Date.now() - revertedCache.time > 60_000)
-    revertedCache = {
-      time: Date.now(),
-      commits: ES.revertedCommitsIn(gitRead(['log', BASE, '--grep=This reverts commit', '--format=%B'])),
-    };
-  return revertedCache.commits;
-}
-
-/** The flow figures for the last 14 days (lib/eventStatistics.js, the same as in ravenseat cost); an error leaves the box out. */
-function boardFlow(queue, events) {
-  try {
-    const to = Date.now();
-    return ES.flowStatistics(queue, events ?? [], {
-      from: to - 14 * 86_400_000,
-      to,
-      plans: flowPlans(),
-      reviewerTypes: L.REVIEWER_TYPES,
-      revertedCommits: revertedNow(),
-    });
-  } catch (e) {
-    console.error(`the flow figures failed: ${e?.message ?? e}`);
-    return null;
-  }
-}
-
-// The Claude Code settings files that may set autoCompactWindow (the context cap), in precedence order.
-const COMPACT_FILES = [
-  ['.claude/settings.local.json', path.join(ROOT, '.claude', 'settings.local.json')],
-  ['.claude/settings.json', path.join(ROOT, '.claude', 'settings.json')],
-  ['~/.claude/settings.json', path.join(os.homedir(), '.claude', 'settings.json')],
-];
-const FINDINGS_FILE = path.join(FOLDER, 'findings.jsonl');
-const RATE_FILE = path.join(FOLDER, RL.FILE);
-/** A file's mtime for a cache key, 0 when it is missing. */
-function mtimeOf(file) {
-  try {
-    return fs.statSync(file).mtimeMs;
-  } catch {
-    return 0; // not there (yet)
-  }
-}
-/** A JSON file, or null when it is missing or broken (a settings file the owner is editing, say). */
-function jsonOrNull(file) {
-  try {
-    return JSON.parse(fs.readFileSync(file, 'utf8'));
-  } catch {
-    return null; // error-ignored: the figure then falls back (300k cap, no quota reading)
-  }
-}
-
-/**
- * The reworked sections (lib/statisticsSections.js: top row, Cost and tokens, Machine, Quality); an error leaves them
- * out and the older charts still show.
- */
-function boardSections(queue, log, stat, cap) {
-  try {
-    let findings = [];
-    try {
-      findings = FL.read(null, { since: Date.now() - S.WINDOW_DAYS * 86_400_000, includeArchive: true }).rows;
-    } catch {
-      findings = []; // error-ignored: no finding log yet, or a data folder without one
-    }
-    // PG-6 (lib/planPostCheck.js): the built plans against their estimates, with plans.postCheck on. The success
-    // measure is read through the /api/doc guard (queueBoard.readDocument), only for a plan with a decision source.
-    const fresh = KK.config({ fresh: true });
-    let postCheck = null;
-    if (require('./lib/planPostCheck.js').postCheckSetup(fresh).on) {
-      const reg = flowPlans();
-      const readDoc = (p) => {
-        const r = T.readDocument(SOURCE_ROOT, p, { fs, path });
-        return r.ok ? r.text : null;
-      };
-      if (reg?.entries?.length)
-        postCheck = { entries: reg.entries, measureFor: (e) => require('./lib/planPostCheck.js').decisionMeasure(e, readDoc) };
-    }
-    const out = SX.sections({
-      queue,
-      rows: log.rows,
-      gateRows: log.gates ?? [],
-      loadRows: (log.events ?? []).filter((r) => r?.event === 'load'),
-      findings,
-      observed: jsonOrNull(RATE_FILE),
-      cap: cap.cap,
-      statistics: stat,
-      plans: postCheck,
-    });
-    const from = Date.now() - S.WINDOW_DAYS * 86_400_000;
-    out.cost.context.source = cap.source;
-    out.cost.context.compactions = (log.compacts ?? []).filter((c) => Date.parse(c.time) >= from).length;
-    // Which settings are on now, for the "Does this look bad?" lines (no figure, only the advice text).
-    out.settings = { machineSampleMin: require('./lib/machineSample.js').minutesFrom(fresh) };
-    return out;
-  } catch (e) {
-    console.error(`the statistics sections failed: ${e?.message ?? e}`);
-    return null;
-  }
-}
-
-let statCache = null;
-function statistics() {
-  const log = timeLogRows();
-  // plans.json is in the key too: a new finding with --cause changes the right-first-time figure. So are the quota
-  // reading, the finding log and the settings files that set the context cap.
-  const extra = [PLAN_FILE, RATE_FILE, FINDINGS_FILE, ...COMPACT_FILES.map((f) => f[1])].map(mtimeOf).join('|');
-  const key = `${log.key}|${fs.statSync(FILE).mtimeMs}|${archiveMtime()}|${extra}|${TK.dayFor(new Date().toISOString())}`;
-  if (statCache?.key === key) return statCache;
-  // With the archived tasks, so no figure changes when a task moves to the archive.
-  const queue = QARCH.withArchive(JSON.parse(fs.readFileSync(FILE, 'utf8')), FOLDER);
-  // The context cap follows the compaction window (roadmap B13) instead of a fixed 300k.
-  const cap = SX.compactWindow(COMPACT_FILES.map(([name, file]) => ({ name, settings: jsonOrNull(file) })));
-  const stat = S.statistics(queue, log.rows, { cap: cap.cap });
-  const data = {
-    ...stat,
-    sections: boardSections(queue, log, stat, cap),
-    // "Blockers last 7 days" (queueLogic.blockerSummary, the same numbers as ravenseat blockers).
-    blockers: L.blockerSummary(queue, { days: 7 }),
-    // "Guard decisions last 7 days" (lib/guardLog.js counts, the same numbers as the doctor's decisions row).
-    guards: GL.counts(log.guards ?? [], { from: Date.now() - 7 * 86_400_000 }),
-    timeLogError: log.error,
-    forecast: boardForecast(queue),
-    // The slim gate rows too: "Gates run twice" (CI-1) reads their wait_sec and sha. Only event "gate": the flakyGate
-    // rows in log.gates are already in log.events, and counting them twice would double the flaky figure.
-    flow: boardFlow(queue, [...(log.events ?? []), ...(log.gates ?? []).filter((r) => r?.event === 'gate')]),
-  };
-  const version = crypto.createHash('sha1').update(JSON.stringify(data)).digest('hex').slice(0, 16);
-  statCache = { key, version, data };
-  return statCache;
-}
-
-// ---- The Timeline tab (roadmap TIDSLINJE T-A; lib/queueTimeline.js) ------------------------------------------------
-// Read-only: the queue is played forward on a copy (queueSchedule.js) and nothing is written. One payload is kept per
-// key (the queue's mtime and size, the settings and the minute), so the polls of an open tab do not play it again.
-let scheduleCache = { key: null, data: null };
-/** The payload of GET /api/schedule; with board.timeline off only { enabled: false } (nothing is read). */
-function scheduleData() {
-  const settings = KK.boardTimeline(KK.config({ fresh: true }));
-  if (!settings.on) return { enabled: false, settings, version: 'off' };
-  let stamp = 'none';
-  try {
-    const st = fs.statSync(FILE);
-    stamp = `${st.mtimeMs}:${st.size}`;
-  } catch {
-    /* no queue file: read below fails with its own error */
-  }
-  const now = Date.now();
-  const key = QT.cacheKey({ queueStamp: stamp, settings, now });
-  if (scheduleCache.key === key) return scheduleCache.data;
-  const queue = JSON.parse(fs.readFileSync(FILE, 'utf8'));
-  const caps = scheduleCaps(queue);
-  // T-C (board.timelineUncertainty): the band is played up to 200 times (lib/scheduleUncertainty.js runsFor caps it by
-  // the open tasks), so it is kept per queue stamp and BAND_MINUTES instead of per minute; the backtest only reads the
-  // past, so it is kept per UTC day and the number of done tasks.
-  let extra = {};
-  if (settings.uncertainty) {
-    const bandKey = JSON.stringify([stamp, caps, Math.floor(now / (BAND_MINUTES * 60_000))]);
-    if (bandCache.key !== bandKey) bandCache = { key: bandKey, data: UNC.uncertainty(queue, { now, ...caps }) };
-    const doneCount = (queue.tasks ?? []).filter((o) => o?.status === 'done').length;
-    const backtestKey = JSON.stringify([Math.floor(now / 86_400_000), doneCount, (queue.tasks ?? []).length]);
-    if (backtestCache.key !== backtestKey) backtestCache = { key: backtestKey, data: UNC.backtest(queue, { now }) };
-    extra = { uncertainty: true, band: bandCache.data, backtest: backtestCache.data };
-  }
-  const data = { enabled: true, settings, version: key, ...QT.timelineData(queue, { now, ...caps, ...extra }) };
-  scheduleCache = { key, data };
-  return data;
-}
-/** T-C: how long the band is kept (minutes), and the band and backtest caches. */
-const BAND_MINUTES = 5;
-let bandCache = { key: null, data: null };
-let backtestCache = { key: null, data: null };
-
-/**
- * The caps the plan is played with: the same as cli/schedule.mjs. A forecast or a measurement that fails never stops
- * the tab or a preview (no cap then). Used by the Timeline (scheduleData) and by a drop's preview (T-B, planEffect).
- */
-function scheduleCaps(queue) {
-  let quotaSlots = null;
-  try {
-    const running = (queue.tasks ?? []).filter((o) => o.status === 'running').length;
-    quotaSlots = SCHED.quotaSlotsFrom(KAP.forecast({ queue, events: usage() }), running);
-  } catch {
-    quotaSlots = null;
-  }
-  let loadSlots = null;
-  try {
-    const ls = L.loadSlotsFor(queue, LOADS.measure({ cpu: false }));
-    loadSlots = ls.active ? ls.slots : null;
-  } catch {
-    loadSlots = null;
-  }
-  return { quotaSlots, loadSlots };
-}
-
-/**
- * T-B: what a Timeline drop does to the plan, in words ({ sentence, parts }), for a dry run that asked for it
- * (plan_effect: true). `copy` is the queue as the drop would leave it. A failure gives null: the preview then shows the
- * dry run without the sentence, it never stops the drop.
- */
-function planEffectOf(queue, copy, moved = []) {
-  try {
-    return QT.planEffect(queue, copy, { now: Date.now(), ...scheduleCaps(queue), moved });
-  } catch {
-    return null;
-  }
-}
-
-// ---- "Since you left" (roadmap 3e AW-2, AW-3, AW-8; lib/awaySummary.js) ---------------------------------------------
-/**
- * The band at the top of Decisions: the window (the board's choice, else board.sinceLastWindow), the summary on the
- * queue with its archive and the time log rows the cache already keeps, and "Decided" for the same window. `from` is
- * the start the board opened with, so the window stays put for the visit while the seen mark moves. With
- * board.sinceLast off only { on: false } (nothing is read).
- */
-function sinceData({ choice = null, from = null } = {}) {
-  const fresh = KK.config({ fresh: true });
-  const setup = KK.boardSince(fresh);
-  if (!setup.on) return { on: false, default_choice: setup.window };
-  const now = Date.now();
-  const seen = SEEN.readSeen(FOLDER);
-  const w = AWAY.resolveWindow({ choice: choice ?? setup.window, seen, from, now });
-  // Decided for you carries a delivery's door and blast radius; hidden while mergeDanger.show is off (lib/doorShow.js).
-  const queue = DOOR.hideStored(QARCH.withArchive(JSON.parse(fs.readFileSync(FILE, 'utf8')), FOLDER), fresh);
-  const log = timeLogRows();
-  // What waits on the owner now: the same count as "Waiting on you" (null when the state could not be built).
-  let waiting = null;
-  try {
-    waiting = state().data?.inbox?.count ?? null;
-  } catch {
-    waiting = null;
-  }
-  return {
-    on: true,
-    default_choice: setup.window,
-    seen,
-    window: { ...w, text: AWAY.windowText(w) },
-    summary: AWAY.awaySummary({ queue, rows: [...(log.events ?? []), ...(log.redGates ?? [])], from: w.from, to: w.to, waiting }),
-    decided: DEC.decidedToday(queue, { now, from: w.from }),
-    decided_for_you: DEC.decidedForYou(queue, { now, from: w.from }),
-  };
-}
-
-// ---- The plan register: read only, rebuilt when plans.json or queue.json changes (or every minute,
-// so "stale" and "Working now" expire on their own). Writing to the register never goes via the board in this track.
-let planCache = null;
-// The lead of a plan without a summary, read from its plan document (P3 of plans/plans-tab-ux-review-2026-11-19.md;
-// queueBoard.planLeadReader: the /api/doc guard, cached per file by time and size). One reader for the process, so the
-// cache lives as long as the board.
-// `let`: demo mode makes both again on the demo folder's documents (useDemo), and back.
-let planLead = T.planLeadReader(SOURCE_ROOT, { fs, path });
-// P5: the full-text search in the plan documents (queueBoard.planDocSearcher: the same source, guard and cap as the
-// lead, passages cached per file by time and size). One searcher for the process, like the lead reader.
-let planSearch = T.planDocSearcher(SOURCE_ROOT, { fs, path });
-// PG-1/PG-3: the decision section's state for a large plan's detail panel (queueBoard.planDecisionReader: the same
-// guard, cached per file by time and size). The zones are read again with each new plans() answer, so an accepted zone
-// shows within a minute; plans.decisionNote off reads nothing (the caller passes no reader).
-const planDecisionFor = () => {
-  let zonesFor = null;
-  try {
-    // The demo has no catalog: the real project's zones are never read for it.
-    if (!demoOn) zonesFor = require('./lib/catalogZones.js').zonesOnDisk();
-  } catch {
-    // error-ignored: a zone only raises attention; the size rule still applies
-  }
-  const read = T.planDecisionReader(SOURCE_ROOT, { fs, path }, { zonesFor });
-  return (entry, tasks) => read(entry, tasks);
-};
-function plans() {
-  const mt = (f) => {
-    try {
-      return fs.statSync(f).mtimeMs;
-    } catch {
-      return 0;
-    }
-  };
-  // The Roadmap settings (plans.* in queue.config.json) are read fresh and are part of the key, so a change in the gear
-  // reaches the open board on its next poll without a restart.
-  const view = KK.plansView(KK.config({ fresh: true }));
-  const key = `${mt(PLAN_FILE)}|${mt(FILE)}|${archiveMtime()}|${Math.floor(Date.now() / 60_000)}|${JSON.stringify(view)}`;
-  if (planCache?.key === key) return planCache;
-  const reg = fs.existsSync(PLAN_FILE)
-    ? P.normalize(JSON.parse(fs.readFileSync(PLAN_FILE, 'utf8')))
-    : P.emptyRegister();
-  // With the archived tasks: a plan's status is derived from its linked tasks, so archiving one never changes it.
-  const queue = fs.existsSync(FILE) ? QARCH.withArchive(JSON.parse(fs.readFileSync(FILE, 'utf8')), FOLDER) : {};
-  const now = new Date();
-  const fk = L.rankingContext(queue, now.getTime());
-  // The column and focus stage for a queue task (same rules as the cards on the board, queueBoard.board).
-  const queueInfo = (o) => {
-    const column = o.id ? T.columnFor(o) : null;
-    if (column !== 'queue') return { column, applies: fk.applies };
-    const p = L.focusSpace(o, fk);
-    const stage = p.step != null ? queue.focus?.order?.[p.step] : null;
-    return {
-      column,
-      applies: fk.applies,
-      step: p.step,
-      outside: fk.applies ? p.outside : false,
-      step_title: stage ? L.stepTitle(stage, queue) : null,
-    };
-  };
-  // The pace for the capacity figure on the overview (finished queue tasks per week, as `plan check`).
-  const window = P.CAPACITY_WINDOW_DAYS ?? 28;
-  const donePerWeek =
-    S.doneInWindow(queue, S.daysBackward(now.getTime(), window)).length / (window / 7);
-  const data = {
-    ...PRIVACY.plansData(reg, queue, {
-      now,
-      queueInfo,
-      queuePlan: P,
-      donePerWeek,
-      // No document is read while the Plans room is off or plans.leadFromDocument is false.
-      leadFor: FEATURES.plans && view.leadFromDocument ? planLead : null,
-      decisionFor: FEATURES.plans && view.decisionNote ? planDecisionFor() : null,
-    }),
-    exists: fs.existsSync(PLAN_FILE),
-    view,
-  };
-  const version = crypto.createHash('sha1').update(JSON.stringify(data)).digest('hex').slice(0, 16);
-  planCache = { key, version, data };
-  return planCache;
-}
-
-// ---- Live update. GET /api/plans?version=…&wait=1 waits (at most WAIT_MS) until plans.json
-// or queue.json changes, so changes from a Claude Code session show without reloading the page. The folder is watched with
-// fs.watch (the files are written atomically with rename); if that does not work, the call answers "unchanged" after the wait, and the client
-// asks again. Read only.
-const WAIT_MS = 25_000;
-const PLAN_WAITERS = new Set();
-let planGuard = null;
-function planGuardOn() {
-  if (planGuard !== null) return;
-  try {
-    let time = null;
-    planGuard = fs.watch(FOLDER, (_event, name) => {
-      if (name && !/^(plans|queue)\.json$/.test(String(name))) return;
-      clearTimeout(time);
-      // A short pause: a write is a tmp file + rename, and queue.mjs can write both files one after the other.
-      time = setTimeout(() => {
-        for (const v of [...PLAN_WAITERS]) v();
-      }, 150);
-    });
-    planGuard.on('error', () => {
-      planGuard?.close();
-      planGuard = false;
-    });
-  } catch {
-    planGuard = false; // fs.watch does not work here: the calls answer after the wait
-  }
-}
-/**
- * Waits until the register changes, the client leaves, or WAIT_MS has passed. `res` (not req): req sends "close" as soon as a
- * GET without a body is fully read, res only when the connection closes.
- */
-function waitOnPlans(res) {
-  planGuardOn();
-  return new Promise((done) => {
-    let time = null;
-    const v = () => {
-      PLAN_WAITERS.delete(v);
-      clearTimeout(time);
-      res.off('close', v);
-      done();
-    };
-    time = setTimeout(v, WAIT_MS);
-    PLAN_WAITERS.add(v);
-    res.on('close', v);
-  });
-}
-
-/** A JSON file, or null when it is missing or broken. */
-function readJson(filePath) {
-  try {
-    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-  } catch {
-    return null;
-  }
-}
-
-/**
- * The tidy line in Settings > Project (lib/tidy.js, roadmap 1b): the same count as doctor's tidy row, with the command
- * to copy. Read only. Kept for five minutes, since it runs git status in every worktree; null value fields = unknown.
- * tidy.doctor false hides the count (the line still shows the command).
- */
-const TIDY_CACHE_MS = 5 * 60_000;
-let tidyCache = null;
-function tidySummary(queue, config) {
-  const command = `${require('./lib/projectRoot.js').cliCommand()} tidy`;
-  if (config.tidy?.doctor === false) return { off: true, command };
-  if (tidyCache && Date.now() - tidyCache.at < TIDY_CACHE_MS) return tidyCache.value;
-  let value;
-  try {
-    const TIDY = require('./lib/tidy.js');
-    const minAge = Number(config.tidy?.minAgeHours);
-    const t = TIDY.scan({
-      main: GIT_ROOT,
-      base: String(config.baseBranch ?? 'main'),
-      prefix: config.branchPrefix ?? 'queue/',
-      tasks: queue.tasks ?? [],
-      minAgeHours: Number.isFinite(minAge) && minAge >= 0 ? minAge : 3,
-      sharedLinks: config.sharedLinks,
-      production: config.productionBranch ?? null,
-      exclude: config.excludeBranches ?? [],
-      dataFolder: FOLDER,
-      sizes: 'removable',
-    }).totals;
-    value = { worktrees: t.worktrees, branches: t.branches, size: TIDY.sizeText(t.worktreeBytes, t.capped), command, at: new Date().toISOString() };
-  } catch (e) {
-    value = { error: String(e?.message ?? e).split('\n')[0], command };
-  }
-  tidyCache = { at: Date.now(), value };
-  return value;
-}
-
-/** The setup in the settings panel (read only, from the real sources). */
-function setup(queue, stat) {
-  // The migrations are shown only when the project has turned on the migration flow (config().migrations.folder).
-  const m = CONFIG.migrations ?? {};
-  let migrations = null;
-  if (m.folder) {
-    let files = [];
-    let error = null;
-    try {
-      files = fs.readdirSync(path.join(GIT_ROOT, ...String(m.folder).split('/')));
-    } catch (e) {
-      error = e?.code ?? 'could not read the folder';
-    }
-    migrations = {
-      folder: m.folder,
-      error,
-      next: queue.next_migr ?? null,
-      highest: T.highestMigration(files, m.filePattern),
-    };
-  }
-  const cursor = readJson(CURSOR);
-  // Plugin install: the hooks and skills ship in the plugin folder. Vendored: they are in the project's .claude/.
-  const src = T.setupSources(HERE, GIT_ROOT, (f) => fs.existsSync(f));
-  const settings = readJson(src.hooksFile);
-  const manifest = src.manifest ? readJson(src.manifest) : null;
-  return {
-    baseBranch: BASE,
-    migrations,
-    orchestrator: { ...L.orchestratorStatus(cursor), updated: cursor?.updated ?? null },
-    models: stat.models,
-    install: {
-      mode: src.mode,
-      name: manifest?.name ?? null,
-      version: manifest?.version ?? null,
-    },
-    hooks: settings ? T.hooksCoverage(settings) : null,
-    skills: T.skillsCoverage((name) =>
-      fs.existsSync(path.join(src.skillsFolder, name, 'SKILL.md')),
-    ),
-    rules: T.SKILL_RULES.map((r) => r.text),
-    rulesSource: T.SKILL_SOURCE,
-  };
-}
-
-/**
- * The mission text: the file `mission` points to (in the worktree or the main tree, never outside), otherwise the text itself.
- *
- * "Never outside" is checked the same way as /api/doc (queueBoard.readDocument), not only on the written path:
- *   1. the resolved path must lie under the root (stops `..` and absolute paths),
- *   2. every part under the root is checked with lstat: a symlink or junction (Node reports both as a symlink) is refused,
- *   3. the real path (realpath) must be exactly the real root + the same parts (catches 8.3 short names, other upper and
- *      lower case and links step 2 did not see).
- * Without 2 and 3 a mission path like `docs/link/secret.md`, where `link` is a junction to another folder, would let
- * the board show any file on the machine (red team finding 11, RT-23). A refused path falls back to the text itself.
- */
-function missionFor(o) {
-  const s = String(o.mission ?? '');
-  // The demo's missions are text; a path in one is never read from the real project.
-  if (s && !s.includes('\n') && !demoOn) {
-    for (const root of [ROOT, MAIN_TREE]) {
-      const filePath = path.resolve(root, s);
-      if (!filePath.startsWith(root + path.sep)) continue;
-      try {
-        // Step 2: walk from the real root, part by part, and refuse any link on the way.
-        const realRoot = fs.realpathSync.native(root);
-        const parts = path.relative(root, filePath).split(path.sep);
-        let here = realRoot;
-        let linked = false;
-        for (const d of parts) {
-          here = path.join(here, d);
-          if (fs.lstatSync(here).isSymbolicLink()) {
-            linked = true;
-            break;
-          }
-        }
-        if (linked) continue;
-        // Step 3: the real path must be the path we walked, nothing else.
-        const real = fs.realpathSync.native(here);
-        if (real !== path.join(realRoot, ...parts)) continue;
-        if (fs.statSync(real).isFile())
-          return { text: fs.readFileSync(real, 'utf8').slice(0, 200_000), path: s };
-      } catch {
-        /* does not exist here */
-      }
-    }
-  }
-  return { text: s, path: null };
-}
 
 /**
  * Does a write action. Returns { status, answer }. The POST route map: each /api/ path and its handler in
@@ -1826,7 +442,7 @@ async function write(filePath, b) {
     no: (message) => ({ status: 400, answer: { ok: false, message } }),
     run: async (args, what) => {
       const r = await queueMjs(args);
-      quick = null;
+      ctx.clearQuick();
       const clock = new Date().toLocaleTimeString('en-GB');
       console.log(`${clock} ${what}: ${r.ok ? 'ok' : `failed (${r.error || r.out})`}`);
       return r.ok
@@ -2058,39 +674,16 @@ let lastOpen = 0;
 const DEMO_ENV_KEYS = Object.keys(DEMO.demoVariables(DEMO_PATHS));
 let savedEnv = null;
 
-/** Every cache back to its start value (the paths behind them have changed). */
+/** Every cache back to its start value (the paths behind them have changed). Each data module resets its own. */
 function resetCaches() {
-  gitStatus = { time: 0, uncommitted: [], error: false, pushedHead: null, sincePush: [] };
-  usageCache = { key: null, list: [] };
-  silentCache = { time: 0, key: null, list: [] };
-  reviewsCache = { key: null, list: [] };
-  spinCache = { time: 0, key: null, list: [] };
-  baseTipCache = { time: 0, tip: null };
-  pushBatchCache = { time: 0, batch: null, blocked: [], fullGate: 'off' };
-  checksCache = { time: 0, data: null, running: false };
-  notBuildingCache = { key: null, list: [] };
-  checksReport = { time: 0, report: null };
-  quick = null;
-  logCache = { key: null, rows: [], events: [], error: null };
-  revertedCache = { time: 0, commits: new Set() };
-  statCache = null;
-  scheduleCache = { key: null, data: null };
-  bandCache = { key: null, data: null };
-  backtestCache = { key: null, data: null };
-  planCache = null;
-  tidyCache = null;
+  ctx.resetTracks();
+  ctx.resetState();
+  ctx.resetStatistics();
+  ctx.resetSetup();
   resetPlanCheck();
   demoCountCache = { key: null, count: 0, archived: 0 };
-  // The live update watched the old data folder: close it (the next wait watches the new one) and answer the waiters.
-  if (planGuard) {
-    try {
-      planGuard.close();
-    } catch {
-      // error-ignored: a watcher that is already gone needs no closing
-    }
-  }
-  planGuard = null;
-  for (const v of [...PLAN_WAITERS]) v();
+  // The plan cache, and the live update off the old data folder (its waiters are answered).
+  ctx.resetPlans();
 }
 
 function useDemo(on) {
@@ -2116,8 +709,7 @@ function useDemo(on) {
     ({ FOLDER, FILE, CURSOR, PLAN_FILE, FOLLOW_FILE, BASE_HEALTH_FILE, SOURCE_ROOT, GIT_ROOT, TIME_LOG } = REAL);
   }
   demoOn = on;
-  planLead = T.planLeadReader(SOURCE_ROOT, { fs, path });
-  planSearch = T.planDocSearcher(SOURCE_ROOT, { fs, path });
+  ctx.remakePlanReaders();
   resetCaches();
 }
 
@@ -2176,7 +768,7 @@ function demoAction(b) {
   if (action === 'dismiss') {
     const r = DEMO.writeDismissed(REAL.FOLDER);
     if (!r.ok) return { status: 500, answer: { ok: false, message: `Could not write demo-offer.json (${r.error}).` } };
-    quick = null;
+    ctx.clearQuick();
     return ok(DEMO_OFFER.TEXTS.neverDone);
   }
   if (action === 'leave') {
@@ -2211,10 +803,11 @@ async function writeOrDemo(filePath, b) {
   return write(filePath, b);
 }
 
-// ---- The route modules (queue-board/api/) ---------------------------------------------------------------------
-// ctx is what the handlers read from this file: the live paths and caches as getters (demo mode switches them, so a
-// handler reads the value of the moment, as it did when it lived here), the two cache resets, the constants, the data
-// builders, the JSON answer and the write plumbing (writeTools.mjs). It is built once and copies nothing.
+// ---- The data builders (queue-board/data/) and the route modules (queue-board/api/) ------------------------------
+// ctx is what the data builders and the handlers read from this file: the live paths as getters (demo mode switches
+// them, so a module reads the value of the moment, as it did when it lived here), the constants and the few helpers that
+// stay here. Each data module then adds its builders to it (their caches stay in the module; planCache and planSearch
+// stay getters), and writeTools.mjs the write plumbing. It is built once and copies nothing.
 const ctx = {
   get FILE() {
     return FILE;
@@ -2234,28 +827,29 @@ const ctx = {
   get FOLLOW_FILE() {
     return FOLLOW_FILE;
   },
+  get BASE_HEALTH_FILE() {
+    return BASE_HEALTH_FILE;
+  },
+  get GIT_ROOT() {
+    return GIT_ROOT;
+  },
+  get TIME_LOG() {
+    return TIME_LOG;
+  },
   get demoOn() {
     return demoOn;
-  },
-  get planSearch() {
-    return planSearch;
   },
   get realConfig() {
     return realConfig;
   },
-  get planCache() {
-    return planCache;
-  },
-  clearQuick() {
-    quick = null;
-  },
-  clearChecksReport() {
-    checksReport = { time: 0, report: null };
-  },
-  BRANCH_PATTERN, BRANCH_PREFIX, CONFIG, DEMO_PATHS, FEATURES, MAIN_TREE, QUEUE_MJS, REAL, ROOT, TITLE, UPDATE_CACHE,
-  branchFor, branchInfo, checksReportNow, demoNow, escHtml, historyFor, json, missionFor, planEffectOf, plans,
-  readJson, scheduleData, setup, sinceData, state, statistics, tidySummary, uncommitted, waitOnPlans, write,
+  BASE, CONFIG, DEMO_PATHS, FEATURES, HERE, MAIN_TREE, MASCOT_FILE, MASCOT_MODE, QUEUE_MJS, REAL, REMOTE, ROOT, TITLE,
+  demoNow, escHtml, findLogo, isFile, json, write,
 };
+// tracks.mjs: git, base health, push batch, the agent badges. state.mjs: state(), the Checks report, missionFor.
+// statistics.mjs: the time log, Statistics, History, Timeline, Since you left. plans.mjs: plans() and the live update.
+// setup.mjs: the update banner, the setup panel, the tidy line. getOwnPropertyDescriptors keeps a getter a getter.
+for (const part of [tracksData, stateData, statisticsData, plansData, setupData])
+  Object.defineProperties(ctx, Object.getOwnPropertyDescriptors(part(ctx)));
 const WRITE_TOOLS = writeTools(ctx);
 Object.assign(ctx, WRITE_TOOLS);
 const { queueMjs, oneAtATime } = WRITE_TOOLS;
@@ -2456,8 +1050,8 @@ server.listen(PORT, HOST, () => {
   }
   console.log(`Queue: ${FILE}. Ctrl+C stops the board.`);
   // The update check: once now and then once a day (the cache keeps it to one fetch per 24 hours, also across restarts).
-  refreshLatest().catch(() => {});
-  setInterval(() => refreshLatest().catch(() => {}), U.MAX_AGE_MS).unref();
+  ctx.refreshLatest().catch(() => {});
+  setInterval(() => ctx.refreshLatest().catch(() => {}), U.MAX_AGE_MS).unref();
   // S9: the periodic machine sample (metrics.machineSampleMin, 0 = off by default). The setting is read once a minute,
   // so the gear turns it on or off without a restart; a sample is one `load` row with command "sample".
   try {
