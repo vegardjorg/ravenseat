@@ -984,12 +984,11 @@ Where Ravenseat starts a process that can run long, with its time budget and how
 | Where | What runs | Time budget | Tree ended by | Registered, track tag, lower priority |
 |---|---|---|---|---|
 | `gates.mjs` runShell | gate commands (`--quick`, `--full`, `--precheck`) | per command (`gates` budgets) | the tree guard (`lib/treeRun.js`), `killTree` at the budget | yes, yes, yes |
-| `lib/treeRun.js` runBounded | done commands, red on base, the base gate, the base check in merge | `doneCheck.timeoutSec`, `baseGate.timeoutSec` | the supervisor at the budget, the guard when the caller dies | yes, done commands only, yes |
+| `lib/treeRun.js` runBounded | done commands, red on base, the base gate, the base check in merge, the QA evidence command (`qa auto --run`) | `doneCheck.timeoutSec`, `baseGate.timeoutSec`; QA: `gates.timeoutSec` (null = `baseGate.timeoutSec`) | the supervisor at the budget, the guard when the caller dies | yes, done commands only, yes |
 | `lib/waitMode.js` and `lib/waitRunner.js` | wait-mode runs (`ravenseat gates`, `merge` ...) | `wait.hardSec` | the runner at the cap, the guard when the runner dies | yes, when the caller has one, no |
 | `queue-board.mjs` openBrowser, `lib/queueUpdate.js` refresh | the browser opener, the update check | 5 s, 3 s | ends by itself | no |
-| everything else | `git`, `gh`, `taskkill`, `tar` and short `node` calls of the queue itself | short, synchronous | ends with its caller | no |
-
-One gap is known: the QA evidence command (`ravenseat qa auto --run`) runs without a budget or a tree guard.
+| `cli/ghRun.mjs` ghSpawn, `cli/cloud.mjs` gitRemote | `gh` (issues, doctor, the CI watch, the external CI check in gates), `git fetch` of a cloud track, the cloud branch delete after a merge | gh 20 s; fetch 15 s (pulse) or 2 min (`cloud done`); delete 60 s | ends at the limit, no password prompt for git | no |
+| everything else | `git`, `taskkill`, `tar` and short `node` calls of the queue itself | short, synchronous | ends with its caller | no |
 
 The register (`processGuard.register`): each guard writes `<data folder>/processes/<pid>.json` (pid, the pid that
 started it, owner, track, kind, start, max time) and removes it when its command ends. `ravenseat doctor` (`processes`),

@@ -130,6 +130,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **Settings marks the command palette (`board.palette`) as having no effect while `board.shortcuts` is off.**
 - **Internal: `cli/merge.mjs` is split by step of the receive and merge flow into `cli/merge/`, with the old file as the map.** No change in behaviour.
 ### Fixed
+- **No more hangs on a silent remote or tool: `cloud done`'s fetch, the cloud branch delete, `gh` in gates and the CI watch, and `qa auto --run` now have time limits.** QA uses `gates.timeoutSec` (null = `baseGate.timeoutSec`, 900 s).
 - **`undo <id>` finds the merge on a base log over 1 MB, and says when the log cannot be read instead of "merge not found".**
 - **Dragging a Timeline bar with the mouse no longer selects text: a ghost follows the pointer and the landing row, insertion mark and place are shown.** Rides on `board.timelineDrag`, no new setting.
 - **The owner-question examples in the add-to-queue, review and plans skills carry the card fields, so a copied example is no longer refused.** No setting: they are examples.

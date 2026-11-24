@@ -12,7 +12,6 @@
 // =============================================================
 
 import fs from 'node:fs';
-import { spawnSync } from 'node:child_process';
 
 import {
   a, autoAcceptContext, autoAcceptRules, autoCleanFocus, CLI, CONFIG, cut, die, edit, FOLDER, focusCleanOut, GIT_ROOT, L, positional,
@@ -475,23 +474,24 @@ export function cmdQa() {
       }
       const k = L.evidenceCommand(o);
       if (k.error) die(k.error);
-      // The evidence command runs what the track delivered: the same scrubbed environment as the gates (lib/gateEnv.js).
-      const s = spawnSync(k.command, {
+      // The evidence command runs what the track delivered: the same scrubbed environment as the gates (lib/gateEnv.js),
+      // and the same budget as a track's own gate run (gates.timeoutSec, null = baseGate.timeoutSec, 900 s), through
+      // lib/treeRun.js, which ends the whole process tree at the budget (ARK-1 T3). A run over it is red.
+      const budgetSec = Number(CONFIG.gates?.timeoutSec) || Number(CONFIG.baseGate?.timeoutSec) || 900;
+      const s = require('./lib/treeRun.js').runBounded(k.command, {
         cwd: GIT_ROOT,
-        env: require('./lib/gateEnv.js').trackCodeEnv(process.env, { storeFile: require('./lib/gateEvidence.js').storeFile(FOLDER), root: GIT_ROOT }).env,
-        shell: true,
-        encoding: 'utf8',
-        maxBuffer: 1 << 28,
-        windowsHide: true,
+        timeoutMs: budgetSec * 1000,
+        spawn: require('./lib/gateEnv.js').trackCodeSpawn(process.env, { storeFile: require('./lib/gateEvidence.js').storeFile(FOLDER), root: GIT_ROOT }),
       });
-      const green = s.status === 0;
+      const green = s.status === 0 && !s.timedOut;
+      const redText = s.timedOut ? `timed out after ${budgetSec} s` : `exit ${s.status ?? '?'}`;
       edit((queue) => {
         const u = L.qaAutoOutcome(queue, o.id, green);
         if (u.error) die(u.error);
         return u;
       });
       console.log(
-        `${o.id.padEnd(12)} ${green ? 'green, QA ok (auto)' : `red (exit ${s.status ?? '?'}), stays in the QA list`} · ${L.evidenceText(o.evidence)}`,
+        `${o.id.padEnd(12)} ${green ? 'green, QA ok (auto)' : `red (${redText}), stays in the QA list`} · ${L.evidenceText(o.evidence)}`,
       );
     }
     if (candidates.length && !run) console.log(`\nRun and close the green ones: ${CLI} qa auto --run [<id...>]`);

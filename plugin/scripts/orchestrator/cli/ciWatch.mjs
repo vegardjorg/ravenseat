@@ -45,11 +45,14 @@ if (process.env.QUEUE_CI_GH) {
   const mod = await import(pathToFileURL(path.resolve(process.env.QUEUE_CI_GH)).href);
   gh = (args) => mod.default(args);
 } else {
-  const r = spawnSync('gh', ['--version'], { encoding: 'utf8', shell: false });
-  if (r.error || r.status !== 0) die('CI WATCH: gh (the GitHub CLI) was not found; install it and run gh auth login. Nothing watched.');
+  // Through cli/ghRun.mjs: every gh call has a 20 s limit, so one that does not answer counts as a failed poll instead
+  // of holding the watch past its own --timeout (ARK-1 T3).
+  const { ghSpawn } = await import('./ghRun.mjs');
+  const r = ghSpawn(['--version'], { cwd: GIT_ROOT });
+  if (r.missing || r.timedOut || r.code !== 0) die('CI WATCH: gh (the GitHub CLI) was not found; install it and run gh auth login. Nothing watched.');
   gh = (args) => {
-    const x = spawnSync('gh', args, { encoding: 'utf8', cwd: GIT_ROOT, maxBuffer: 64 * 1024 * 1024 });
-    return { code: x.status ?? 1, out: `${x.stdout ?? ''}` };
+    const x = ghSpawn(args, { cwd: GIT_ROOT });
+    return { code: x.code ?? 1, out: x.out };
   };
 }
 

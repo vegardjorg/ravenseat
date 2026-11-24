@@ -299,6 +299,18 @@ describe('queue.mjs qa evidence and qa auto', () => {
     expect(find('S-1').qa_status).toBe('waiting');
   });
 
+  it('qa auto --run stops a command that hangs at the gate budget and keeps the entry red (ARK-1 T3)', () => {
+    writeFileSync(join(folder, 'hang.mjs'), 'setInterval(() => {}, 1000);\n');
+    writeFileSync(join(folder, 'queue.config.json'), JSON.stringify({ qa: { autoCommand: 'node {refs}' }, gates: { timeoutSec: 2 } }));
+    run(['qa', 'evidence', 'R-1', 'test=hang.mjs']);
+    const started = Date.now();
+    const r = run(['qa', 'auto', '--run']);
+    expect(Date.now() - started).toBeLessThan(30_000);
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/R-1 +red \(timed out after 2 s\), stays in the QA list/);
+    expect(find('R-1').qa_status).toBe('waiting');
+  }, 60_000);
+
   it('qa auto --run without a configured command refuses and changes nothing', () => {
     config({});
     run(['qa', 'evidence', 'G-1', 'test=green.mjs']);
