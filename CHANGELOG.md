@@ -94,7 +94,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **Doctor and `pulse-check --include-owner` show who holds a gate queue slot and who waits.** Display only, no setting.
 - **test:changed gives vitest fewer workers and 120 s timeouts on a busy machine, so load gives fewer false reds.** `testChanged.adaptLoad` `true`.
 ### Changed
-- **Ready for the Claude plugin directory: the plugin has a listing icon (the raven seat logo), and the Windows `.cmd` shim is stored with CRLF as is (`-text`), since the directory refuses `eol=crlf`.**
+- **Ready for the Claude plugin directory: the plugin has a listing icon (the raven seat logo), the README lists what Ravenseat runs, sends and fetches, and the Windows `.cmd` shim is stored with CRLF as is (`-text`), since the directory refuses `eol=crlf`.**
 - **The settings registry's rows live in one file per settings area (`lib/settings/`), put together by `lib/settingsRegistry.js` in the same order.** Internal structure only; no setting or output changes.
 - **The board server's API routes live in one module per route group under `queue-board/api/`; `queue-board.mjs` is the entry point and route map.** Internal structure only, no user-visible change.
 - **The board server's data builders (state, statistics, plans, Timeline, git and agent helpers, setup) live in `queue-board/data/`, one module per group.** Internal structure only, no user-visible change.

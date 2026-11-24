@@ -240,6 +240,26 @@ Ravenseat coordinates work across sessions, failures and concurrent agents:
 The full list, with the test behind each guarantee: [red team](plugin/docs/redteam.md) ·
 [guarantees and limits](plugin/docs/guide.md#guarantees-and-limits)
 
+## What Ravenseat runs, sends and fetches
+
+Ravenseat is plain, readable Node.js in `plugin/`. It has no telemetry, no analytics and no server of its own. Its
+state lives in your project (`scripts/.queue/`, `plans/`, `docs/`).
+
+- **Runs locally:** Node.js scripts, called by its hooks, skills and the `ravenseat` command; `git` in your
+  repository and its worktrees; your project's own check commands (tests, lint, build) as you configure them; and
+  Claude Code itself, to start queue agents.
+- **The board:** an optional local web server that listens on `127.0.0.1` only and reads the same files.
+- **GitHub, through your own `gh` login, only when you use the feature:** CI status and logs (the optional CI watch after a push), repository
+  visibility, branch protection, and issue import (`issues import`). `git push` and `git fetch` go to your own remote,
+  and a push happens only when you ask for one.
+- **Anthropic, only if you set up cloud tracks:** `ravenseat cloud send` sends the task text to the routine trigger
+  URL you configure (`api.anthropic.com`), with the trigger token you put in an environment variable. Nothing else
+  reads or sends that token.
+- **A web page, only on request:** `ravenseat plan doc` can read a public page you name as a plan source (GET only,
+  no login, 10 second limit). A repository visibility check may call the public GitHub API without credentials.
+
+Nothing is fetched or installed at run time: Ravenseat has no runtime dependencies to download.
+
 ## What about cost?
 
 Ravenseat aims to reduce supervision, not promise cheaper code generation. Smaller conversations reduce repeated
