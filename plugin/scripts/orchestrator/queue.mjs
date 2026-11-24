@@ -1121,14 +1121,8 @@ if (command === 'init') {
   await (await import('./cli/undo.mjs')).cmdUndoLast();
 } else if (command === 'plan') {
   // ---- The plan register (see the top of the file and lib/queuePlan.js) ----
-  // A plans.json that does not parse stops with the store's message (the way back through plans.json.prev), not a
-  // stack trace (lib/store/fileBackend.js StoreCorruptError).
-  try {
-    await (await import('./cli/plans.mjs')).planCommand();
-  } catch (e) {
-    if (e?.code === 'ESTORECORRUPT') die(e.message);
-    throw e;
-  }
+  // A plans.json that does not parse stops with the store's message, not a stack trace (cli/plans.mjs planCommand).
+  (await import('./cli/plans.mjs')).planCommand();
 } else if (command === 'classify') {
   (await import('./cli/tasks.mjs')).cmdClassify();
 } else if (command === 'handover') {
