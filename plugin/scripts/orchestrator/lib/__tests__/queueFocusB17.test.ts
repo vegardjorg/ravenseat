@@ -19,7 +19,7 @@
 // The whole board runs in jsdom with a small synthetic queue (no network), as in queueBoardFeatures.test.ts.
 // =============================================================
 import { describe, it, expect, beforeAll } from 'vitest';
-import { readFileSync } from 'fs';
+import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { clientSource } from './boardClient';
 
@@ -234,6 +234,10 @@ describe('one word on the board: step, never stage', () => {
       join(ORCH, 'lib', 'queueDecisions.js'),
       join(ORCH, 'lib', 'queuePlanView.js'),
       join(ORCH, 'lib', 'settingsRegistry.js'),
+      // SPLIT-1: the registry's rows live in one file per settings area.
+      ...readdirSync(join(ORCH, 'lib', 'settings'))
+        .filter((f) => f.endsWith('.js'))
+        .map((f) => join(ORCH, 'lib', 'settings', f)),
       join(ORCH, 'lib', 'logic', 'focus.js'),
       join(ORCH, 'lib', 'logic', 'ranking.js'),
       join(ORCH, 'lib', 'logic', 'edit.js'),

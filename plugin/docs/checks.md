@@ -709,5 +709,5 @@ Yes: `ravenseat checks off`. Nothing else changes: the guards and gates run as b
 | The opt-in checks and how each is offered | `lib/optInChecks.js` |
 | The command `ravenseat checks` and the facts that need git, the host or the logs | `cli/checks.mjs` |
 | The tab on the board | `queue-board/board/checks.js` |
-| The settings `checksPanel.mode` and `checksPanel.marker` | `lib/settingsRegistry.js` |
+| The settings `checksPanel.mode` and `checksPanel.marker` | `lib/settings/gates.js` (put together by `lib/settingsRegistry.js`) |
 | The table and the conditions on this page | `scripts/checks-doc-table.mjs` (`npm run docs:checks`) |

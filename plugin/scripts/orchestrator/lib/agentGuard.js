@@ -6,7 +6,7 @@
 // or the user's own subagent, got none of them (review 2026-11-11, S7). Now every non-empty agent_type is guarded, with
 // an exception list for the types the owner names.
 //
-// The setting (queue.config.json, lib/settingsRegistry.js, category Command and secret guards):
+// The setting (queue.config.json, lib/settings/guards.js, category Command and secret guards):
 //   agentGuard.enabled  true (default): every subagent is guarded. false: only the queue's own types (as before B3).
 //   agentGuard.except   [] (default): agent types that are not guarded, compared without case, with or without a
 //                       plugin prefix ("general-purpose", "myplugin:helper").

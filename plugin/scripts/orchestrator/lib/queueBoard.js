@@ -2274,7 +2274,8 @@ function assessBulk(queue, action, add) {
 /**
  * The fields in the settings panel: all the limits `queue.mjs limit` can set (the test checks that the list equals
  * queueLogic.LIMIT_NAME), with the title, explanation and type of their row in the settings registry
- * (lib/settingsRegistry.js, `limits.<name>`), which is the one place those texts are written.
+ * (lib/settingsRegistry.js; the rows are in lib/settings/project.js, `limits.<name>`), which is the one place those
+ * texts are written.
  */
 const REGISTRY = require('./settingsRegistry.js');
 const SETTINGS_VIEW = require('./settingsView.js');

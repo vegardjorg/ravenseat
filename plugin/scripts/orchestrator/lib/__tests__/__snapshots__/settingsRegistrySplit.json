@@ -1,0 +1,637 @@
+{
+ "exports": [
+  "CATEGORIES",
+  "INTERNAL",
+  "LABELS",
+  "QUEUE_ONLY",
+  "REQUIRES",
+  "SETTINGS",
+  "rowFor"
+ ],
+ "labels": {
+  "advanced": "Advanced",
+  "fullOnly": "Full mode only"
+ },
+ "categories": [
+  {
+   "id": "project",
+   "title": "Project and git"
+  },
+  {
+   "id": "limits",
+   "title": "Limits and cost"
+  },
+  {
+   "id": "load",
+   "title": "Machine load"
+  },
+  {
+   "id": "gates",
+   "title": "Gates"
+  },
+  {
+   "id": "tests",
+   "title": "Tests and evidence"
+  },
+  {
+   "id": "learning",
+   "title": "Checks tab and learning",
+   "note": "Three sources can propose a task that builds a new guard: a failure that keeps repeating (inspection.mode, on), a known bug (gates.fromKnownBugs, propose) and the finding log (learning.proposals, off). Together they keep at most three proposals open, and each one waits for your approval, so none of them starts work by itself. The finding log source is an opt-in check, off until you turn it on, since its proposals ask for your time."
+  },
+  {
+   "id": "files",
+   "title": "File and read guards"
+  },
+  {
+   "id": "guards",
+   "title": "Command and secret guards"
+  },
+  {
+   "id": "push",
+   "title": "Merge and push"
+  },
+  {
+   "id": "private",
+   "title": "Private and sharing"
+  },
+  {
+   "id": "review",
+   "title": "Review and agents"
+  },
+  {
+   "id": "scope",
+   "title": "Scope and catalog"
+  },
+  {
+   "id": "board",
+   "title": "Board and advice"
+  },
+  {
+   "id": "cloud",
+   "title": "Cloud"
+  },
+  {
+   "id": "plans",
+   "title": "Plans and focus"
+  },
+  {
+   "id": "history",
+   "title": "History and storage"
+  }
+ ],
+ "internal": [
+  "board.updateCheck"
+ ],
+ "queueOnly": [
+  "guidance",
+  "checksPanel.mode",
+  "checksPanel.marker"
+ ],
+ "requires": {
+  "fixRound.continueMaxContextK": [
+   "fixRound.continueWithinMin"
+  ],
+  "gateEvidence.external": [
+   "gateEvidence.mode=external"
+  ],
+  "gates.clean.dependencies": [
+   "gates.runner=clean"
+  ],
+  "gates.clean.copy": [
+   "gates.runner=clean"
+  ],
+  "gates.clean.include": [
+   "gates.runner=clean"
+  ],
+  "gates.clean.kinds": [
+   "gates.runner=clean"
+  ],
+  "gates.clean.keepOnRed": [
+   "gates.runner=clean"
+  ],
+  "baseGate.commands": [
+   "baseGate.enabled"
+  ],
+  "baseGate.tailLines": [
+   "baseGate.enabled"
+  ],
+  "baseGate.flakyRerun": [
+   "baseGate.enabled"
+  ],
+  "testWeakening.focusStop": [
+   "testWeakening.enabled"
+  ],
+  "testWeakening.findingLog": [
+   "testWeakening.enabled"
+  ],
+  "testWeakening.markers": [
+   "testWeakening.enabled"
+  ],
+  "decisionSignals.deleteMin": [
+   "decisionSignals.enabled"
+  ],
+  "decisionSignals.bigDiffLines": [
+   "decisionSignals.enabled"
+  ],
+  "gates.fixWithoutTestWarning": [
+   "gates.redOnBase"
+  ],
+  "checksPanel.marker": [
+   "checksPanel.mode"
+  ],
+  "inspection.minRepeats": [
+   "inspection.mode"
+  ],
+  "inspection.windowDays": [
+   "inspection.mode"
+  ],
+  "learning.windowDays": [
+   "learning.repeats"
+  ],
+  "learning.areaRepeats": [
+   "learning.repeats"
+  ],
+  "learning.projectRepeats": [
+   "learning.repeats"
+  ],
+  "learning.guardFailedMarker": [
+   "learning.repeats"
+  ],
+  "learning.dbProbes": [
+   "inspection.mode",
+   "learning.repeats"
+  ],
+  "learning.recipeDamping": [
+   "inspection.mode",
+   "learning.repeats"
+  ],
+  "learning.recipeMinProposals": [
+   "learning.recipeDamping"
+  ],
+  "learning.recipeMinProposalsDb": [
+   "learning.recipeDamping",
+   "learning.dbProbes"
+  ],
+  "learning.recipeMinAccepted": [
+   "learning.recipeDamping"
+  ],
+  "agentGuard.except": [
+   "agentGuard.enabled"
+  ],
+  "push.ownerAsk": [
+   "push.mode=owner"
+  ],
+  "push.ciWatchIntervalSec": [
+   "push.ciWatch=github"
+  ],
+  "push.ciWatchTimeoutMin": [
+   "push.ciWatch=github"
+  ],
+  "migrations.filePattern": [
+   "migrations.folder"
+  ],
+  "migrations.blockSize": [
+   "migrations.folder"
+  ],
+  "proposals.autoAccept.classes": [
+   "proposals.autoAccept.enabled"
+  ],
+  "proposals.autoAccept.maxEstimateMin": [
+   "proposals.autoAccept.enabled"
+  ],
+  "proposals.autoAccept.maxValue": [
+   "proposals.autoAccept.enabled"
+  ],
+  "scopeNotes.folderDepth": [
+   "scopeNotes.newFolders"
+  ],
+  "scopeNotes.driftGapFiles": [
+   "scopeNotes.driftGap"
+  ],
+  "scopeNotes.driftGapShare": [
+   "scopeNotes.driftGap"
+  ],
+  "catalog.checkStop": [
+   "catalog.checks"
+  ],
+  "catalog.gateAfter": [
+   "learning.proposals",
+   "catalog.checks"
+  ],
+  "board.showCloud": [
+   "features.cloud"
+  ],
+  "board.timelineHorizonDays": [
+   "board.timeline"
+  ],
+  "board.timelineRows": [
+   "board.timeline"
+  ],
+  "board.timelineDrag": [
+   "board.timeline"
+  ],
+  "board.timelineDragPreview": [
+   "board.timeline",
+   "board.timelineDrag"
+  ],
+  "board.timelineUncertainty": [
+   "board.timeline"
+  ],
+  "board.palette": [
+   "board.shortcuts"
+  ],
+  "client.shapeLog": [
+   "client.canary"
+  ],
+  "features.plans.legal": [
+   "features.plans"
+  ],
+  "features.plans.launch": [
+   "features.plans"
+  ],
+  "features.plans.documents": [
+   "features.plans"
+  ],
+  "features.plans.inbox": [
+   "features.plans"
+  ],
+  "plans.startView": [
+   "features.plans"
+  ],
+  "plans.roadmapLayout": [
+   "features.plans"
+  ],
+  "plans.roadmapFoldAfter": [
+   "features.plans"
+  ],
+  "plans.leadFromDocument": [
+   "features.plans"
+  ],
+  "plans.searchDocuments": [
+   "features.plans"
+  ],
+  "loadGuard.minSlots": [
+   "loadGuard.adaptive"
+  ],
+  "loadGuard.allSlotsFreeMemoryPct": [
+   "loadGuard.adaptive"
+  ],
+  "loadGuard.allSlotsCpuPct": [
+   "loadGuard.adaptive"
+  ],
+  "loadGuard.minSlotsCpuPct": [
+   "loadGuard.adaptive"
+  ],
+  "gateQueue.slots": [
+   "gateQueue.enabled"
+  ],
+  "gateQueue.heavyAfterSec": [
+   "gateQueue.enabled"
+  ],
+  "gateQueue.agingMin": [
+   "gateQueue.enabled"
+  ],
+  "gateQueue.staleMin": [
+   "gateQueue.enabled"
+  ],
+  "processGuard.heavyQueue": [
+   "gateQueue.enabled"
+  ],
+  "stateSnapshots.tiers": [
+   "stateSnapshots.enabled"
+  ],
+  "silentSnapshot.keep": [
+   "silentSnapshot.enabled"
+  ],
+  "silentSnapshot.maxKB": [
+   "silentSnapshot.enabled"
+  ],
+  "processGuard.sweep": [
+   "processGuard.register"
+  ],
+  "processGuard.autoKill": [
+   "processGuard.sweep"
+  ]
+ },
+ "rows": [
+  ["mode","bedf232b4cbeff0a"],
+  ["projectName","7ba771f44365c083"],
+  ["baseBranch","84c8ae8e7ecf635d"],
+  ["remote","b6d75b3f2ae1ebde"],
+  ["branchPrefix","5ea55eb266c1b376"],
+  ["productionBranch","5274d1491bfeabac"],
+  ["sharedLinks","9a9cfed5351730bf"],
+  ["excludeBranches","cb0a98c12b0ba887"],
+  ["identity.allow","592f44aad1dcdd90"],
+  ["dataFolder","4eb676cf4ffd1807"],
+  ["timeLog","9f16452734816f5d"],
+  ["largeFileMb","9ba79ce430c185f0"],
+  ["tidy.doctor","496c0eb521b6abc7"],
+  ["tidy.afterMerge","4da4927d05b340c5"],
+  ["tidy.minAgeHours","53e6053f10ccb75a"],
+  ["issues.refsTrailer","f9102315caffb228"],
+  ["issues.labelMap","0b780a3459fe86c6"],
+  ["issues.onPush","c1b887ca81d59a34"],
+  ["limits.maxConcurrent","e73e9076bdb61b3d"],
+  ["limits.dailyBudget","42a5a8f7dcd921f1"],
+  ["limits.nightRun","c42e751a2942d834"],
+  ["limits.nightWindow","06d5253259a6cf65"],
+  ["limits.maxDPlus","ce6d4dd9321d3a44"],
+  ["limits.maxPerDomain","400227d4a8f110e2"],
+  ["limits.maxDb","58d3f45c46e1e56d"],
+  ["usageLimit.pause","3513b2a30a9fdc6b"],
+  ["capacity.resetDay","6ee83614931ebe3c"],
+  ["capacity.resetClock","df0eca74b5ce6f62"],
+  ["capacity.timeZone","539e9843de1928c9"],
+  ["capacity.planName","6cd9a12dd21c5cf1"],
+  ["models","4c15168d5d725845"],
+  ["prices","03b9d055fb59f2d2"],
+  ["cost.contextThresholdK","8bc53fd4bfb3f4ba"],
+  ["limits.minFreeMemoryPct","6b1cf0b585f9aeb5"],
+  ["loadGuard.minFreeMemoryPct","58e68bdcd6a536e3"],
+  ["loadGuard.adaptive","892895603e953e89"],
+  ["loadGuard.minSlots","2943c87156e718a6"],
+  ["loadGuard.allSlotsFreeMemoryPct","a03b81286fc216a8"],
+  ["loadGuard.allSlotsCpuPct","57456bbabd3fad7d"],
+  ["loadGuard.minSlotsCpuPct","9c434594e959036c"],
+  ["gateQueue.enabled","9883810396e2cfcb"],
+  ["gateQueue.slots","a909079cbd6f70f2"],
+  ["gateQueue.heavyAfterSec","47e7d1f9980ed12b"],
+  ["gateQueue.agingMin","71ebf310b1501d3c"],
+  ["gateQueue.staleMin","9e5dd9a82c4e383b"],
+  ["processGuard.heavyQueue","bc0cb8bf075bce2f"],
+  ["gateTemp.enabled","8213bbb48fa5c1fe"],
+  ["processGuard.register","bc15d91f975403c7"],
+  ["processGuard.sweep","bd30a08ccb7ad7c2"],
+  ["processGuard.autoKill","6ac1637911262e02"],
+  ["processGuard.lowerPriority","39e7f82dd287bccc"],
+  ["tracks.overtimeFactor","870ad8e841bd5496"],
+  ["limits.parallelThreshold","2988dc8e3be4a5a9"],
+  ["limits.silentMin","f9a18ae8879c0e9d"],
+  ["silentSnapshot.enabled","ab5d3bf664116af0"],
+  ["silentSnapshot.keep","6da1401b35fa3163"],
+  ["silentSnapshot.maxKB","dc5c981d295de7fa"],
+  ["limits.noAgentMin","e60e2ccc6ec98982"],
+  ["limits.spinMin","8f2da07368ae87eb"],
+  ["gates.quick","412336febb3f1f15"],
+  ["gates.full","500019442999acc2"],
+  ["maxFixRounds","bf46aac26c0c0e5e"],
+  ["fixPlateau","653f89671d59afa6"],
+  ["fixRound.continueWithinMin","3bd586c7c25b80ef"],
+  ["fixRound.continueMaxContextK","60a961d8c8081b9a"],
+  ["doneCheck.timeoutSec","c2a52d97b4e0f164"],
+  ["doneCheck.tailLines","aafb9dc58be584d7"],
+  ["gates.precheck","7888f431576b4b0b"],
+  ["gates.precheckBudgetSec","48d85da3983ef989"],
+  ["gates.timeoutSec","055cae9152c39be3"],
+  ["wait.blockSec","d48d7ca2c4b89984"],
+  ["windows.hideConsoles","bfb796d50063c49a"],
+  ["gates.flakyRerun","546a2cae9587737d"],
+  ["gates.brokenVerdict","14d046362a698e21"],
+  ["gates.runner","016d6b14c546374a"],
+  ["gates.clean.dependencies","520c151615c0a3e2"],
+  ["gates.clean.copy","9f6d29b3e55f97ae"],
+  ["gates.clean.include","05b819a941531ced"],
+  ["gates.clean.kinds","5e3c31e9377ab199"],
+  ["gates.clean.keepOnRed","eca6c447b32bb61d"],
+  ["gates.clean.sweepAfterHours","4f826361c982e678"],
+  ["gateEvidence.mode","21e889602d0b1718"],
+  ["gateEvidence.external","e6da42d30a7d56cf"],
+  ["baseGate.enabled","fc622da5303ab051"],
+  ["baseGate.commands","e2f9b6cff4ef0311"],
+  ["baseGate.timeoutSec","b862b02774001af1"],
+  ["baseGate.tailLines","3f2b1d72af2edf8c"],
+  ["baseGate.flakyRerun","23b9abb1d577eef4"],
+  ["gates.redOnBase","5b78c847c9be29fe"],
+  ["gates.redOnBaseStrict","238efae7d3b6daab"],
+  ["gates.fixWithoutTestWarning","27b78ee1d2241d43"],
+  ["testWeakening.enabled","821fe7f61ae3ca98"],
+  ["testWeakening.focusStop","3b653feb2a8fca1c"],
+  ["testWeakening.findingLog","48a82cf6bab41e51"],
+  ["testRuns.log","da2ca560f95a7342"],
+  ["testChanged.adaptLoad","ed4cda5758533fbb"],
+  ["testWeakening.testPaths","f76a2d3685cb6643"],
+  ["testWeakening.markers","abe81a6a974d0469"],
+  ["qa.evidenceTypes","9a123ea187ddbe5a"],
+  ["qa.autoTypes","9ee3dfaa4aa8e5e3"],
+  ["qa.manualTypes","67edba71ac3a69eb"],
+  ["qa.autoCommand","bcd28c48dd55f132"],
+  ["qa.evidenceLabels","a962ae981aad2fca"],
+  ["checksPanel.mode","4f7729a0917b74d0"],
+  ["checksPanel.marker","99254bcfbaca26ac"],
+  ["gates.fromKnownBugs","864f5f8789cc98dd"],
+  ["inspection.mode","429ea855ab1cd40b"],
+  ["inspection.minRepeats","2b50264a592abed0"],
+  ["inspection.windowDays","6dbd2bf45a28d6f1"],
+  ["inspection.registryFile","0fb4c0e7be3aa156"],
+  ["learning.repeats","5f4db9261914ba5e"],
+  ["learning.windowDays","27aba050d0a98c40"],
+  ["learning.areaRepeats","894b4923641b8cdb"],
+  ["learning.projectRepeats","df1f67696898ed6b"],
+  ["learning.guardFailedMarker","15cb70c683c8ba04"],
+  ["learning.proposals","2e78cfe14ed38928"],
+  ["learning.dbProbes","eb32d12c021e735e"],
+  ["learning.recipeDamping","ecc6e7363e9e071a"],
+  ["learning.recipeMinProposals","d0589f6a8b2a71a2"],
+  ["learning.recipeMinProposalsDb","b35338222d54a5cb"],
+  ["learning.recipeMinAccepted","99b0948a3994c7a6"],
+  ["learning.quickGateCard","ec52f9851e75f301"],
+  ["learning.ciParityLift","dc944f8dff36d412"],
+  ["learning.idleGuardDays","a51b953cd88447e0"],
+  ["protectedPaths","ff5ce0493475a3b6"],
+  ["dependencyFiles","49c7878d55dd355d"],
+  ["gitSurface","69be41ad787c7e2a"],
+  ["secretScan.enabled","cd7be28599cdfa92"],
+  ["injection.ownerMark","b0740262fccb9a4b"],
+  ["secretScan.atReceive","f891509afb49f9fb"],
+  ["secretScan.allowlist","3c43d604df6f9cf8"],
+  ["permissionsCheck.enabled","a45a452a8cb7b8e2"],
+  ["dbGuard.localOnly","ade7d213ee0e6fa6"],
+  ["gitignoreCheck.enabled","099a2452b07a328f"],
+  ["secretScan.maxBytes","d59a3b00f69ff751"],
+  ["secretScan.timeoutMs","a6f3052422a2a751"],
+  ["secretScan.historyDepth","3c0f65f714fe7de5"],
+  ["secretScan.rescanDays","80dd2923976f0d2d"],
+  ["deployCommands","fa548b2468d421bd"],
+  ["claudeFingerprint","a3eeebd16c384094"],
+  ["controlFiles.guard","680ed55ef307d82e"],
+  ["controlFiles.fingerprint","b394847c1d2492cf"],
+  ["guardLog.enabled","55c7bcbfb9bdeecb"],
+  ["guards.secretReads","930e04410a735348"],
+  ["guards.onHookFailure","3ed1761e4d0480f7"],
+  ["redact.envValues","07453147fc4f0f15"],
+  ["approvals.ask","96ace74648ceeb9a"],
+  ["agentGuard.enabled","057096605c2f694f"],
+  ["agentGuard.except","f321b271ddcc07f6"],
+  ["agentPushBlock.enabled","8ff473e747ec3b68"],
+  ["ownership.sharedPatchCollides","9fd141a4e355b60d"],
+  ["readGuard.agentTypes","91afea78f0ac40a7"],
+  ["readGuard.autoLoaded","9cd2baddc05dd493"],
+  ["readGuard.largeFiles","1b4cad283a09de08"],
+  ["readGuard.maxLines","a71aa74e0502295c"],
+  ["readGuard.blockLines","df4c93705653f422"],
+  ["readGuard.outline","6a8987689a8a6680"],
+  ["reads.mode","472b6b945be6a759"],
+  ["hotspots","30b6a6b989f716bd"],
+  ["contextGuard.blockOtherChats","d49fbd09c98face8"],
+  ["push.mode","9cdd50803df05598"],
+  ["push.minTasks","8892413cf50c0ec4"],
+  ["push.warnTasks","2d420c0a5d396264"],
+  ["push.maxAgeHours","2cc768b84745d389"],
+  ["push.allowBranches","08d3f053b803e4fd"],
+  ["push.pr","c9d5836a27cf2386"],
+  ["push.controlsWarning","88c8e1e937839af0"],
+  ["push.ownerAsk","68fab81fbb7f52f3"],
+  ["wiring.stop","e625fb3e86a235e5"],
+  ["reviewItems.stop","bb12f09401c4ac76"],
+  ["review.requireFindings","25186dda537cead2"],
+  ["push.ciWatch","6facc221f07eb2a8"],
+  ["push.ciWatchIntervalSec","a4c11a48f279f699"],
+  ["push.ciWatchTimeoutMin","8302ebbae98bb0d1"],
+  ["migrations.folder","5281f4801d245d86"],
+  ["migrations.filePattern","4d809417164ba9f7"],
+  ["migrations.blockSize","1d0659c215080b86"],
+  ["migrations.pushCommand","426812fe0decd6d4"],
+  ["migrations.environmentFile","9f954c73072f5d75"],
+  ["migrations.allowedEnvironment","6bcc3c304bf2d9aa"],
+  ["mergeDanger.show","52d50a82bcb502ba"],
+  ["helpers","c1b7662dd9552228"],
+  ["helpers.reviewer-gap.acceptance","d28b20030a8052d5"],
+  ["reviewers","efcdb77061567624"],
+  ["review.signals","099ec30a241d1bd9"],
+  ["review.packs","2aed4fb05573bc49"],
+  ["triage.minAgeDays","c85f3db1ba916b76"],
+  ["triage.agentAdded","f7a96dae09b24a23"],
+  ["triage.maxPerFill","81b7e0e4605eb29d"],
+  ["triage.askAgainMin","ce4ad41b51df6afd"],
+  ["planReview.mode","efa2f5553164b1ef"],
+  ["planReview.classes","8e84098c42e17cf3"],
+  ["mission.riskFirst","402bfd96d93bdec7"],
+  ["planChecks.missionPaths","8f4ea462f92f1275"],
+  ["planChecks.emptyOwnership","5ab7f4bd928e7dce"],
+  ["planChecks.sizeNotSet","f7cc280c63d02325"],
+  ["planChecks.ownerQuestionCount","e956e5ab78635e2b"],
+  ["decisionSignals.enabled","102e88191acd38cc"],
+  ["decisionSignals.deleteMin","6c6f601eebea086b"],
+  ["decisionSignals.bigDiffLines","2f614fdb85b74983"],
+  ["proposals.autoAccept.enabled","acd80b6973cf16a5"],
+  ["proposals.autoAccept.classes","9e9b479d2ba5ba23"],
+  ["proposals.autoAccept.maxEstimateMin","64666dd1fdb1dc23"],
+  ["proposals.autoAccept.maxValue","4889fff4cdbda2b7"],
+  ["architectureRules","5ae0b2c8012786f6"],
+  ["attempts.reservationTtlMin","dd7d95c911f58825"],
+  ["scopeNotes.reuse","062f5670167450cf"],
+  ["scopeNotes.newFolders","c296cc63817931f8"],
+  ["scopeNotes.dependencies","bf6a97b6560a5b9d"],
+  ["scopeNotes.drift","9f0a5e598ec0131f"],
+  ["scopeNotes.ignoreNames","e6742456c5ca0c31"],
+  ["scopeNotes.folderDepth","8794f909a4c33d93"],
+  ["scopeNotes.driftGap","ca2d6035ede67f07"],
+  ["scopeNotes.driftGapFiles","2d1c1a94550f1852"],
+  ["scopeNotes.driftGapShare","5d75ad829c4711ec"],
+  ["scopeNotes.driftWarn","1abde99adcd96f7d"],
+  ["catalog.doctor","eda0ebc365b964ff"],
+  ["catalog.planLinks","c75c16e6121f148f"],
+  ["catalog.missionExcerpt","df6415dc03a7761b"],
+  ["catalog.reviewExcerpt","6a4fb6e268488d4d"],
+  ["catalog.excerptTokens","4e9bfa39b7d4260b"],
+  ["catalog.index","7c2c313d8e6eedcb"],
+  ["catalog.checks","c7e01bb704be6c0a"],
+  ["catalog.checkStop","cdb2165fcb34631d"],
+  ["catalog.captureAnswers","1a13bd3b18887ad7"],
+  ["notBuilding.match","f9d45a2dc0b98f20"],
+  ["catalog.stackFacts","61907cdf4111d57d"],
+  ["catalog.depsExcerpt","f660375919da5951"],
+  ["catalog.gateAfter","b9d3b16a353bd25b"],
+  ["guidance","d9d9b369d629c3f1"],
+  ["board.mascot","30c5d046e52eff5b"],
+  ["board.blockedColumn","267b5ee42cf1b00a"],
+  ["board.panelMode","2e51ce2b2468ba6f"],
+  ["board.demoOffer","b6751cef24d7b403"],
+  ["board.titleCount","814518755c7218a8"],
+  ["board.shortcuts","8258f72826fc5c65"],
+  ["board.palette","0500808228d34e27"],
+  ["board.structuredSearch","beab575aac370c49"],
+  ["board.quickFilters","64ed385c9912f99f"],
+  ["board.timeline","ce879666b30ca1ec"],
+  ["board.timelineHorizonDays","e03b8acd71eb90ac"],
+  ["board.timelineRows","aed1b52fc363c2f1"],
+  ["board.timelineDrag","bc179c3f83a6754c"],
+  ["board.timelineDragPreview","b97dee5b464aea72"],
+  ["board.timelineUncertainty","b54a5c695d30f0cd"],
+  ["board.sinceLast","6e2ae0f3895cd0ee"],
+  ["board.sinceLastWindow","43a278be4a3f162c"],
+  ["limits.autocompact","02ef06de6154ee21"],
+  ["board.port","7f7f8e279d7f5185"],
+  ["board.title","c6631d2f52d5ae33"],
+  ["board.hideKey","c3dc24a713861d82"],
+  ["updates.check","4f0d88927e87f9d2"],
+  ["board.showCloud","f91e041432d494e3"],
+  ["features.statistics","11e9adf33a511786"],
+  ["features.follow","ccaf8a4408f65012"],
+  ["instructionSize.mode","8481515a9f5cea0a"],
+  ["instructionSize.maxLines","5608835edddee1c3"],
+  ["instructionSize.maxChars","6e1f00cc20cf2324"],
+  ["client.canary","cba8823f6b094bc1"],
+  ["client.shapeLog","1dc4605a8cee77b2"],
+  ["codeMode.policy","f89ed1e15a13f99c"],
+  ["features.cloud","56613931432a4583"],
+  ["cloud.maxSessions","5ee5943151dc9151"],
+  ["cloud.offerOnLeave","156933d3e36645cf"],
+  ["cloud.collect","ed24ea1190284df9"],
+  ["cloud.deleteBranch","47ec1dd0858d048e"],
+  ["cloud.bundleMax","07e76f218a2804d7"],
+  ["cloud.start","a65f440f40ee8cab"],
+  ["cloud.fireUrl","e16558eede0d66e3"],
+  ["cloudHidden","6a2cda1fbebbfd18"],
+  ["features.plans","1e44f701ff0b6427"],
+  ["features.focus","d0d2854074d39837"],
+  ["features.plans.legal","19774b8d66f01847"],
+  ["features.plans.launch","1cf56944d1ac804b"],
+  ["features.plans.documents","5a9e8a075ffb3bf6"],
+  ["features.plans.inbox","6a21d45c3959b15f"],
+  ["plans.startView","69d9579a5496456f"],
+  ["plans.roadmapLayout","48025fb4673e6673"],
+  ["plans.roadmapFoldAfter","cb85ef0bf430ede7"],
+  ["plans.leadFromDocument","edf4d9fc1616c3cd"],
+  ["plans.searchDocuments","864e9fdd0f425d38"],
+  ["plans.inboxTriage","96038a28a9f05585"],
+  ["plans.inboxAutoApply","bd41e69593aa88e6"],
+  ["shape.nudge","2ed35e0f330f7de2"],
+  ["shape.threshold","990902381f3ab553"],
+  ["plans.decisionNote","513a06e89436300d"],
+  ["plans.readyCheck","6acb5cb3d43d7af7"],
+  ["plans.checkpoint","07f544954409b90a"],
+  ["zones.detect","bd103071eef0d06d"],
+  ["plans.postCheck","d6e7221d140677b1"],
+  ["plans.devilsAdvocate","83e8dea2fdefbd30"],
+  ["add.largeBatchWarn","b4a78267542fbc73"],
+  ["focus.continueWhenEmpty","3caa4b567dc8ae1b"],
+  ["focus.restDefault","bf68aeb0a477cb82"],
+  ["modules","a4868b3dfdabd43e"],
+  ["projectModuleSuggestion","ad0d09b01d1987b8"],
+  ["priorityRules","604033c2603e9ece"],
+  ["documents.vendors","14fbca8ed70186cb"],
+  ["documents.secretsManifest","29517d013111687a"],
+  ["documents.vendorSwitches","65e9a1d5c3ead724"],
+  ["documentFolders","71ada3d533d12593"],
+  ["indexFile","b7272d5e9a8a4800"],
+  ["planBackup","d1d686cf3c16b39a"],
+  ["links.addWarn","ebf0c47e4fff0784"],
+  ["links.doctor","f212556b7e2983fd"],
+  ["stateSnapshots.enabled","3174ffdee42da3a2"],
+  ["stateSnapshots.tiers","0ab2fef9122721e1"],
+  ["metrics.idleGapMin","647243b0cbdc05f2"],
+  ["metrics.machineSampleMin","bd272cdaaa2d5775"],
+  ["share.queueData","8a295ee0e9bb7b8c"],
+  ["share.include","0e63de0b541fdc94"],
+  ["share.publicOk","9fb936866b4a52ba"],
+  ["privatePaths","8e488d494fb2a1d2"],
+  ["deps.audit","1db8890c4294c2c5"],
+  ["deps.privateScopes","602e8df78e74f97b"],
+  ["deps.auditStop","7e2d2288ff3bba32"],
+  ["history.rotateTimeLog","f0d68b672dacb885"],
+  ["history.archiveDoneAfterDays","71dcbf144968d615"],
+  ["queue.missionInlineMax","0c3ec3edd86a2fba"]
+ ]
+}
