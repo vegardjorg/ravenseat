@@ -96,6 +96,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 ### Changed
 - **The settings registry's rows live in one file per settings area (`lib/settings/`), put together by `lib/settingsRegistry.js` in the same order.** Internal structure only; no setting or output changes.
 - **The board server's API routes live in one module per route group under `queue-board/api/`; `queue-board.mjs` is the entry point and route map.** Internal structure only, no user-visible change.
+- **The board server's data builders (state, statistics, plans, Timeline, git and agent helpers, setup) live in `queue-board/data/`, one module per group.** Internal structure only, no user-visible change.
 - **A gate queue slot is held with a heartbeat: a stuck holder's slot is taken over after 5 minutes instead of 3 hours.** `gateQueue.staleMin` `5`, with a 6 hour ceiling.
 - **The reviewers and the researcher put independent calls in the same turn, as the tracks already did.** Text only, no setting; `ravenseat cost` "parallel" is the before and after.
 - **On the Timeline a step's band replaces the per-task likely range of its planned bars, and one line explains a band that starts after the last bar.** Rides on `board.timelineUncertainty`, no new setting.

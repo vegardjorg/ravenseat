@@ -549,7 +549,8 @@ describe('the wiring in the board (read as text)', () => {
       "'/plans/read.js'",
     ])
       expect(mjs).toContain(r);
-    expect(mjs).toContain('T.readDocument(SOURCE_ROOT');
+    // The plan post-check reads through the same guard in queue-board/data/statistics.mjs since SPLIT-1b (live root via ctx).
+    expect(readFileSync(join(CLIENT, 'data', 'statistics.mjs'), 'utf8')).toContain('T.readDocument(ctx.SOURCE_ROOT');
     // GET /api/doc itself lives in queue-board/api/plans.mjs since SPLIT-1 (the live root through ctx).
     expect(readFileSync(join(CLIENT, 'api', 'plans.mjs'), 'utf8')).toContain('T.readDocument(ctx.SOURCE_ROOT');
   });

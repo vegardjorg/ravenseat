@@ -459,7 +459,8 @@ describe('the wiring in the board (read as text)', () => {
     expect(jur).toContain('Q.answers(item');
     expect(jur).toContain("postJson('/api/lawyerPackage'");
     expect(board).toContain("if (filePath === '/api/lawyerPackage') return lawyerPackageWrite(b);");
-    expect(board).toMatch(/isSymbolicLink\(\)/);
+    // The server's own link guard (missionFor) lives in queue-board/data/state.mjs since SPLIT-1b.
+    expect(readFileSync(join(CLIENT, 'data', 'state.mjs'), 'utf8')).toMatch(/isSymbolicLink\(\)/);
     // The lawyer package write lives in queue-board/api/planEdits.mjs since SPLIT-1, with its own link check.
     expect(readFileSync(join(CLIENT, 'api', 'planEdits.mjs'), 'utf8')).toMatch(/lstatSync\(x\)\.isSymbolicLink\(\)/);
     expect(jur).not.toMatch(/innerHTML|insertAdjacentHTML|outerHTML/);

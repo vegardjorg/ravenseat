@@ -7,7 +7,8 @@
 //     bytes, so a module that is missing from the server's allow list shows up here and not as a blank board,
 //   - the board's scripts in index.html are exactly the files in queue-board/board/ (none left out, none extra),
 //   - the Content-Security-Policy and the other security headers are the same strict ones as before the split,
-//   - only allow-listed paths are served: the old /board.js and an unknown file under /board/ give 404,
+//   - only allow-listed paths are served: the old /board.js and an unknown file under /board/ give 404, and no file in
+//     the server-only queue-board/api/ and queue-board/data/ is ever served (with or without the key),
 //   - an answer from a choice button (POST /api/action { type: 'resolve', choice }) goes through queue.mjs resolve --choice,
 //   - GET /api/settings sends the registry by category, and POST /api/setting refuses a weakening value without
 //     confirm: 'weaken' (422 with the warning texts, nothing written), then writes and logs it with that confirm.
@@ -140,6 +141,26 @@ describe('the board server and the client scripts', () => {
       const r = await fetch(`${base}${p}`);
       expect(r.status, p).toBe(404);
       await r.arrayBuffer();
+    }
+  }, 30_000);
+
+  it('never serves the server-only modules in queue-board/api/ and queue-board/data/, with or without the key', async () => {
+    // SPLIT-1: the route handlers (api/) and the data builders (data/) sit next to the browser files in queue-board/, but
+    // they run only on the server. STATIC is an allow list, so no path reaches them; this proves it for every file.
+    for (const dir of ['api', 'data']) {
+      const files = fs.readdirSync(path.join(CLIENT, dir)).filter((f) => f.endsWith('.mjs'));
+      expect(files.length, dir).toBeGreaterThan(0);
+      for (const f of files) {
+        const source = fs.readFileSync(path.join(CLIENT, dir, f));
+        for (const p of [`/${dir}/${f}`, `/queue-board/${dir}/${f}`]) {
+          for (const headers of [{}, { 'x-queue-key': key }]) {
+            const r = await fetch(`${base}${p}`, { headers });
+            const body = Buffer.from(await r.arrayBuffer());
+            expect(r.ok, `${p} ${Object.keys(headers).length ? 'with' : 'without'} the key`).toBe(false);
+            expect(body.equals(source), p).toBe(false);
+          }
+        }
+      }
     }
   }, 30_000);
 });
