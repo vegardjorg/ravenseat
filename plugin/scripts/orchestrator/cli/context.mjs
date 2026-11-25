@@ -454,6 +454,22 @@ export function write(queue) {
     throw e;
   }
 }
+/**
+ * Saves the owner log on its own (owner-log accept, the first check's baseline: lib/ownerLog.js check and accept take
+ * this as their `save`), through the same store as write() (fix round jrn-r2, M1). Before, they wrote owner-log.json
+ * straight with FileBackend, past a journal still open on it (store.journalRecover report, or a recovery at the lock
+ * that failed): the journal then found the owner log changed and could never be finished. Now a journal still open on
+ * the owner log stops the command with the doctor --fix line, as a queue write does (pending 'refuse': the log was
+ * computed from reads made before the transaction). Takes the queue lock itself when the caller does not hold it.
+ */
+export function saveOwnerLog(log) {
+  try {
+    QUEUE_STORE.transaction(['owner-log'], (tx) => tx.put('owner-log', OL.logText(log)), { pending: 'refuse' });
+  } catch (e) {
+    if (e?.code === 'ESTOREJOURNAL') die(e.message.replace(/\bravenseat (?=doctor)/g, `${CLI} `));
+    throw e;
+  }
+}
 const OL = require('./lib/ownerLog.js');
 // The archive of done tasks (lib/queueArchive.js, history.archiveDoneAfterDays, owner decision B5). Every queue write,
 // under the lock:

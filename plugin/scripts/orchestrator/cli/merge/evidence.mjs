@@ -16,7 +16,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-import { CLI, CONFIG, die, FOLDER, git, GIT_ROOT, HERE, L, read, require, val } from '../context.mjs';
+import { CLI, CONFIG, die, FOLDER, git, GIT_ROOT, HERE, L, read, require, saveOwnerLog, val } from '../context.mjs';
 import { BASE_SETUP, fileFlaky } from '../baseHealth.mjs';
 
 const GB = require('./lib/gitSurfaceBaseline.js');
@@ -51,7 +51,8 @@ export const GE_MODE = require('./lib/gateEvidence.js').modeOf(CONFIG);
 export function stopOnOwnerRows(id, again) {
   if (GE_MODE === 'off') return;
   const OL = require('./lib/ownerLog.js');
-  const r = OL.check(FOLDER, read(), id);
+  // The first use's baseline goes through the store (saveOwnerLog), never past an open store journal (fix round jrn-r2).
+  const r = OL.check(FOLDER, read(), id, { save: saveOwnerLog });
   if (r.baseline) console.log(`Owner log started (${OL.logFile(FOLDER)}): the owner rows in the queue now are its baseline.`);
   if (r.missing.length) die(OL.stopMessage({ id, missing: r.missing, ravenseat: CLI, again, file: OL.logFile(FOLDER) }));
 }

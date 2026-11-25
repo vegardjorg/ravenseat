@@ -252,6 +252,34 @@ describe('the real queue write, killed at each point of its commit', () => {
     },
   );
 
+  // Fix round jrn-r2, M1: owner-log accept wrote owner-log.json straight past an open journal (report mode, or a
+  // lock-time recovery that failed), so the journal found the owner log changed and could never be finished.
+  it.each([
+    ['store.journalRecover report', { store: { journalRecover: 'report' } }, undefined],
+    ['auto, and the recovery at the lock fails', {}, ARCHIVE_EPERM],
+  ])('%s: owner-log accept refuses instead of writing past the kept journal; doctor --fix finishes it', (_name, config, acceptCrash) => {
+    const p = archiving(config);
+    // X-1 has an owner row the log does not have yet: the owner accepts it below.
+    const q = readJson(p.data, 'queue.json');
+    q.tasks.push({ id: 'X-1', title: 'Added by the owner', status: 'waiting', project: 'p', class: 'K', added_by: 'owner', added_at: '2026-01-02T00:00:00.000Z' });
+    fs.writeFileSync(path.join(p.data, 'queue.json'), JSON.stringify(q));
+    p.run(FIRST, 'journal');
+    expect(p.journal().length).toBe(1);
+    const acc = p.run(['owner-log', 'accept', 'X-1', '--by', 'owner'], acceptCrash);
+    expect(acc.code, acc.all).not.toBe(0);
+    expect(acc.all).toMatch(/doctor --fix/);
+    // Nothing accepted was written (a recovery at the lock may have renamed the journal's own owner log into place).
+    expect(readJson(p.data, 'owner-log.json').entries.filter((e: any) => e.accepted_by)).toEqual([]);
+    const fix = p.run(['doctor', '--fix']);
+    expect(p.journal(), fix.all).toEqual([]);
+    expect(ids(p.data)).toEqual(['X-1', 'T-1']);
+    const again = p.run(['owner-log', 'accept', 'X-1', '--by', 'owner']);
+    expect(again.code, again.all).toBe(0);
+    expect(again.all).toMatch(/Accepted 1 owner row/);
+    consistent(p.data);
+    expect(p.journal()).toEqual([]);
+  });
+
   it('a hand edit over a kept journal is never written over: doctor --fix keeps it and says so', () => {
     const p = archiving({ store: { journalRecover: 'report' } });
     p.run(FIRST, 'journal');

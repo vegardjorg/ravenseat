@@ -185,14 +185,17 @@ function recordWrite(folder, { before, after, inTrack = false, save: saveTo = nu
 /**
  * The owner rows of task `id` the log does not have. The first use (no file) records every row there is and reports
  * none missing; a broken file reports every row missing.
+ * save: where the baseline goes instead of the file (cli/context.mjs saveOwnerLog: a store transaction, so it never
+ * writes past a store journal left open on the owner log; fix round jrn-r2). Its ESTOREJOURNAL error is thrown on.
  * @returns {{ baseline: boolean, missing: { key: string, kind: string, label: string, task: string }[] }}
  */
-function check(folder, queue, id) {
+function check(folder, queue, id, { save: saveTo = null } = {}) {
   const { state, log } = load(folder);
   if (state === 'missing') {
     try {
-      save(folder, baselineOf(queue));
-    } catch {
+      (typeof saveTo === 'function' ? saveTo : (l) => save(folder, l))(baselineOf(queue));
+    } catch (e) {
+      if (e?.code === 'ESTOREJOURNAL') throw e; // an open store journal: the caller stops with the way on
       return { baseline: false, missing: rowsOf(queue, id) }; // no log could be written: nothing is confirmed
     }
     return { baseline: true, missing: [] };
@@ -204,13 +207,15 @@ function check(folder, queue, id) {
 /**
  * The owner confirms the missing rows of task `id` as theirs (`ravenseat owner-log accept <id> --by owner`). Only
  * `by` owner or theBoard. A broken file is replaced by a log with these rows (the other tasks' rows are then missing).
+ * save: as for check (cli/context.mjs saveOwnerLog); its error is thrown on.
  * @returns {{ ok: boolean, accepted: number, error?: string }}
  */
-function accept(folder, queue, id, by) {
+function accept(folder, queue, id, by, { save: saveTo = null } = {}) {
   if (!isOwner(by)) return { ok: false, accepted: 0, error: 'only the owner accepts owner rows (--by owner)' };
+  const put = (log) => (typeof saveTo === 'function' ? saveTo(log) : save(folder, log));
   const { state, log } = load(folder);
   if (state === 'missing') {
-    save(folder, baselineOf(queue));
+    put(baselineOf(queue));
     return { ok: true, accepted: 0 };
   }
   const had = new Set(log.entries.map((e) => e.key));
@@ -221,7 +226,7 @@ function accept(folder, queue, id, by) {
     log.entries.push({ key: r.key, task: r.task, kind: r.kind, at, accepted_by: String(by).trim() });
     accepted++;
   }
-  if (accepted || state === 'broken') save(folder, { ...log, since: log.since ?? at });
+  if (accepted || state === 'broken') put({ ...log, since: log.since ?? at });
   return { ok: true, accepted };
 }
 
