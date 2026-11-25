@@ -105,4 +105,13 @@ describe('the never-share list and the register agree', () => {
   it('the refusal names the family note', () => {
     expect(QS.includeProblem('approval-waits.json')).toMatch(/agents waiting on a permission prompt/);
   });
+
+  it('the transaction journal is a family (share never, owned by the store), and its recovery has a settings row', () => {
+    expect(FAM.family('journal')).toMatchObject({ dir: '.journal', share: 'never', owner: 'lib/store/index.js' });
+    expect(FAM.classify('.journal', true)?.name).toBe('journal');
+    const REG = require('../settingsRegistry.js');
+    const row = REG.SETTINGS.find((r: any) => r.key === 'store.journalRecover');
+    expect(row).toMatchObject({ category: 'history', type: 'choice', choices: ['auto', 'report'] });
+    expect(require('../queueConfig.js').STANDARD.store.journalRecover).toBe('auto');
+  });
 });
