@@ -19,7 +19,8 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const KEY_FILE = 'owner-mark.key';
+// The key's file name in the data folder, from the register (lib/store/families.js, family 'owner-mark-key').
+const KEY_FILE = require('./store/families.js').family('owner-mark-key').file;
 /** What a mark looks like: om- and 12 hex characters. */
 const MARK = /\bom-[0-9a-f]{12}\b/g;
 /**

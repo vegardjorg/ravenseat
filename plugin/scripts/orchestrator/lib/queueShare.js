@@ -8,8 +8,11 @@
 //   off (default)   everything in the data folder is private, as before: setup ignores the whole folder.
 //   on              only the files in share.include may be tracked. Setup, `ravenseat share on` and `doctor --fix` write
 //                   `<dataFolder>/*` and `!<dataFolder>/<file>` per file: an allow list, not a block list.
-//   never           a hardcoded list (NEVER) that cannot be shared whatever include says; an include naming one is refused
-//                   with the reason. Private does not mean secret: everyone with access, and every fork, sees the files.
+//   never           what cannot be shared whatever include says; an include naming one is refused with the reason. The
+//                   source is the storage register (lib/store/families.js): every family marked share "never" is
+//                   refused with its note (registerNever). NEVER below is the broad net by name on top of it, for a file
+//                   the queue adds later under one of those names before it gets a family.
+//                   Private does not mean secret: everyone with access, and every fork, sees the files.
 // The guard (push hook and merge, owner decision 2026-11-15: refuse, never ask, since it is a settings breach and not a
 // possible false positive): a commit that tracks a file in the data folder that include does not list, or anything under
 // a private path (lib/privatePaths.js), is refused. With share on, a repo that is public or of unknown visibility
@@ -35,6 +38,7 @@ const path = require('node:path');
 
 const PP = require('./privatePaths.js');
 const RV = require('./repoVisibility.js');
+const FAM = require('./store/families.js');
 
 /** What `share on` lists when --include is not given: the queue and the plan register (cli/context.mjs PLAN_FILE). */
 const STANDARD_INCLUDE = Object.freeze(['queue.json', 'plans.json']);
@@ -43,8 +47,22 @@ const STANDARD_INCLUDE = Object.freeze(['queue.json', 'plans.json']);
 const HEADER = "# Ravenseat (the queue's data, the agents' worktrees and local secrets)";
 
 /**
- * The files that are never shared, as tests on the lower-cased file name with the reason. Broad on purpose: a file the
- * queue adds later under one of these names stays private without a change here.
+ * The register's family for a data folder name when it is marked share "never", or null. A name is tried as a file
+ * and as a folder, as written and lower-cased (the register's names are exact).
+ */
+function registerNever(name) {
+  for (const n of new Set([name, name.toLowerCase()]))
+    for (const isDir of [false, true]) {
+      const f = FAM.classify(n, isDir);
+      if (f && f.share === 'never') return f;
+    }
+  return null;
+}
+
+/**
+ * The broad net on top of the register (registerNever): tests on the lower-cased file name with the reason. Broad on
+ * purpose: a file the queue adds later under one of these names stays private before it has a family, and a renamed
+ * time log (cfg.timeLog) is caught by its configured name.
  */
 const NEVER = Object.freeze([
   { test: (n, log) => /^times(-.*)?\.jsonl$/.test(n) || (log && n === log), why: 'the time log (who worked on what, when, and the cost)' },
@@ -65,6 +83,9 @@ const dataFolderOf = (cfg) => PP.projectPath(cfg?.dataFolder ?? 'scripts/.queue'
 function includeProblem(name, cfg = {}) {
   if (typeof name !== 'string' || !name.trim() || /[\\/*?[\]!]/.test(name) || name === '.' || name === '..')
     return `${JSON.stringify(name)} is not a plain file name in the data folder (no folders, no patterns)`;
+  const fam = registerNever(name.trim());
+  // The register's note says what the file is (lib/store/families.js); a module path in parentheses is left out.
+  if (fam) return `${name} can never be shared: it is ${String(fam.note ?? fam.name).replace(/\s*\([^)]*\)\s*$/, '')}`;
   const n = name.trim().toLowerCase();
   const log = typeof cfg?.timeLog === 'string' ? path.posix.basename(cfg.timeLog.replace(/\\/g, '/')).toLowerCase() : null;
   const hit = NEVER.find((x) => x.test(n, log));

@@ -55,7 +55,8 @@ const QA = require('./lib/queueArchive.js');
 const AA = require('./lib/approvalAsk.js');
 const PG = require('./lib/pushGuard.js');
 
-const LEDGER = path.join(FOLDER, 'issue-reports.json');
+// The GitHub write log, from the register (lib/store/families.js, family 'gh-write-ledger').
+const LEDGER = path.join(FOLDER, require('./lib/store/families.js').family('gh-write-ledger').file);
 const json = a.includes('--json');
 const post = a.includes('--post');
 

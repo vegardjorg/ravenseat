@@ -37,7 +37,8 @@ const path = require('node:path');
 /** The longest task title in a post (characters, before the code span). */
 const TITLE_MAX = 120;
 const SIGNATURE = 'Posted by Ravenseat';
-const PREVIEW_FILE = 'outbound-preview.json';
+// The preview's file name in the data folder, from the register (lib/store/families.js, family 'gh-outbound-preview').
+const PREVIEW_FILE = require('./store/families.js').family('gh-outbound-preview').file;
 /** A preview older than this is stale: `--post` asks for a new one. */
 const PREVIEW_MAX_AGE_MS = 60 * 60_000;
 

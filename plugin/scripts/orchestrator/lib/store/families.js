@@ -24,11 +24,18 @@
 //              agents through a path)
 //   idScheme   the id scheme the family hands out with store.nextId (D, G), or null
 //   empty      the value a reader gets when the file is missing (doc families)
+//   owner      the module that owns the file's format and writes it (null when the note says it)
+//   pathSetting the queue.config.json key that moves a tree family's file (treeFileOf reads it), or null
 //
 // ADDING A STATE FILE: add a family here (and use lib/store/index.js to read and write it). Doctor names any data folder
-// entry this register does not know as an INFO row, so a forgotten family shows up the first time it is written.
+// entry this register does not know as an INFO row, so a forgotten family shows up the first time it is written, and
+// lib/__tests__/storeRegister.test.ts fails on a path.join(FOLDER | dataFolder(), '<name>') this register does not know.
+// The owners take their file names from here (family(name).file), never from a literal of their own, and the
+// never-share list (lib/queueShare.js) refuses every family marked share "never".
 //
-// Pure: no I/O. Used by: lib/store/index.js, cli/store.mjs, cli/doctor.mjs. Tested in: lib/__tests__/store.test.ts.
+// Pure: no I/O, no requires (lib/queueConfig.js reads it while it loads). Used by: lib/store/index.js, cli/store.mjs,
+// cli/doctor.mjs, lib/queueShare.js and the owners named below. Tested in: lib/__tests__/store.test.ts and
+// lib/__tests__/storeRegister.test.ts.
 // =============================================================
 'use strict';
 
@@ -51,6 +58,8 @@ const BASE = Object.freeze({
   backend: 'auto',
   idScheme: null,
   match: [],
+  owner: null,
+  pathSetting: null,
 });
 
 /** @type {object[]} */
@@ -62,16 +71,17 @@ const LIST = [
   { name: 'plans', file: 'plans.json', writers: ['main', 'track', 'board'], backup: 'prev', onCorrupt: 'fail', empty: null, note: 'the plan register (cli/context.mjs readPlans/writePlans)' },
   { name: 'follow', file: 'follow.json', writers: ['main'], onCorrupt: 'fail', note: 'follow up entries (lib/queueFollow.js)' },
   { name: 'follow-reports', dir: 'follow', kind: 'blob', backend: 'file-only', note: 'follow up reports' },
-  { name: 'missions', dir: 'mission', kind: 'blob', backend: 'file-only', writers: ['main'], note: 'long missions, <id>.md (agents read them by path)' },
-  { name: 'missions-legacy', dir: 'missions', kind: 'blob', backend: 'file-only', note: 'the older folder name of mission/ (naming drift, plan part 2 point 11)' },
-  { name: 'owner-log', file: 'owner-log.json', writers: ['main'], onCorrupt: 'broken', share: 'never', note: 'owner rows the queue recorded (lib/ownerLog.js)' },
-  { name: 'owner-mark-key', file: 'owner-mark.key', kind: 'cache', onCorrupt: 'skip', share: 'never', note: 'the key of the owner mark (lib/ownerMark.js)' },
+  { name: 'missions', dir: 'mission', kind: 'blob', backend: 'file-only', writers: ['main'], share: 'never', note: 'long missions, <id>.md (agents read them by path)' },
+  { name: 'missions-legacy', dir: 'missions', kind: 'blob', backend: 'file-only', share: 'never', note: 'the older folder name of mission/ (naming drift, plan part 2 point 11)' },
+  { name: 'owner-log', file: 'owner-log.json', writers: ['main'], onCorrupt: 'broken', share: 'never', owner: 'lib/ownerLog.js', note: 'owner rows the queue recorded (lib/ownerLog.js)' },
+  { name: 'owner-mark-key', file: 'owner-mark.key', kind: 'cache', onCorrupt: 'skip', share: 'never', owner: 'lib/ownerMark.js', note: 'the key of the owner mark (lib/ownerMark.js)' },
   // ---- Catalog, ids and guards ---------------------------------------------------------------------------------------
   { name: 'ledger', file: 'catalog-accepted.json', writers: ['main', 'board'], backup: 'prev', onCorrupt: 'empty', empty: { version: 1, decisions: {} }, note: "the owner's record of accepted design choices (cli/catalog.mjs)" },
   { name: 'catalog-index', file: 'catalog-index.json', kind: 'cache', writers: ['main', 'track'], note: 'the code index (lib/catalogIndex.js)' },
   { name: 'id-reservations', file: 'id-reservations.json', writers: ['main', 'track'], backup: 'prev', onCorrupt: 'restorePrev', empty: { version: 1, ids: {} }, note: 'the highest id each scheme handed out (store.nextId), so a deleted record never frees its id' },
   { name: 'decisions', root: 'tree', dir: 'docs/queue/catalog/decisions', kind: 'collection', backend: 'file-only', idScheme: 'D', onCorrupt: 'skip', note: 'design choices D-NNNN-<slug>.md, git-tracked' },
-  { name: 'guards', root: 'tree', file: '.ravenseat/guards.json', writers: ['main', 'track'], backend: 'file-only', idScheme: 'G', onCorrupt: 'fail', note: 'the guard registry, git-tracked (lib/guardRegistry.js)' },
+  // The default place; inspection.registryFile moves it (treeFileOf). lib/guardRegistry.js and lib/queueConfig.js read it.
+  { name: 'guards', root: 'tree', file: '.ravenseat/guards.json', writers: ['main', 'track'], backend: 'file-only', idScheme: 'G', onCorrupt: 'fail', owner: 'lib/guardRegistry.js', pathSetting: 'inspection.registryFile', note: 'the guard registry, git-tracked (lib/guardRegistry.js)' },
   // ---- Gates, merge and receive -----------------------------------------------------------------------------------
   { name: 'gate-evidence', file: 'gate-evidence.json', writers: ['main'], share: 'never', note: 'gate runs bound to a sha (lib/gateEvidence.js)' },
   { name: 'merge-state', match: [/^merge-state-.+\.json$/], kind: 'collection', writers: ['main'], onCorrupt: 'broken', note: 'a merge in progress, per task (lib/mergeLock.js)' },
@@ -79,12 +89,15 @@ const LIST = [
   { name: 'clean-gate', dir: 'clean-gate', kind: 'cache', note: 'clean copies for the gate (lib/gateClean.js)' },
   { name: 'base-health', file: 'base-health.json', kind: 'cache', match: [/^base-health-.+\.md$/], note: 'the base branch health (lib/baseHealth.js)' },
   // ---- Logs -------------------------------------------------------------------------------------------------------
-  { name: 'time-log', file: 'times.jsonl', kind: 'log', writers: ['main', 'track', 'hook'], onCorrupt: 'skip', match: [MONTH_ARCHIVE('times')], note: 'the time log and its monthly archives (lib/timeLogArchive.js)' },
+  { name: 'time-log', file: 'times.jsonl', kind: 'log', writers: ['main', 'track', 'hook'], onCorrupt: 'skip', share: 'never', match: [MONTH_ARCHIVE('times')], note: 'the time log and its monthly archives (lib/timeLogArchive.js)' },
   { name: 'findings', file: 'findings.jsonl', kind: 'log', writers: ['main', 'track'], onCorrupt: 'skip', match: [MONTH_ARCHIVE('findings')], note: 'the finding log and its monthly archives (lib/findingLog.js)' },
   { name: 'log-index', kind: 'cache', writers: ['main', 'track', 'hook'], onCorrupt: 'skip', share: 'never', match: [/\.jsonl\.[a-z]+\.idx$/], note: 'sidecar indexes of the logs (lib/store/logBackend.js): rebuilt from the log when missing or stale' },
   { name: 'test-runs', file: 'test-runs.jsonl', kind: 'log', writers: ['main', 'track'], onCorrupt: 'skip', note: 'test run rows (cut at 512 KB)' },
   { name: 'client-shapes', file: 'client-shapes.jsonl', kind: 'log', writers: ['hook'], onCorrupt: 'skip', note: 'client payload shapes (lib/clientCanary.js)' },
   { name: 'cost-guard-log', file: 'cost-guard-log.jsonl', kind: 'log', writers: ['hook'], onCorrupt: 'skip', note: 'cost guard rows' },
+  // ---- GitHub writes (cli/ghWrite.mjs, lib/ghOutbound.js) ------------------------------------------------------------
+  { name: 'gh-write-ledger', file: 'issue-reports.json', writers: ['main'], share: 'never', owner: 'cli/ghWrite.mjs', note: 'the GitHub write log: which issue reports were posted, so none is posted twice (cli/ghWrite.mjs)' },
+  { name: 'gh-outbound-preview', file: 'outbound-preview.json', writers: ['main'], kind: 'cache', share: 'never', owner: 'lib/ghOutbound.js', note: 'the preview of a GitHub post awaiting --post (lib/ghOutbound.js)' },
   // ---- Secrets ------------------------------------------------------------------------------------------------------
   { name: 'secret-scan', file: 'secret-scan.json', share: 'never', note: 'the last secret scan (lib/repoSecretScan.js)' },
   { name: 'secret-scan-ignore', file: 'secret-scan-ignore.json', share: 'never', note: "the owner's ignores for the secret scan" },
@@ -95,8 +108,9 @@ const LIST = [
   { name: 'silent-snapshots', dir: 'silent-snapshots', kind: 'collection', share: 'never', note: 'silent track snapshots (keep 20)' },
   { name: 'wait-runs', dir: 'runs', kind: 'collection', share: 'never', note: 'wait mode runs: output, done files, key pointers and their locks (lib/waitMode.js)' },
   // ---- Handover, release notes, ask ---------------------------------------------------------------------------------
-  { name: 'handover', file: 'handover-ongoing.md', kind: 'blob', backend: 'file-only', onCorrupt: 'skip', match: ['handover.md'], note: 'the ongoing handover note (lib/queueHandover.js)' },
-  { name: 'handover-archive', dir: 'handover-archive', kind: 'blob', backend: 'file-only', note: 'monthly handover archives' },
+  { name: 'handover', file: 'handover-ongoing.md', kind: 'blob', backend: 'file-only', onCorrupt: 'skip', share: 'never', match: ['handover.md'], note: 'the ongoing handover note (lib/queueHandover.js)' },
+  { name: 'handover-archive', dir: 'handover-archive', kind: 'blob', backend: 'file-only', share: 'never', note: 'monthly handover archives' },
+  { name: 'wave-active', file: 'wave-active', kind: 'cache', onCorrupt: 'skip', share: 'never', note: 'the wave id the orchestrator set at wave start, one line of text (hook-time.mjs, hook-track-context.mjs)' },
   { name: 'release-notes', dir: 'release-notes', kind: 'blob', backend: 'file-only', note: 'release notes drafts' },
   { name: 'ask', dir: 'ask', kind: 'blob', backend: 'file-only', note: 'ask bundles per task' },
   { name: 'issues', dir: 'issues', kind: 'blob', backend: 'file-only', note: 'issue bodies (cli/issues.mjs)' },
@@ -113,7 +127,7 @@ const LIST = [
     match: [
       'orchestrator.json', 'setup.json', 'effort.json', 'inspection.json', 'seen.json', 'git-surface.json', 'costGuard.json',
       'statusline.json', 'queue-session.json', 'session-cost.json', 'rate-limits.json', 'tool-trouble.json', 'usage-limit.json',
-      'demo-offer.json', 'demo.json', 'outbound-preview.json', 'update-check.json', 'issue-reports.json', 'checks-report.json',
+      'demo-offer.json', 'demo.json', 'update-check.json', 'checks-report.json',
       'branch-protection.json', 'deps-audit.json', 'instruction-size.json', 'repo-visibility.json', 'conflict-predict.json',
       'cloud-check.json', 'compact-count.json', 'push-seen.json', 'wait-heartbeat.json', 'wait-tracks-seen.json',
       'setup-tips.json', 'mascot-phrases.json', 'ownership-files.json', 'queue-fill.json', 'ravenseat-version.json',
@@ -166,6 +180,22 @@ function classify(name, isDir) {
   return null;
 }
 
+/**
+ * The project-relative file of a tree family: the configured path when the family has a pathSetting and the
+ * configuration sets it to a non-empty text, else the register's default.
+ * @param {string} name the family
+ * @param {object} [cfg] the configuration (queueConfig.config())
+ */
+function treeFileOf(name, cfg = {}) {
+  const f = family(name);
+  if (f.pathSetting) {
+    let v = cfg;
+    for (const k of f.pathSetting.split('.')) v = v && typeof v === 'object' ? v[k] : undefined;
+    if (typeof v === 'string' && v.trim()) return v.trim();
+  }
+  return f.file ?? f.dir ?? null;
+}
+
 /** The text an id scheme formats a number as (D-0007, G-7). */
 function formatId(scheme, n) {
   const s = ID_SCHEMES[scheme];
@@ -173,4 +203,4 @@ function formatId(scheme, n) {
   return `${s.prefix}${s.pad ? String(n).padStart(s.pad, '0') : String(n)}`;
 }
 
-module.exports = { ID_SCHEMES, all, family, classify, isTmpName, tmpPid, formatId };
+module.exports = { ID_SCHEMES, all, family, classify, treeFileOf, isTmpName, tmpPid, formatId };

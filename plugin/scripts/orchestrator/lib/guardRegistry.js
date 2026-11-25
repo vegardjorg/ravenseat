@@ -38,8 +38,11 @@
 // =============================================================
 'use strict';
 
-/** The registry's default place in the project (inspection.registryFile in queue.config.json overrides). */
-const DEFAULT_FILE = '.ravenseat/guards.json';
+/**
+ * The registry's default place in the project, from the register (lib/store/families.js, family 'guards');
+ * inspection.registryFile in queue.config.json overrides (families.treeFileOf).
+ */
+const DEFAULT_FILE = require('./store/families.js').family('guards').file;
 const KINDS = Object.freeze(['gate', 'instruction', 'review', 'none']);
 const STATUSES = Object.freeze(['active', 'retired']);
 const TITLE_MAX = 100;

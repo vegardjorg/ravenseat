@@ -165,6 +165,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **A push or write guard that crashes, does not start or times out now refuses the call instead of letting it through, also from Code Mode.** `guards.onHookFailure` `block`.
 - **The write guard no longer lets a write through when it is slow: after 8 s it refuses with how to retry.** Follows `guards.onHookFailure` (`block`).
 - **The write guard's time-out refusal leaves a guard log row (rule `timeout`) like every other refusal, and still refuses when the row cannot be written.** No setting: it follows `guardLog.enabled`.
+- **The storage register is the one list: the GitHub write log, its post preview and wave-active are families, the owner log, owner mark key, guard registry and queue file take their names from it, and the never-share list refuses every family marked never (now also the time log, missions and handover).** No setting: a register fix with no friction.
 - **The push guard checks a first push of a long history for private files instead of skipping it, and refuses when git cannot list the files.**
 - **The write, control-file and private-read guards compare paths in one form: the real path, case folded on macOS as on Windows, so `claude.md` is `CLAUDE.md`.**
 - **The shell reader treats a backslash-escaped space as part of the word, so `C:/Program\ Files/GitHub\ CLI/gh.exe` is checked as `gh`.**
