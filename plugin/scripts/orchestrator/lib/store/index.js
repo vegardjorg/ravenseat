@@ -575,6 +575,13 @@ function openStore({ folder, tree = null, lockWaitMs, now, pidAlive, io = null, 
     } catch {
       return { unknown, orphanTmp };
     }
+    const inJournal = new Set();
+    for (const file of journalFiles())
+      try {
+        for (const t of JSON.parse(String(f.readFileSync(file, 'utf8'))).targets ?? []) if (t?.tmp) inJournal.add(path.resolve(t.tmp));
+      } catch {
+        /* an unreadable journal is doctor's own row */
+      }
     const walk = (dir, rel, depth) => {
       let list;
       try {
@@ -591,6 +598,8 @@ function openStore({ folder, tree = null, lockWaitMs, now, pidAlive, io = null, 
           continue;
         }
         if (!FAM.isTmpName(e.name)) continue;
+        // A tmp file a journal names is a commit's new content, waiting for its recovery: never an orphan to sweep.
+        if (inJournal.has(path.resolve(abs))) continue;
         try {
           const s = f.statSync(abs);
           if (orphaned(e.name, s.mtimeMs)) orphanTmp.push({ path: abs, rel: r, ageMs: now() - s.mtimeMs, size: s.size });

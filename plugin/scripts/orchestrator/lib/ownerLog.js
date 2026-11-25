@@ -131,9 +131,11 @@ function load(folder) {
 
 /** Writes the log atomically (lib/store/fileBackend.js: a unique tmp file and a rename, the tmp removed on a failure). */
 function save(folder, log) {
-  // Compact JSON on one line, as before (the log can hold 20000 entries).
-  FB.writeText(logFile(folder), `${JSON.stringify({ ...log, entries: log.entries.slice(-MAX_ENTRIES) })}\n`, { json: true });
+  FB.writeText(logFile(folder), logText(log), { json: true });
 }
+
+/** The log file's text: compact JSON on one line, as before (the log can hold 20000 entries). */
+const logText = (log) => `${JSON.stringify({ ...log, entries: log.entries.slice(-MAX_ENTRIES) })}\n`;
 
 /** The log with every owner row of the queue added (the first use). */
 function baselineOf(queue) {
@@ -150,13 +152,15 @@ function baselineOf(queue) {
  * worktree (`inTrack`) records nothing. Never throws.
  * @returns {{ recorded: number }}
  */
-function recordWrite(folder, { before, after, inTrack = false }) {
+function recordWrite(folder, { before, after, inTrack = false, save: saveTo = null }) {
+  // saveTo: where the new log goes instead of the file (cli/context.mjs write stages it in its store transaction).
+  const put = (log) => (typeof saveTo === 'function' ? saveTo(log) : save(folder, log));
   try {
     if (inTrack || !folder) return { recorded: 0 };
     const { state, log } = load(folder);
     if (state === 'missing') {
       const base = baselineOf(after);
-      save(folder, base);
+      put(base);
       return { recorded: base.entries.length };
     }
     const had = new Set(log.entries.map((e) => e.key));
@@ -171,7 +175,7 @@ function recordWrite(folder, { before, after, inTrack = false }) {
         recorded++;
       }
     }
-    if (recorded) save(folder, log);
+    if (recorded) put(log);
     return { recorded };
   } catch {
     return { recorded: 0 }; // error-ignored: a row left out is missing at receive and merge, the owner accepts it
@@ -234,4 +238,4 @@ function stopMessage({ id, missing, ravenseat = 'ravenseat', again, file }) {
   ].join('\n');
 }
 
-module.exports = { FILE_NAME, MAX_ENTRIES, OWNER_BY, logFile, rowsOf, keySet, load, recordWrite, check, accept, stopMessage };
+module.exports = { FILE_NAME, MAX_ENTRIES, OWNER_BY, logFile, logText, rowsOf, keySet, load, recordWrite, check, accept, stopMessage };

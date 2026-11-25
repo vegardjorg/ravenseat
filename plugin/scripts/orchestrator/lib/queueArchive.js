@@ -166,16 +166,21 @@ function load(folder) {
 /** Writes the archive atomically, with a .prev copy of the one before (lib/stateFile.js). */
 function save(folder, tasks) {
   fs.mkdirSync(folder, { recursive: true });
-  require('./stateFile.js').writeState(archiveFile(folder), `${JSON.stringify({ version: 1, tasks }, null, 2)}\n`);
+  require('./stateFile.js').writeState(archiveFile(folder), archiveText(tasks));
 }
+
+/** The archive file's text for these tasks (cli/context.mjs write stages it in its store transaction). */
+const archiveText = (tasks) => `${JSON.stringify({ version: 1, tasks }, null, 2)}\n`;
 
 /**
  * Moves the candidates from `queue` (changed in place) to the archive (see THE ORDER in the header). Never throws.
  * @param {object} queue
- * @param {{ folder: string, days: number|null, now?: number }} o
+ * @param {{ folder: string, days: number|null, now?: number, save?: (tasks: object[]) => void }} o
+ *   save: where the new archive goes instead of the file (cli/context.mjs write stages it in the same store transaction
+ *   as queue.json, step 7: the two files then change together or not at all)
  * @returns {{ moved: string[], error?: string }}
  */
-function archiveDone(queue, { folder, days, now = Date.now() }) {
+function archiveDone(queue, { folder, days, now = Date.now(), save: saveTo = null }) {
   try {
     if (!Number.isInteger(days) || days < 0) return { moved: [] };
     stamp(queue, now);
@@ -187,7 +192,9 @@ function archiveDone(queue, { folder, days, now = Date.now() }) {
     const ids = new Set(list.map((o) => String(o.id)));
     // By id: a task already there (a crash between the two writes, or an id restored and archived again) is replaced.
     const kept = cur.tasks.filter((o) => !ids.has(String(o.id)));
-    save(folder, [...kept, ...list.map((o) => ({ ...o, archived_at: at }))]);
+    const next = [...kept, ...list.map((o) => ({ ...o, archived_at: at }))];
+    if (typeof saveTo === 'function') saveTo(next);
+    else save(folder, next);
     // Only now does the queue let go of them.
     queue.tasks = queue.tasks.filter((o) => !(isObject(o) && ids.has(String(o.id))));
     queue.archived = { ...(isObject(queue.archived) ? queue.archived : {}) };
@@ -267,6 +274,7 @@ module.exports = {
   stamp,
   load,
   archiveDone,
+  archiveText,
   lookup,
   withArchive,
   restore,

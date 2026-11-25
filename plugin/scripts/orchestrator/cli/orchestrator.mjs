@@ -17,7 +17,7 @@ import path from 'node:path';
 
 import {
   a, autoAcceptIn, autoAcceptRules, CONFIG, CLI, CURSOR, cut, die, edit, F, FOLDER, FOLLOW_FILE, FOLLOW_REPORTS, HO, KK,
-  KV, L, missionRef, parallelWarning, positional, pulseCursor, read, readCursor, require, val, values, WIDTH, withLock, write,
+  KV, L, missionRef, ST, parallelWarning, positional, pulseCursor, read, readCursor, require, val, values, WIDTH, withLock, write,
 } from './context.mjs';
 import { cloudPulseLines } from './cloud.mjs';
 import { deliveryWarning, findSilent, findSpinning, findWithoutAgent } from './tracks.mjs';
@@ -51,14 +51,13 @@ function usageLimitLines() {
 
 // ---- queue.mjs handover: the ongoing note in two parts ---------------------------------------------------------
 /**
- * `handover archive [--dry]` and `handover now`. The orchestrator edits the note by hand (not under the queue lock), so
- * the write is atomic (tmp + rename), and the archive is written BEFORE the note: if the call crashes midway, the lines
- * are in both files (never in neither). The rules live in lib/queueHandover.js.
+ * `handover archive [--dry]` and `handover now`. The orchestrator edits the note by hand (not under the queue lock); the
+ * archive writes the note and its month files in one store transaction (lib/store/index.js), so a crash midway leaves
+ * the lines in exactly one place once the journal is finished. The rules live in lib/queueHandover.js.
  */
 export function handoverCommand() {
   const sub = a[1];
   const note = path.join(FOLDER, 'handover-ongoing.md');
-  const archiveFolder = path.join(FOLDER, 'handover-archive');
   if (sub !== 'archive' && sub !== 'now') die('Use: ravenseat handover <archive [--dry]|now>');
   let text = '';
   try {
@@ -74,16 +73,20 @@ export function handoverCommand() {
   }
   const dry = a.includes('--dry');
   const now = new Date();
-  const r = HO.archive(text, now);
-  const months = Object.keys(r.archive).sort();
-  if (!dry && r.moved > 0) {
-    fs.mkdirSync(archiveFolder, { recursive: true });
-    for (const m of months)
-      fs.appendFileSync(path.join(archiveFolder, `${m}.md`), HO.archiveAddition(r.archive[m], now));
-    const tmp = `${note}.${process.pid}.tmp`;
-    fs.writeFileSync(tmp, r.keep);
-    require('./lib/stateFile.js').renameWithRetry(tmp, note);
+  let r = HO.archive(text, now);
+  if (!dry) {
+    // One store transaction (step 7): the note and the month files change together or not at all, under the store lock,
+    // and a commit of them that stopped part way is finished first (the note is then read again inside it). Before, a
+    // crash after the appends left the lines in both files, and the next run appended them a second time.
+    ST.openStore({ folder: FOLDER, journalRecover: CONFIG.store?.journalRecover }).transaction(['handover', 'handover-archive'], (tx) => {
+      text = tx.text('handover') ?? text;
+      r = HO.archive(text, now);
+      if (r.moved <= 0) return;
+      for (const m of Object.keys(r.archive)) tx.append('handover-archive', `${m}.md`, HO.archiveAddition(r.archive[m], now));
+      tx.put('handover', r.keep);
+    });
   }
+  const months = Object.keys(r.archive).sort();
   const before = text.replace(/\r\n/g, '\n').split('\n').length;
   const after = r.keep.split('\n').length;
   console.log(

@@ -56,6 +56,29 @@ export function storeDoctorRows(info) {
   return [info('store', parts.join('; '), fixes.join('; '))];
 }
 
+/**
+ * Doctor's rows for store commits that stopped part way (lib/store/index.js transaction, step 7): one WARN row per
+ * journal left in <dataFolder>/.journal, naming it, its families and what a recovery would do. Reads only.
+ */
+export function storeJournalRows(warn) {
+  return store()
+    .journals()
+    .map((j) => {
+      const what = `journal ${j.id} (${j.families.join(', ') || 'unreadable'}) is left by a store commit that stopped part way`;
+      if (j.plan === 'failed')
+        return warn('store journal', `${what}; it cannot be finished: ${j.reason}`, `look at the files it names; ${path.relative(FOLDER, j.file)} stays until you remove it (doctor --fix tries again)`);
+      const how = j.plan === 'back' ? `the state before it comes back from .prev (${j.reason})` : j.plan === 'forward' ? 'the rest of its renames are made' : 'only the journal is left to remove';
+      return warn('store journal', `${what}; a recovery finishes it: ${how}`, `${CLI} doctor --fix finishes it now (the next command on those families does it too, unless store.journalRecover is report)`);
+    });
+}
+
+/** doctor --fix: finishes every journal it can (whatever store.journalRecover says: the owner asked). One line each. */
+export function storeJournalFix() {
+  return store()
+    .recover()
+    .results.map((r) => `store journal ${r.id} (${(r.families ?? []).join(', ')}): ${r.outcome === 'failed' ? `not finished, kept (${r.reason})` : r.outcome === 'back' ? 'put back the state before it' : 'finished'}`);
+}
+
 function cmdSweep(json) {
   if (!a.includes('--tmp')) die(`${USAGE}\n(only --tmp exists so far: the orphaned tmp files of crashed writes)`);
   const track = trackBranchHere() ?? queueBranchId();
