@@ -266,13 +266,21 @@ function openStore({ folder, tree = null, lockWaitMs, now, pidAlive, io = null, 
   }
 
   /**
-   * What a journal left behind needs, without changing anything. Per target: done (the new content is in place),
-   * ready (its tmp file still holds the new content: the rename can be made), lost (still the old content and no tmp
-   * file: it cannot be finished) or changed (neither: a later write replaced it, it is left alone).
-   *   plan done      every target is done or changed: only the journal is left to remove
-   *   plan forward   no target is lost: the ready ones are renamed (roll forward)
+   * What a journal left behind needs, without changing anything. Per target, from the hash of what is on disk now:
+   *   done      the new content is in place
+   *   ready     the target still holds its content from BEFORE the commit, and its tmp file the new content: the
+   *             rename can be made. Only then: a rename never goes over content the journal does not know (fix round
+   *             jrn-r1, H1; before, a tmp file with the new content was enough, so a later write was written over)
+   *   lost      the target still holds its content from before, and the tmp file is gone: it cannot be finished
+   *   later     neither before nor after, and the tmp file is gone (for a removal: its copy is in the journal folder):
+   *             this commit's content landed and a later write replaced it. Counts as done, never put back
+   *   changed   neither before nor after, and the tmp file still waits: a later write came BEFORE this commit's rename
+   *   plan done      every target is done or later: only the journal is left to remove
+   *   plan forward   no target is lost or changed: the ready ones are renamed (roll forward), in the commit's order
    *   plan back      a target is lost, and every done target can be put back from its .prev (the hash matches)
-   *   plan failed    a target is lost and some done target cannot be put back (reason names it); nothing is touched
+   *   plan failed    a target is changed (the journal never writes over it, and does not finish the others without
+   *                  it: they may depend on it, such as the queue on its archive), or a target is lost and some done
+   *                  target cannot be put back. The reason names it; nothing is touched and the journal is kept
    */
   function analyse(file) {
     let j;
@@ -284,16 +292,30 @@ function openStore({ folder, tree = null, lockWaitMs, now, pidAlive, io = null, 
     }
     const states = j.targets.map((t) => {
       const cur = hashFile(t.path);
-      if (t.op === 'remove') return cur === null ? 'done' : cur === t.before ? 'ready' : 'changed';
+      if (t.op === 'remove') {
+        if (cur === null) return 'done';
+        if (cur === t.before) return 'ready';
+        return t.trash && hashFile(t.trash) === t.before ? 'later' : 'changed';
+      }
       if (cur === t.after) return 'done';
-      if (t.tmp && hashFile(t.tmp) === t.after) return 'ready';
-      return cur === t.before ? 'lost' : 'changed';
+      const waiting = !!t.tmp && hashFile(t.tmp) === t.after;
+      if (cur === t.before) return waiting ? 'ready' : 'lost';
+      return waiting ? 'changed' : 'later';
     });
     const out = { id: j.id ?? path.basename(file, '.json'), file, at: j.at ?? null, pid: j.pid ?? null, families: j.families, targets: j.targets, states };
+    const changed = j.targets.filter((_, i) => states[i] === 'changed');
+    if (changed.length) {
+      const what = changed.map((t) =>
+        t.op === 'remove'
+          ? `${rel(t.path)} was changed by a later write before this commit removed it`
+          : `${rel(t.path)} was changed by a later write before this commit's rename (its new content waits in ${rel(t.tmp)})`,
+      );
+      return { ...out, plan: 'failed', reason: `${what.join('; ')}: the journal never writes over it, and finishes nothing without it` };
+    }
     if (!states.includes('lost')) return { ...out, plan: states.includes('ready') ? 'forward' : 'done' };
     const problems = [];
     j.targets.forEach((t, i) => {
-      if (states[i] === 'changed') problems.push(`${rel(t.path)} was changed by a later write`);
+      if (states[i] === 'later') problems.push(`${rel(t.path)} was changed by a later write`);
       if (states[i] !== 'done') return;
       if (t.op === 'remove') {
         if (hashFile(t.trash) !== t.before) problems.push(`${rel(t.path)} was removed and its copy is gone`);

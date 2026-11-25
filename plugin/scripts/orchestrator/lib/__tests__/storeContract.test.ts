@@ -436,6 +436,38 @@ describe.each([['file', fileEnv], ['memory', memoryEnv]] as const)('store transa
     clean(env);
   });
 
+  it('a later write over a kept journal is never written over: the recovery leaves it, keeps the journal and says so', () => {
+    const env = seeded();
+    expect(() => commitBoth(env.crashStore({ op: 'rename', match: JOURNAL_TMP, after: true }))).toThrow(/ECRASH/);
+    env.restart();
+    // A write that did not go through the transaction (another writer, a hand edit) lands on plans.json first.
+    const LATER = { entries: [{ id: 'PL-LATER' }] };
+    env.write('plans.json', JSON.stringify(LATER));
+    const st = env.store();
+    const listed = st.journals();
+    expect(listed[0]).toMatchObject({ plan: 'failed' });
+    expect(listed[0].reason).toMatch(/plans\.json was changed by a later write/);
+    const r = st.recover();
+    expect(r.results[0].outcome).toBe('failed');
+    expect(r.results[0].reason).toMatch(/plans\.json was changed by a later write/);
+    expect(JSON.parse(env.read('plans.json')!)).toEqual(LATER);
+    // Nothing else is finished without it either, and the journal stays for the owner.
+    expect(JSON.parse(env.read('catalog-accepted.json')!)).toEqual(OLD.ledger);
+    expect(env.listIn('.journal').length).toBe(1);
+  });
+
+  it('a later write after a complete commit: the recovery only removes the journal and keeps the later write', () => {
+    const env = seeded();
+    quiet(() => commitBoth(env.crashStore({ op: 'rm', match: JOURNAL_FILE })));
+    env.restart();
+    const LATER = { entries: [{ id: 'PL-LATER' }] };
+    env.write('plans.json', JSON.stringify(LATER));
+    expect(env.store().recover().results.map((x: any) => x.outcome)).toEqual(['done']);
+    expect(JSON.parse(env.read('plans.json')!)).toEqual(LATER);
+    expect(JSON.parse(env.read('catalog-accepted.json')!)).toEqual(NEW.ledger);
+    clean(env);
+  });
+
   it('nothing can be finished (a tmp file is gone): the before-state comes back from .prev where the hash matches', () => {
     const env = seeded();
     expect(() => commitBoth(env.crashStore({ op: 'rename', match: TMP_OF('catalog-accepted.json'), after: true }))).toThrow(/ECRASH/);
