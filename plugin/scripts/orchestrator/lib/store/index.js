@@ -212,14 +212,20 @@ function openStore({ folder, tree = null, lockWaitMs, now, pidAlive, io = null, 
   const journalDir = path.join(folder, JOURNAL_DIR);
   const recoverMode = journalRecover === 'report' ? 'report' : 'auto';
 
-  /** sha256 of a file's bytes, or null when it does not exist (any other read error is thrown). */
-  function hashFile(p) {
+  /** A file's bytes, or null when it does not exist (any other read error is thrown). */
+  function bytesAt(p) {
     try {
-      return sha(f.readFileSync(p));
+      return f.readFileSync(p);
     } catch (e) {
       if (e?.code === 'ENOENT') return null;
       throw e;
     }
+  }
+
+  /** sha256 of a file's bytes, or null when it does not exist (any other read error is thrown). */
+  function hashFile(p) {
+    const b = bytesAt(p);
+    return b === null ? null : sha(b);
   }
 
   /** The text of a file, or null when it does not exist. */
@@ -561,9 +567,14 @@ function openStore({ folder, tree = null, lockWaitMs, now, pidAlive, io = null, 
     const rank = (s) => (FAM.family(s.family).commitFirst ? 0 : 1);
     const list = [...staged.values()].sort((x, y) => rank(x) - rank(y) || x.family.localeCompare(y.family) || x.path.localeCompare(y.path));
     const targets = [];
+    // Each target is read once (fix round jrn-r1, L1): its hash before and its .prev copy come from the same bytes, so
+    // a queue write reads queue.json (about 12 MB) once here, not twice. Kept out of the journal, dropped after use.
+    const bytesOf = new Map();
     try {
       for (const s of list) {
-        const before = hashFile(s.path);
+        const cur = bytesAt(s.path);
+        const before = cur === null ? null : sha(cur);
+        if (cur !== null) bytesOf.set(s.path, cur);
         if (s.op === 'remove') {
           if (before !== null) targets.push({ family: s.family, path: s.path, op: 'remove', before, after: null, trash: path.join(journalDir, `${txid}.${targets.length}.removed`) });
           continue;
@@ -579,7 +590,8 @@ function openStore({ folder, tree = null, lockWaitMs, now, pidAlive, io = null, 
       for (const t of targets) {
         if (t.op !== 'put' || t.before === null) continue;
         const backup = FAM.family(t.family).backup;
-        if (backup === 'prev' || backup === 'tiers') FB.keepPrevious(t.path, { fs: f, pid });
+        if (backup === 'prev' || backup === 'tiers') FB.keepPrevious(t.path, { fs: f, pid, bytes: bytesOf.get(t.path) });
+        bytesOf.delete(t.path);
         const tiers = o.snapshots?.[t.family];
         if (backup === 'tiers' && Array.isArray(tiers) && tiers.length) require('../stateSnapshots.js').roll(t.path, tiers, { fs: f });
       }
