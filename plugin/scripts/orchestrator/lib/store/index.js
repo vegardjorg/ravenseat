@@ -14,6 +14,10 @@
 //                                              lock: a deleted record never frees its id, and two callers that saw the
 //                                              same folder still get two ids. atLeast = the lowest number the caller's
 //                                              own data allows (the highest id it can see + 1)
+//   st.transaction([famA, famB], tx => ...)    several families written as one unit (step 7, TRANSACTIONS in the code):
+//                                              the families' locks in LOCK_ORDER (queue, then store), writes staged in
+//                                              tx, the commit through <dataFolder>/.journal/<txid>.json. fn must be pure
+//   st.recover(families?) / st.journals()      finishes (or lists, for doctor) a commit that stopped part way
 //   st.scan()                                  data folder entries the register does not know, and orphaned tmp files
 //   st.sweepTmp({ dry })                       removes the orphaned tmp files (dry: lists only)
 //
@@ -30,14 +34,21 @@
 // =============================================================
 'use strict';
 
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 
 const FAM = require('./families.js');
 const FB = require('./fileBackend.js');
 const QL = require('../queueLock.js');
+const SF = require('../stateFile.js');
 
 const LOCK_DIR = '.storeLock';
+/** The lock folder of each lock kind (a family's `lock`, lib/store/families.js). '.lockState' is cli/context.mjs LOCK. */
+const LOCK_DIRS = Object.freeze({ queue: '.lockState', store: LOCK_DIR });
+/** The journal folder of transaction() (the 'journal' family). */
+const JOURNAL_DIR = FAM.family('journal').dir;
+const sha = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
 /** A tmp file younger than this is left alone even when its pid looks dead (pid reuse, a clock step). */
 const ORPHAN_AGE_MS = 10 * 60_000;
 /** How deep scan looks for tmp files under the data folder (mission/, handover-archive/, snapshots/ ...). */
@@ -61,8 +72,11 @@ function releaseAll() {
  *   io?: { fs?: object, now?: () => number, pid?: number, pidAlive?: Function, sleep?: Function, hostname?: string } }} o
  *   io: the backend's io (lib/store/memoryBackend.js mem.io(), or a test's wrapped fs); the real fs, clock and pid
  *   when left out. The file backend and the memory backend run the same code below, only the io differs (step 4).
+ *   outerLocks: { queue: () => token|null }, a lock this process already holds outside the store (cli/context.mjs
+ *   holds the queue lock with its own token): transaction() uses it instead of waiting on itself, and never releases it.
+ *   journalRecover: 'auto' (default) | 'report', the store.journalRecover setting (see TRANSACTIONS below).
  */
-function openStore({ folder, tree = null, lockWaitMs, now, pidAlive, io = null } = {}) {
+function openStore({ folder, tree = null, lockWaitMs, now, pidAlive, io = null, outerLocks = {}, journalRecover = 'auto' } = {}) {
   if (!folder) throw new Error('openStore needs the data folder');
   const f = io?.fs ?? fs;
   now = now ?? io?.now ?? Date.now;
@@ -105,8 +119,24 @@ function openStore({ folder, tree = null, lockWaitMs, now, pidAlive, io = null }
     FB.writeJson(pathOf(name), value, { backup: fam.backup === 'prev' ? 'prev' : 'none', fs: f, pid });
   }
 
+  /** The store lock (every family with lock 'store'). */
   function withLock(fn) {
-    const h = holds.get(lockDir);
+    return withLockOf('store', fn);
+  }
+
+  /**
+   * Runs fn under one of the locks (kind 'queue' or 'store', LOCK_DIRS), re-entrant in this process. The queue lock held
+   * by an outer holder (outerLocks.queue, cli/context.mjs) is used as it is: never taken a second time, never released.
+   */
+  function withLockOf(kind, fn) {
+    const dir = path.join(folder, LOCK_DIRS[kind]);
+    const outer = typeof outerLocks?.[kind] === 'function' ? outerLocks[kind]() : null;
+    if (outer) {
+      if (!LK.isHeld(dir, outer))
+        throw new Error(`this command lost the ${kind} lock on ${folder} (${LOCK_DIRS[kind]}) before a store transaction; nothing was written`);
+      return fn();
+    }
+    const h = holds.get(dir);
     if (h) {
       h.depth++;
       try {
@@ -116,9 +146,10 @@ function openStore({ folder, tree = null, lockWaitMs, now, pidAlive, io = null }
       }
     }
     f.mkdirSync(folder, { recursive: true });
-    const got = LK.acquire(lockDir, { waitMs });
+    const got = LK.acquire(dir, { waitMs });
     if (!got.ok)
-      throw new Error(QL.heldMessage({ folder: `${folder} (the store lock, ${LOCK_DIR})`, ravenseat: 'ravenseat', ...got }));
+      throw new Error(QL.heldMessage({ folder: `${folder} (the ${kind} lock, ${LOCK_DIRS[kind]})`, ravenseat: 'ravenseat', ...got }));
+    const lockDir = dir;
     holds.set(lockDir, { me: got.me, depth: 1 });
     if (!io && !exitHook) {
       exitHook = true;
@@ -174,6 +205,355 @@ function openStore({ folder, tree = null, lockWaitMs, now, pidAlive, io = null }
       );
       return { version: 1, ids };
     }
+  }
+
+  // ---- TRANSACTIONS (step 7) ----------------------------------------------------------------------------------------
+
+  const journalDir = path.join(folder, JOURNAL_DIR);
+  const recoverMode = journalRecover === 'report' ? 'report' : 'auto';
+
+  /** sha256 of a file's bytes, or null when it does not exist (any other read error is thrown). */
+  function hashFile(p) {
+    try {
+      return sha(f.readFileSync(p));
+    } catch (e) {
+      if (e?.code === 'ENOENT') return null;
+      throw e;
+    }
+  }
+
+  /** The text of a file, or null when it does not exist. */
+  function textOf(p) {
+    try {
+      return String(f.readFileSync(p, 'utf8'));
+    } catch (e) {
+      if (e?.code === 'ENOENT') return null;
+      throw e;
+    }
+  }
+
+  /** The file a transaction writes for (family, id): a single-file family takes no id, a folder family needs one. */
+  function targetOf(name, id) {
+    const fam = FAM.family(name);
+    if (fam.file) {
+      if (id !== undefined) throw new Error(`storage family "${name}" is one file; it takes no id`);
+      return pathOf(name);
+    }
+    if (!fam.dir) throw new Error(`storage family "${name}" has no single path; it cannot be written in a transaction`);
+    const ok = typeof id === 'string' && id && id !== '.' && id !== '..' && !/[\\/:\0]/.test(id);
+    if (!ok) throw new Error(`storage family "${name}" is a folder: a write needs the id of one file in it, not ${JSON.stringify(id)}`);
+    return path.join(pathOf(name), id);
+  }
+
+  const rel = (p) => {
+    const r = path.relative(folder, p);
+    return r && !r.startsWith('..') ? r.replace(/\\/g, '/') : p;
+  };
+
+  /** Moves a target of a journal into place: a tmp file over its target, or a removed file into the journal folder. */
+  function applyTarget(t) {
+    if (t.op === 'remove') SF.renameWithRetry(t.path, t.trash, { fs: f });
+    else SF.renameWithRetry(t.tmp, t.path, { fs: f });
+  }
+
+  /** Removes a file and ignores a failure (left for doctor's orphan row and the sweep). */
+  function drop(p) {
+    try {
+      f.rmSync(p, { force: true });
+    } catch {
+      /* left for doctor's orphan row and ravenseat store sweep --tmp */
+    }
+  }
+
+  /**
+   * What a journal left behind needs, without changing anything. Per target: done (the new content is in place),
+   * ready (its tmp file still holds the new content: the rename can be made), lost (still the old content and no tmp
+   * file: it cannot be finished) or changed (neither: a later write replaced it, it is left alone).
+   *   plan done      every target is done or changed: only the journal is left to remove
+   *   plan forward   no target is lost: the ready ones are renamed (roll forward)
+   *   plan back      a target is lost, and every done target can be put back from its .prev (the hash matches)
+   *   plan failed    a target is lost and some done target cannot be put back (reason names it); nothing is touched
+   */
+  function analyse(file) {
+    let j;
+    try {
+      j = JSON.parse(String(f.readFileSync(file, 'utf8')));
+      if (!j || !Array.isArray(j.targets) || !Array.isArray(j.families)) throw new Error('no targets');
+    } catch (e) {
+      return { id: path.basename(file, '.json'), file, families: [], targets: [], plan: 'failed', reason: `the journal cannot be read (${e?.code ?? e?.message ?? e})` };
+    }
+    const states = j.targets.map((t) => {
+      const cur = hashFile(t.path);
+      if (t.op === 'remove') return cur === null ? 'done' : cur === t.before ? 'ready' : 'changed';
+      if (cur === t.after) return 'done';
+      if (t.tmp && hashFile(t.tmp) === t.after) return 'ready';
+      return cur === t.before ? 'lost' : 'changed';
+    });
+    const out = { id: j.id ?? path.basename(file, '.json'), file, at: j.at ?? null, pid: j.pid ?? null, families: j.families, targets: j.targets, states };
+    if (!states.includes('lost')) return { ...out, plan: states.includes('ready') ? 'forward' : 'done' };
+    const problems = [];
+    j.targets.forEach((t, i) => {
+      if (states[i] === 'changed') problems.push(`${rel(t.path)} was changed by a later write`);
+      if (states[i] !== 'done') return;
+      if (t.op === 'remove') {
+        if (hashFile(t.trash) !== t.before) problems.push(`${rel(t.path)} was removed and its copy is gone`);
+      } else if (t.before === null) problems.push(`${rel(t.path)} had no file before and is not removed by a recovery`);
+      else if (hashFile(SF.prevPath(t.path)) !== t.before) problems.push(`${rel(t.path)} has no .prev copy of its state before`);
+    });
+    const lost = j.targets.filter((_, i) => states[i] === 'lost').map((t) => rel(t.path));
+    return problems.length
+      ? { ...out, plan: 'failed', reason: `the tmp file of ${lost.join(', ')} is gone and ${problems.join('; ')}` }
+      : { ...out, plan: 'back', reason: `the tmp file of ${lost.join(', ')} is gone` };
+  }
+
+  /** Carries out what analyse says for one journal (the caller holds the locks of its families). Never throws. */
+  function recoverFile(file) {
+    let a;
+    try {
+      a = analyse(file);
+      if (a.plan === 'failed') return { ...a, outcome: 'failed' };
+      if (a.plan === 'forward') a.targets.forEach((t, i) => a.states[i] === 'ready' && applyTarget(t));
+      if (a.plan === 'back')
+        a.targets.forEach((t, i) => {
+          if (a.states[i] !== 'done') return;
+          if (t.op === 'remove') SF.renameWithRetry(t.trash, t.path, { fs: f });
+          else FB.writeText(t.path, f.readFileSync(SF.prevPath(t.path)), { fs: f, pid });
+        });
+      // Done: the tmp files and removed copies that are left go, and the journal last.
+      for (const t of a.targets) {
+        if (t.tmp) drop(t.tmp);
+        if (t.trash) drop(t.trash);
+      }
+      f.rmSync(file, { force: true });
+      return { ...a, outcome: a.plan };
+    } catch (e) {
+      return { ...(a ?? { id: path.basename(file, '.json'), file, families: [] }), outcome: 'failed', reason: `the recovery stopped: ${e?.code ?? e?.message ?? e}` };
+    }
+  }
+
+  /** The journals in the data folder (file names <txid>.json), oldest first. */
+  function journalFiles() {
+    try {
+      return f
+        .readdirSync(journalDir)
+        .filter((n) => n.endsWith('.json'))
+        .sort()
+        .map((n) => path.join(journalDir, n));
+    } catch {
+      return [];
+    }
+  }
+
+  /** Every journal left behind with what a recovery would do (read-only: doctor's row). */
+  function journals() {
+    return journalFiles().map((file) => {
+      try {
+        const { targets: _t, states: _s, ...a } = analyse(file);
+        return a;
+      } catch (e) {
+        return { id: path.basename(file, '.json'), file, families: [], plan: 'failed', reason: e?.code ?? e?.message ?? String(e) };
+      }
+    });
+  }
+
+  const kindsOf = (names) => FAM.LOCK_ORDER.filter((k) => names.some((n) => (FAM.all().find((x) => x.name === n)?.lock ?? 'store') === k));
+
+  /** Runs fn under the locks of these kinds, taken in LOCK_ORDER. */
+  function underLocks(kinds, fn) {
+    const take = (i) => (i >= kinds.length ? fn() : withLockOf(kinds[i], () => take(i + 1)));
+    return take(0);
+  }
+
+  /** One line per result for stderr; failed ones name the way on. */
+  function sayRecovered(results) {
+    for (const r of results) {
+      const what = `journal ${r.id} (${(r.families ?? []).join(', ')})`;
+      if (r.outcome === 'forward' || r.outcome === 'done')
+        console.error(`NOTE: finished a store commit that stopped part way: ${what}.`);
+      else if (r.outcome === 'back') console.error(`NOTE: put back the state before a store commit that stopped part way (${r.reason}): ${what}.`);
+      else
+        console.error(
+          `WARNING: a store commit that stopped part way could not be finished (${r.reason}): ${what}. The journal is kept ` +
+            `at ${r.file}; ravenseat doctor shows it, and the owner decides.`,
+        );
+    }
+  }
+
+  /**
+   * Recovers the journals left behind (all, or those that share a family with `families`), under the locks of their
+   * families. Returns { results: [{ id, file, families, outcome: forward|back|done|failed, reason? }] }. Never throws for
+   * a journal: a failed one is kept, with its reason.
+   */
+  function recover(families = null) {
+    const results = [];
+    for (const file of journalFiles()) {
+      let fams = [];
+      try {
+        fams = JSON.parse(String(f.readFileSync(file, 'utf8'))).families ?? [];
+      } catch {
+        fams = [];
+      }
+      if (families && !fams.some((n) => families.includes(n))) continue;
+      try {
+        results.push(underLocks(kindsOf(fams.length ? fams : ['queue']), () => recoverFile(file)));
+      } catch (e) {
+        results.push({ id: path.basename(file, '.json'), file, families: fams, outcome: 'failed', reason: e?.message ?? String(e) });
+      }
+    }
+    return { results };
+  }
+
+  /**
+   * transaction(families, fn, { snapshots }): writes several families as one unit. Takes the families' locks in
+   * LOCK_ORDER, recovers a journal left behind on them (journalRecover auto; report only says so), runs fn(tx), and
+   * commits what fn staged. fn MUST BE PURE: it may only read through tx and stage writes, because a database backend may
+   * run it again; a throw inside it writes nothing. Returns what fn returns.
+   *   tx.get(fam, id?)            the value (a staged one first), with the family's empty value and onCorrupt rule
+   *   tx.text(fam, id?)           the text, or null when missing
+   *   tx.put(fam, id?, value)     stages a write; a string is written as it is, anything else as JSON
+   *   tx.update(fam, id?, fn)     put(fn(get))
+   *   tx.remove(fam, id?)         stages a removal (the file moves into the journal folder until the commit is done)
+   *   tx.append(fam, id?, text)   stages text added at the end (refused for a family a hook appends to without a lock)
+   * id: the file in a folder family (handover-archive '2026-11.md'); a single-file family takes none.
+   * snapshots: { <family>: tiers } for a family with backup 'tiers' (the queue's rolling copies).
+   */
+  function transaction(families, fn, o = {}) {
+    const fams = [...new Set(families)].sort();
+    for (const n of fams) FAM.family(n);
+    if (typeof fn !== 'function') throw new Error('transaction needs a function');
+    return underLocks(kindsOf(fams), () => {
+      const pending = journalFiles().length ? journals().filter((j) => j.families.some((n) => fams.includes(n))) : [];
+      if (pending.length) {
+        if (recoverMode === 'auto') sayRecovered(recover(fams).results);
+        else
+          for (const j of pending)
+            console.error(
+              `WARNING: journal ${j.id} (${j.families.join(', ')}) is left by a store commit that stopped part way; ` +
+                'store.journalRecover is report, so it is not finished now. Run ravenseat doctor, then ravenseat doctor --fix.',
+            );
+      }
+      const staged = new Map();
+      const tx = stager(fams, staged);
+      const out = fn(tx);
+      commit(fams, staged, o);
+      return out;
+    });
+  }
+
+  /** The tx object of one transaction: reads see the staged writes, writes only stage. */
+  function stager(fams, staged) {
+    const mine = (name) => {
+      if (!fams.includes(name)) throw new Error(`storage family "${name}" is not in this transaction (${fams.join(', ')})`);
+      return FAM.family(name);
+    };
+    // (fam, id?, rest...): a folder family's first argument after the name is the id.
+    const split = (name, args) => (mine(name).file ? [undefined, args] : [args[0], args.slice(1)]);
+    const text = (name, id) => {
+      const p = targetOf(name, id);
+      const s = staged.get(p);
+      if (s) return s.op === 'remove' ? null : s.text;
+      return textOf(p);
+    };
+    const get = (name, id) => {
+      const fam = mine(name);
+      const p = targetOf(name, id);
+      const s = staged.get(p);
+      if (!s) return fam.file ? readJson(name) : FB.readJson(p, { onCorrupt: fam.onCorrupt === 'fail' ? 'fail' : 'empty', fallback: null, fs: f });
+      if (s.op === 'remove') return fam.empty === undefined ? null : JSON.parse(JSON.stringify(fam.empty));
+      return JSON.parse(s.text);
+    };
+    const put = (name, id, value) => {
+      const p = targetOf(name, id);
+      staged.set(p, { family: name, path: p, op: 'put', text: typeof value === 'string' ? value : FB.jsonText(value) });
+    };
+    return {
+      get: (name, id) => get(name, split(name, [id])[0]),
+      text: (name, id) => text(name, split(name, [id])[0]),
+      put: (name, ...args) => {
+        const [id, [value]] = split(name, args);
+        put(name, id, value);
+      },
+      update: (name, ...args) => {
+        const [id, [fn]] = split(name, args);
+        const next = fn(get(name, id));
+        if (next !== undefined) put(name, id, next);
+        return next;
+      },
+      remove: (name, id) => {
+        mine(name);
+        const p = targetOf(name, id);
+        staged.set(p, { family: name, path: p, op: 'remove' });
+      },
+      append: (name, ...args) => {
+        const fam = mine(name);
+        if (fam.writers.includes('hook'))
+          throw new Error(`storage family "${name}" is appended to by a hook without a lock; it cannot be appended in a transaction`);
+        const [id, [add]] = split(name, args);
+        put(name, id, `${text(name, id) ?? ''}${String(add)}`);
+      },
+    };
+  }
+
+  /**
+   * The commit: every new content to a unique tmp file, the .prev copies and snapshot tiers as for a single write, the
+   * journal (families, targets, tmp paths, the hash of each target before and after), then the renames, then the
+   * journal is removed. A failure before the journal is written removes the tmp files and changes nothing; a failure
+   * after it leaves the journal for the recovery (tried once at once).
+   */
+  function commit(fams, staged, o) {
+    if (!staged.size) return;
+    const txid = `${now()}-${pid}-${crypto.randomBytes(4).toString('hex')}`;
+    const file = path.join(journalDir, `${txid}.json`);
+    const list = [...staged.values()].sort((x, y) => x.family.localeCompare(y.family) || x.path.localeCompare(y.path));
+    const targets = [];
+    try {
+      for (const s of list) {
+        const before = hashFile(s.path);
+        if (s.op === 'remove') {
+          if (before !== null) targets.push({ family: s.family, path: s.path, op: 'remove', before, after: null, trash: path.join(journalDir, `${txid}.${targets.length}.removed`) });
+          continue;
+        }
+        const after = sha(Buffer.from(s.text, 'utf8'));
+        if (after === before) continue; // nothing changes
+        f.mkdirSync(path.dirname(s.path), { recursive: true });
+        const t = { family: s.family, path: s.path, op: 'put', tmp: FB.tmpName(s.path, pid), before, after };
+        targets.push(t);
+        f.writeFileSync(t.tmp, s.text);
+      }
+      if (!targets.length) return;
+      for (const t of targets) {
+        if (t.op !== 'put' || t.before === null) continue;
+        const backup = FAM.family(t.family).backup;
+        if (backup === 'prev' || backup === 'tiers') FB.keepPrevious(t.path, { fs: f, pid });
+        const tiers = o.snapshots?.[t.family];
+        if (backup === 'tiers' && Array.isArray(tiers) && tiers.length) require('../stateSnapshots.js').roll(t.path, tiers, { fs: f });
+      }
+      f.mkdirSync(journalDir, { recursive: true });
+      const journal = { version: 1, id: txid, at: new Date(now()).toISOString(), pid, families: fams, targets };
+      FB.writeText(file, `${JSON.stringify(journal, null, 2)}\n`, { fs: f, pid, json: true });
+    } catch (e) {
+      for (const t of targets) if (t.tmp) drop(t.tmp);
+      throw e;
+    }
+    try {
+      for (const t of targets) applyTarget(t);
+    } catch (e) {
+      const r = recoverFile(file);
+      if (r.outcome !== 'forward' && r.outcome !== 'done') {
+        e.message = `${e.message} (a store commit of ${fams.join(', ')} stopped part way; the journal ${file} is kept for the recovery, and ravenseat doctor shows it)`;
+        throw e;
+      }
+      return;
+    }
+    for (const t of targets) if (t.op === 'put' && /\.json$/.test(t.path)) FB.markGood(t.path, f);
+    try {
+      f.rmSync(file, { force: true });
+    } catch (e) {
+      // Every target is in place: the commit is complete. The journal left behind reads as done to the next recovery.
+      console.error(`WARNING: a store commit is complete, but its journal ${file} could not be removed (${e?.code ?? e?.message ?? e}); the next recovery removes it.`);
+      return;
+    }
+    for (const t of targets) if (t.trash) drop(t.trash);
   }
 
   /** Is a tmp file left by a crashed write? (pid not running and old enough) */
@@ -248,7 +628,7 @@ function openStore({ folder, tree = null, lockWaitMs, now, pidAlive, io = null }
     return { listed, removed, failed };
   }
 
-  return { folder, tree, path: pathOf, readJson, writeJson, update, withLock, nextId, scan, sweepTmp };
+  return { folder, tree, path: pathOf, readJson, writeJson, update, withLock, nextId, scan, sweepTmp, transaction, recover, journals };
 }
 
 /** "3.2 MB", "12 KB", "512 B". */
@@ -266,4 +646,4 @@ function ageText(ms) {
   return h < 48 ? `${h} h` : `${Math.round(h / 24)} d`;
 }
 
-module.exports = { openStore, sizeText, ageText, LOCK_DIR, ORPHAN_AGE_MS, families: FAM, fileBackend: FB };
+module.exports = { openStore, sizeText, ageText, LOCK_DIR, LOCK_DIRS, JOURNAL_DIR, ORPHAN_AGE_MS, families: FAM, fileBackend: FB };

@@ -16,6 +16,12 @@
 //   mem.before({ op, match, times }, fn)                         runs fn right before a matching op: the deterministic
 //                                                                scheduler. A race test puts the other "process"'s whole
 //                                                                operation exactly between two steps of the first one.
+//   mem.crash({ op, match, after })                              a CRASH at the next matching op (step 7, the journal's
+//                                                                failure points): the op throws ECRASH (after: true, it
+//                                                                happens first), and from then on every fs call throws
+//                                                                ECRASH, so no cleanup, finally block or lock release of
+//                                                                the crashed "process" gets anything done
+//   mem.restart()                                                ends the crash (kill the crashed pid to free its locks)
 //   mem.files() / mem.text(p)                                    what is stored (for assertions)
 //
 // ops: read, write, append, rename, rm, rmdir, mkdir, stat, readdir. `match` is a RegExp or a function on the path (for
@@ -54,6 +60,10 @@ function createMemory({ now: start = Date.UTC(2026, 10, 24, 12), hostname = 'mem
   let nextPid = 1000;
   const faults = [];
   const hooks = [];
+  // The crash points (mem.crash): armed specs, whether the world is crashed now, and a crash due after the current op.
+  const crashes = [];
+  let crashed = false;
+  let crashAfter = null;
 
   const norm = (p) => path.resolve(String(p));
   const parentOf = (p) => path.dirname(p);
@@ -65,6 +75,17 @@ function createMemory({ now: start = Date.UTC(2026, 10, 24, 12), hostname = 'mem
 
   /** Runs the hooks and faults for an op before it happens. */
   function gate(op, p) {
+    if (crashed) throw fsError('ECRASH', op, p);
+    for (const c of crashes) {
+      if (c.times > 0 && c.op === op && matches(c.match, p)) {
+        c.times--;
+        if (!c.after) {
+          crashed = true;
+          throw fsError('ECRASH', op, p);
+        }
+        crashAfter = { op, p };
+      }
+    }
     for (const h of hooks) {
       if (h.times > 0 && h.op === op && matches(h.match, p)) {
         h.times--;
@@ -274,6 +295,22 @@ function createMemory({ now: start = Date.UTC(2026, 10, 24, 12), hostname = 'mem
     },
   };
 
+  // Every call: refused while crashed, and an armed after-crash fires once the op it matched has happened.
+  for (const k of Object.keys(fs)) {
+    const op = fs[k];
+    fs[k] = (...args) => {
+      if (crashed) throw fsError('ECRASH', k, String(args[0]));
+      const out = op(...args);
+      if (crashAfter) {
+        const c = crashAfter;
+        crashAfter = null;
+        crashed = true;
+        throw fsError('ECRASH', c.op, c.p);
+      }
+      return out;
+    };
+  }
+
   const world = {
     fs,
     now: () => clock,
@@ -298,6 +335,14 @@ function createMemory({ now: start = Date.UTC(2026, 10, 24, 12), hostname = 'mem
     before({ op, match, times = 1 }, fn) {
       hooks.push({ op, match, times, fn });
     },
+    crash({ op, match, after = false, times = 1 }) {
+      crashes.push({ op, match, after, times });
+    },
+    restart() {
+      crashed = false;
+      crashAfter = null;
+    },
+    crashed: () => crashed,
     /** Every stored file path, sorted (forward slashes, for assertions that read the same on every OS). */
     files: () => [...files.keys()].map((k) => k.replace(/\\/g, '/')).sort(),
     text: (p) => files.get(norm(p))?.data.toString('utf8') ?? null,

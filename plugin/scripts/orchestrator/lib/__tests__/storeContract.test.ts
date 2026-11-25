@@ -426,8 +426,10 @@ describe.each([['file', fileEnv], ['memory', memoryEnv]] as const)('store transa
 
   it('a crash before the journal delete: recovery only removes the journal', () => {
     const env = seeded();
-    expect(() => commitBoth(env.crashStore({ op: 'rm', match: JOURNAL_FILE }))).toThrow(/ECRASH/);
+    // Every target is in place when the journal delete crashes: the commit itself only warns (on stderr).
+    quiet(() => commitBoth(env.crashStore({ op: 'rm', match: JOURNAL_FILE })));
     env.restart();
+    expect(env.listIn('.journal').length).toBe(1);
     expect(both(env)).toEqual(NEW);
     expect(env.store().recover().results.map((x: any) => x.outcome)).toEqual(['done']);
     expect(both(env)).toEqual(NEW);
