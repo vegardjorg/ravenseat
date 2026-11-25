@@ -19,7 +19,7 @@
  * (the catalog's near names), instructionSize.maxLines/maxChars (`ravenseat instructions`), baseGate.timeoutSec (the
  * receive and merge budget), testWeakening.testPaths (red on base), migrations.pushCommand, environmentFile and
  * allowedEnvironment (the push guard), learning.proposals (the catalog rule gates need no learning.repeats) and the
- * cloud.* rows (the cloud commands do not read features.cloud).
+ * cloud.* rows (the cloud commands do not read features.cloud). store.journalRecover has no parent (lib/store/index.js reads it on its own).
  */
 const REQUIRES = Object.freeze({
   // lib/fixRound.js: continueWithinMin 0 turns continuation off before the context cap is read.

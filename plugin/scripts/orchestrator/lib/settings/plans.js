@@ -209,6 +209,15 @@ const ROWS = Object.freeze([
   row('stateSnapshots.tiers', 'history', 'list', 'Snapshot ages',
     'The ages of the rolling copies of queue.json, two to eight such as "1h", "1d", "7d". An older age lets you go ' +
     'further back after a bad change.'),
+  // Friction: none for auto. It runs only when a journal is left (a crash, a kill or a full disk between the writes of
+  // one store transaction), takes a few renames under locks the command already holds, costs no tokens and never stops
+  // the command (a recovery that fails is kept for doctor, and reads go on). Default auto: it only finishes a write the
+  // user already asked for. report is for an owner who wants to look first: the half state then stays until doctor
+  // --fix, and commands go on writing on top of it.
+  row('store.journalRecover', 'history', 'choice', 'Finish a stopped store commit',
+    'When a command that writes several files as one unit stopped part way (a crash, a kill, a full disk), auto finishes ' +
+    'it or puts the state before it back, the next time a command takes the same lock; report only says so, and ' +
+    '`ravenseat doctor --fix` finishes it. Doctor names every journal left behind either way.', { choices: ['auto', 'report'] }),
   row('metrics.idleGapMin', 'history', 'integer', 'Idle gap (minutes)',
     'A gap longer than this between two transcript entries is idle and not counted as active time.'),
   // Friction: low, a CPU reading twice per sample and one time log row; only while the board runs. Off by default: the

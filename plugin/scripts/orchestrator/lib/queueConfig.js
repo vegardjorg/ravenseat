@@ -807,6 +807,9 @@ const STANDARD = Object.freeze({
   // whose copy is at least as old as the tier takes the next younger copy, and the youngest takes the current state.
   // tiers: 2 to 8 ages such as "30m", "5h", "7d". enabled false turns it off.
   stateSnapshots: { enabled: true, tiers: ['1h', '5h', '1d', '2d', '7d'] },
+  // A store commit that stopped part way (lib/store/index.js transaction, <dataFolder>/.journal): auto finishes it (or puts
+  // the state before it back) when a command next takes the same lock; report leaves it for doctor --fix.
+  store: { journalRecover: 'auto' },
   // Where the history lives (owner decision B5). rotateTimeLog: 'monthly' moves the time log to one archive per UTC month
   // next to it on the first write of a new month (times.jsonl -> times-2026-10.jsonl, lib/timeLogArchive.js); every reader
   // that needs older rows reads the archives too. 'off' keeps one file. archiveDoneAfterDays: done and cancelled tasks
