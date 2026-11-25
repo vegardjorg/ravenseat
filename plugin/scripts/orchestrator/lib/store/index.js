@@ -704,7 +704,14 @@ function openStore({ folder, tree = null, lockWaitMs, now, pidAlive, io = null, 
     return { listed, removed, failed };
   }
 
-  return { folder, tree, path: pathOf, readJson, writeJson, update, withLock, nextId, scan, sweepTmp, transaction, recover, journals };
+  /**
+   * Refuses (ESTOREJOURNAL, the transaction's own message) when a journal on these families is still open, and never
+   * recovers. For a caller that holds their lock and is about to run its own work (cli/context.mjs withLock, right
+   * after its recovery at the lock; fix round jrn-r2, L1): the stop then comes before that work, not at its write.
+   */
+  const refuseOpen = (families) => settlePending([...new Set(families)].sort(), { pending: 'refuse' });
+
+  return { folder, tree, path: pathOf, readJson, writeJson, update, withLock, nextId, scan, sweepTmp, transaction, recover, journals, refuseOpen };
 }
 
 /** "3.2 MB", "12 KB", "512 B". */

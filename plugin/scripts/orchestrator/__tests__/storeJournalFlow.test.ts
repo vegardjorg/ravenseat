@@ -280,6 +280,22 @@ describe('the real queue write, killed at each point of its commit', () => {
     expect(p.journal()).toEqual([]);
   });
 
+  // Fix round jrn-r2, L1: the refusal comes right after the lock-time recovery, before the command's own work runs
+  // (owner-log <id> only reads, so before this it went through past the open journal).
+  it.each([
+    ['store.journalRecover report', { store: { journalRecover: 'report' } }, undefined],
+    ['auto, and the recovery at the lock fails', {}, ARCHIVE_EPERM],
+  ])('%s: a command under the queue lock stops before it runs, with the doctor --fix line', (_name, config, crash) => {
+    const p = archiving(config);
+    p.run(FIRST, 'journal');
+    expect(p.journal().length).toBe(1);
+    const r = p.run(['owner-log', 'D-1'], crash);
+    expect(r.code, r.all).not.toBe(0);
+    expect(r.all).toMatch(/left by a store commit that stopped part way.*doctor --fix/s);
+    expect(r.all).not.toMatch(/owner row/);
+    expect(p.journal().length).toBe(1);
+  });
+
   it('a hand edit over a kept journal is never written over: doctor --fix keeps it and says so', () => {
     const p = archiving({ store: { journalRecover: 'report' } });
     p.run(FIRST, 'journal');

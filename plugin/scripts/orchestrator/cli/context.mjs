@@ -350,6 +350,20 @@ function finishStoppedCommits() {
     console.error(`WARNING: the store journal could not be checked (${e?.message ?? e}).`);
   }
 }
+/**
+ * Right after finishStoppedCommits: a journal on the queue's families that is still open (store.journalRecover report,
+ * or a recovery that did not get through) stops the command BEFORE its work runs (fix round jrn-r2, L1), with the same
+ * ESTOREJOURNAL line as write(). write() keeps its own check as a second net. A journal nothing can finish any more
+ * (failed) lets the command go on. Only the check itself failing lets it go on too, with a warning.
+ */
+function refuseOpenJournal() {
+  try {
+    QUEUE_STORE.refuseOpen(QUEUE_LOCK_FAMILIES);
+  } catch (e) {
+    if (e?.code === 'ESTOREJOURNAL') die(e.message.replace(/\bravenseat (?=doctor)/g, `${CLI} `));
+    console.error(`WARNING: the store journal could not be checked (${e?.message ?? e}).`);
+  }
+}
 export function withLock(fn) {
   fs.mkdirSync(FOLDER, { recursive: true });
   const got = QL.acquire(LOCK, { waitMs: QL.waitMsFrom(process.env.QUEUE_LOCK_WAIT_MS) });
@@ -360,6 +374,7 @@ export function withLock(fn) {
     process.on('exit', releaseLock);
   }
   finishStoppedCommits();
+  refuseOpenJournal();
   try {
     return fn();
   } finally {
