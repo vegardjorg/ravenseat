@@ -74,7 +74,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 import { a, branchFor, CONFIG, CLI, FILE, FOLDER, FOLLOW_FILE, git, GIT_ROOT, HERE, KK, L, LOCK, MAIN_TREE, planCount, require, SF } from './context.mjs';
-import { storeDoctorRows } from './store.mjs';
+import { storeDoctorRows, storeJournalFix, storeJournalRows } from './store.mjs';
 import { cloudSetupFacts } from './cloud.mjs';
 import { BASELINE_CHECKS } from './doctorBaseline.mjs';
 import { REPO_CHECKS } from './doctorRepo.mjs';
@@ -460,7 +460,8 @@ function checkState() {
 
 /** The storage layer (lib/store/, cli/store.mjs): unknown data folder entries and orphaned tmp files. INFO only. */
 function checkStore() {
-  return storeDoctorRows(info);
+  // A store commit that stopped part way (a journal left in .journal) is a WARN row of its own, naming the journal.
+  return [...storeDoctorRows(info), ...storeJournalRows(warn)];
 }
 
 /** The git hooks and config that run code against the accepted baseline. Reads only: no ensure here. */
@@ -990,8 +991,9 @@ async function doctorGhRows() {
 
 /**
  * `ravenseat doctor [--json] [--all] [--fix]` (the usage is at the top of queue.mjs).
- * --fix: the one thing doctor repairs itself, the project's .gitignore (setup.mjs writeGitignore: the fixed lines, the
- * data folder or its share pattern, the time log and the private paths), before the checks run. Nothing else changes.
+ * --fix: what doctor repairs itself, before the checks run: the project's .gitignore (setup.mjs writeGitignore: the fixed
+ * lines, the data folder or its share pattern, the time log and the private paths), and a store commit that stopped part
+ * way (cli/store.mjs storeJournalFix, lib/store/index.js recover). Nothing else changes.
  */
 export async function cmdDoctor() {
   let fixed = null;
@@ -999,6 +1001,10 @@ export async function cmdDoctor() {
     const { gitignoreNote, writeGitignore } = await import('../setup.mjs');
     fixed = gitignoreNote(writeGitignore(CONFIG.root, CONFIG));
     if (!a.includes('--json')) console.log(`doctor --fix: ${fixed}\n`);
+    // The other repair: a store commit that stopped part way is finished (or put back) where it can be; one that cannot
+    // stays, with its doctor row.
+    const journal = storeJournalFix();
+    if (journal.length && !a.includes('--json')) console.log(`doctor --fix: ${journal.join('; ')}\n`);
   }
   const every = [checkNode, checkHooks, checkConfig, checkIssues, checkState, checkStore, checkSurface, checkPushBlock, checkLock, checkWorktrees, checkBranches, checkTidy, checkProjectFiles, checkSettings, checkTaxonomy, checkCatalog, checkNotBuilding, checkDepsAudit, checkLinks, checkGuards, checkGuardDecisions, checkCanary, checkCodeMode, ...REPO_CHECKS, checkCloud, checkMachine, checkGateQueue, checkProcesses, checkBudget, checkTemp, checkCleanCopies, checkGit, checkCiCost, ...BASELINE_CHECKS, doctorKeyScan].flatMap((f) => {
     try {

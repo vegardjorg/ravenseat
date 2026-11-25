@@ -245,6 +245,29 @@ describe('withLock and update', () => {
   }, 20_000);
 });
 
+describe('transaction commit cost', () => {
+  it('reads each target once: its hash before and its .prev copy come from the same read (queue.json is ~12 MB)', () => {
+    const folder = tmpDir();
+    const file = path.join(folder, 'plans.json');
+    fs.writeFileSync(file, JSON.stringify({ entries: [{ id: 'PL-1' }] }));
+    let reads = 0;
+    const counting: any = new Proxy(fs, {
+      get(target: any, key: string) {
+        const real = target[key];
+        if (typeof real !== 'function') return real;
+        return (...args: any[]) => {
+          if (key === 'readFileSync' && path.resolve(String(args[0])) === path.resolve(file)) reads++;
+          return real.apply(target, args);
+        };
+      },
+    });
+    S.openStore({ folder, lockWaitMs: 0, io: { fs: counting } }).transaction(['plans'], (tx: any) => tx.put('plans', { entries: [] }));
+    expect(JSON.parse(fs.readFileSync(file, 'utf8'))).toEqual({ entries: [] });
+    expect(JSON.parse(fs.readFileSync(`${file}.prev`, 'utf8'))).toEqual({ entries: [{ id: 'PL-1' }] });
+    expect(reads).toBe(1);
+  });
+});
+
 describe('scan and sweepTmp', () => {
   const seeded = () => {
     const folder = tmpDir();

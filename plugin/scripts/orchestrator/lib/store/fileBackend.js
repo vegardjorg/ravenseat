@@ -95,6 +95,8 @@ const clearCache = () => {
 /**
  * Copies `file` to `<file>.prev` when it holds good JSON: never a broken file over the last good copy. Without a parse
  * when this process already knows the bytes are good. Never throws: a failed copy must not stop the write it protects.
+ * o.bytes: the file's content the caller already read (lib/store/index.js commit hashes it), so a large file such as
+ * queue.json is read once per write, not twice.
  * @returns {boolean} whether a copy was made
  */
 function keepPrevious(file, o = {}) {
@@ -102,8 +104,8 @@ function keepPrevious(file, o = {}) {
   const known = cached(file, f);
   let tmp = null;
   try {
-    const text = f.readFileSync(file, 'utf8');
-    if (!known) JSON.parse(text);
+    const text = o.bytes ?? f.readFileSync(file, 'utf8');
+    if (!known) JSON.parse(String(text));
     const prev = SF.prevPath(file);
     tmp = tmpName(prev, o.pid);
     f.writeFileSync(tmp, text);

@@ -159,6 +159,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **Checks: suggestion groups with one card sit side by side and use the width instead of one narrow column.**
 - **A deleted or concurrent `catalog propose` no longer reuses or shares a D-id, concurrent `catalog accept`s keep every record, and two branches never get the same G-id from `guards add`.**
 ### Hardened
+- **The queue write and `handover archive` commit their files through a journal, so a crash midway is finished or put back by the next command.** `store.journalRecover` `auto`; `store journal drop <id>` sets a failed one aside.
 - **Gate, done and base runs register themselves while they run and carry `RAVENSEAT_TRACK`, and can run at below normal priority.** `processGuard.register` on, `processGuard.lowerPriority` off.
 - **The key scan's hash is salted per data folder, so a short password cannot be guessed back from `secret-scan.json`, and a false alarm stays set aside by that hash.**
 - **Every atomic write retries a rename Windows refuses for a moment, not only queue.json.** A guard test keeps new raw renames out.

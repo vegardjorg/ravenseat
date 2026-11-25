@@ -11,7 +11,7 @@
 // Used by: queue.mjs. Tested in: __tests__/gateEvidenceFlow.test.ts.
 // =============================================================
 
-import { a, CLI, CONFIG, die, FOLDER, queueBranchId, read, require, val, withLock } from './context.mjs';
+import { a, CLI, CONFIG, die, FOLDER, queueBranchId, read, require, saveOwnerLog, val, withLock } from './context.mjs';
 
 const OL = require('./lib/ownerLog.js');
 const GE = require('./lib/gateEvidence.js');
@@ -29,7 +29,7 @@ function show(id) {
   taskOrDie(queue, id);
   if (GE.modeOf(CONFIG) === 'off')
     console.log('gateEvidence.mode is off in queue.config.json: receive and merge do not check owner rows.');
-  const r = withLock(() => OL.check(FOLDER, read(), id));
+  const r = withLock(() => OL.check(FOLDER, read(), id, { save: saveOwnerLog }));
   if (r.baseline) console.log(`Owner log started (${OL.logFile(FOLDER)}): the owner rows in the queue now are its baseline.`);
   if (!r.missing.length) {
     console.log(`Every owner row of ${id} is in the owner log; no owner row of ${id} is missing.`);
@@ -55,7 +55,8 @@ export function cmdOwnerLog() {
   const r = withLock(() => {
     const queue = read();
     taskOrDie(queue, id);
-    return OL.accept(FOLDER, queue, id, by);
+    // Through the store (saveOwnerLog): never past a store journal still open on the owner log (fix round jrn-r2).
+    return OL.accept(FOLDER, queue, id, by, { save: saveOwnerLog });
   });
   if (!r.ok) die(`${CLI} owner-log accept: ${r.error}. Nothing was changed.`);
   console.log(

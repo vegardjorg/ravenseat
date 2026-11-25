@@ -42,6 +42,15 @@ type Env = {
   read: (rel: string) => string | null;
   write: (rel: string, text: string, ageMs?: number) => void;
   list: () => string[];
+  /** The entries of a folder under the data folder ('' = the data folder), sorted; [] when it does not exist. */
+  listIn: (rel: string) => string[];
+  /**
+   * A store as a process that CRASHES at the op `spec` names: the op throws (or, with after: true, happens and then
+   * throws), and from then on every fs call of that process throws ECRASH, so no finally block, cleanup or lock release
+   * gets anything done. restart() ends the crash: the "process" is gone and its locks are free for the next one.
+   */
+  crashStore: (spec: { op: string; match: RegExp; after?: boolean }, o?: object) => any;
+  restart: () => void;
 };
 
 function fileEnv(): Env {
@@ -87,14 +96,65 @@ function fileEnv(): Env {
       }
     },
     list: () => fs.readdirSync(folder).sort(),
+    listIn: (rel) => {
+      try {
+        return fs.readdirSync(rel ? abs(rel) : folder).sort();
+      } catch {
+        return [];
+      }
+    },
+    crashStore: (spec, o = {}) => {
+      crashed = false;
+      armed = spec;
+      return ST.openStore({ folder, lockWaitMs: 0, io: { fs: crashFs }, ...o });
+    },
+    restart: () => {
+      crashed = false;
+      armed = null;
+      // The crashed "process" was this one (alive): its locks go the way a dead holder's would.
+      for (const d of [ST.LOCK_DIR, '.lockState']) fs.rmSync(abs(d), { recursive: true, force: true });
+    },
   };
 }
+
+/** The op of an fs call, for crash matching (as the memory backend names them). */
+const OP_OF: Record<string, string> = {
+  writeFileSync: 'write', appendFileSync: 'append', renameSync: 'rename', copyFileSync: 'write', rmSync: 'rm',
+  unlinkSync: 'rm', mkdirSync: 'mkdir', readFileSync: 'read', statSync: 'stat', readdirSync: 'readdir', rmdirSync: 'rmdir',
+};
+let crashed = false;
+let armed: { op: string; match: RegExp; after?: boolean } | null = null;
+const crashError = (p: unknown) => Object.assign(new Error(`ECRASH: the process crashed (${String(p)})`), { code: 'ECRASH' });
+/** The real fs, crashing as crashStore's spec says (the file backend's crash point). */
+const crashFs: any = new Proxy(fs, {
+  get(target: any, key: string) {
+    const real = target[key];
+    if (typeof real !== 'function') return real;
+    return (...args: any[]) => {
+      if (crashed) throw crashError(args[0]);
+      const hit = armed && OP_OF[key] === armed.op && armed.match.test(String(args[0]).replace(/\\/g, '/'));
+      if (hit && !armed!.after) {
+        armed = null;
+        crashed = true;
+        throw crashError(args[0]);
+      }
+      const out = real.apply(target, args);
+      if (hit) {
+        armed = null;
+        crashed = true;
+        throw crashError(args[0]);
+      }
+      return out;
+    };
+  },
+});
 
 function memoryEnv(): Env & { mem: any } {
   const mem = createMemory();
   const folder = path.resolve('/mem-store/data');
   mem.fs.mkdirSync(folder, { recursive: true });
   const main = mem.io();
+  let crashIo: any = null;
   const abs = (rel: string) => path.join(folder, ...rel.split('/'));
   return {
     name: 'memory',
@@ -122,6 +182,23 @@ function memoryEnv(): Env & { mem: any } {
       } else mem.fs.writeFileSync(abs(rel), text);
     },
     list: () => mem.fs.readdirSync(folder).sort(),
+    listIn: (rel) => {
+      try {
+        return mem.fs.readdirSync(rel ? abs(rel) : folder).sort();
+      } catch {
+        return [];
+      }
+    },
+    crashStore: (spec, o: any = {}) => {
+      crashIo = mem.io();
+      mem.crash(spec);
+      return ST.openStore({ folder, lockWaitMs: 0, io: crashIo, ...o });
+    },
+    restart: () => {
+      mem.restart();
+      if (crashIo) mem.kill(crashIo.pid);
+      crashIo = null;
+    },
   };
 }
 
@@ -225,6 +302,382 @@ describe.each([['file', fileEnv], ['memory', memoryEnv]] as const)('store contra
     expect(env.read(`plans.json.${DEAD_PID}.tmp`)).toBeNull();
     expect(env.read(`ledger-like.json.${DEAD_PID}.tmp`)).not.toBeNull();
     expect(env.read('my-notes.txt')).toBe('x');
+  });
+});
+
+// ---- transaction() with a file journal (LAGRING step 7) ---------------------------------------------------------------
+// Two families with .prev (ledger: the store lock; plans: the queue lock) and one without (owner-log: the queue lock).
+// Renames go in family-name order: ledger (catalog-accepted.json) first, then owner-log, then plans.
+const TMP_OF = (file: string) => new RegExp(`/${file.replace(/\./g, '\\.')}\\.\\d+\\.[0-9a-f]+\\.tmp$`);
+const JOURNAL_TMP = /\/\.journal\/[^/]+\.json\.\d+\.[0-9a-f]+\.tmp$/;
+const JOURNAL_FILE = /\/\.journal\/[^/]+\.json$/;
+const OLD = { ledger: { version: 1, decisions: { old: {} } }, plans: { entries: [{ id: 'PL-1' }] } };
+const NEW = { ledger: { version: 1, decisions: { old: {}, new: {} } }, plans: { entries: [{ id: 'PL-1' }, { id: 'PL-2' }] } };
+
+describe.each([['file', fileEnv], ['memory', memoryEnv]] as const)('store transaction (%s backend)', (_name, make) => {
+  /** A world with OLD in both families (and their .prev copies of an older state). */
+  const seeded = () => {
+    const env = make();
+    const st = env.store();
+    st.writeJson('ledger', { version: 1, decisions: {} });
+    st.writeJson('ledger', OLD.ledger);
+    st.writeJson('plans', { entries: [] });
+    st.writeJson('plans', OLD.plans);
+    return env;
+  };
+  const both = (env: Env) => ({ ledger: JSON.parse(env.read('catalog-accepted.json')!), plans: JSON.parse(env.read('plans.json')!) });
+  const clean = (env: Env) => {
+    expect(tmpLeft(env)).toEqual([]);
+    expect(env.listIn('.journal')).toEqual([]);
+  };
+  const rmIn = (env: Env, name: string) => {
+    if (env.name === 'file') fs.rmSync(path.join(env.folder, name));
+    else (env as any).mem.fs.rmSync(path.join(env.folder, name));
+  };
+  const commitBoth = (st: any) =>
+    st.transaction(['plans', 'ledger'], (tx: any) => {
+      tx.put('ledger', NEW.ledger);
+      tx.put('plans', NEW.plans);
+    });
+  const quiet = <T,>(fn: () => T): { out: T; err: string } => {
+    const errors: string[] = [];
+    const orig = console.error;
+    console.error = (m: string) => errors.push(String(m));
+    try {
+      return { out: fn(), err: errors.join('\n') };
+    } finally {
+      console.error = orig;
+    }
+  };
+
+  it('commits every family at once; nothing reaches a target before the commit; .prev as for a single write', () => {
+    const env = seeded();
+    const st = env.store();
+    const out = st.transaction(['plans', 'ledger'], (tx: any) => {
+      tx.put('ledger', NEW.ledger);
+      expect(tx.get('ledger')).toEqual(NEW.ledger); // the transaction sees its own staged write
+      tx.update('plans', (v: any) => ({ entries: [...v.entries, { id: 'PL-2' }] }));
+      expect(both(env)).toEqual(OLD); // staged only
+      return 'answer';
+    });
+    expect(out).toBe('answer');
+    expect(both(env)).toEqual(NEW);
+    expect(JSON.parse(env.read('plans.json.prev')!)).toEqual(OLD.plans);
+    expect(JSON.parse(env.read('catalog-accepted.json.prev')!)).toEqual(OLD.ledger);
+    clean(env);
+  });
+
+  it('a throw inside fn writes nothing and leaves no tmp file or journal', () => {
+    const env = seeded();
+    expect(() =>
+      env.store().transaction(['plans', 'ledger'], (tx: any) => {
+        tx.put('ledger', NEW.ledger);
+        throw new Error('changed my mind');
+      }),
+    ).toThrow(/changed my mind/);
+    expect(both(env)).toEqual(OLD);
+    clean(env);
+  });
+
+  it('a family the transaction did not name is refused', () => {
+    const env = seeded();
+    expect(() => env.store().transaction(['plans'], (tx: any) => tx.put('ledger', NEW.ledger))).toThrow(/not in this transaction/);
+    expect(both(env)).toEqual(OLD);
+  });
+
+  it('ENOSPC on a tmp file: nothing changed, no tmp file, no journal', () => {
+    const env = seeded();
+    if (env.name === 'memory') (env as any).mem.fault({ op: 'write', match: TMP_OF('plans.json'), code: 'ENOSPC' });
+    else {
+      // The file backend: a crash at the same write leaves no journal either (nothing was renamed yet).
+      expect(() => commitBoth(env.crashStore({ op: 'write', match: TMP_OF('plans.json') }))).toThrow(/ECRASH/);
+      env.restart();
+      expect(both(env)).toEqual(OLD);
+      expect(env.listIn('.journal')).toEqual([]);
+      return;
+    }
+    expect(() => commitBoth(env.store())).toThrow(/ENOSPC/);
+    expect(both(env)).toEqual(OLD);
+    clean(env);
+  });
+
+  it('a crash right after the journal write: the next transaction on those families rolls forward', () => {
+    const env = seeded();
+    expect(() => commitBoth(env.crashStore({ op: 'rename', match: JOURNAL_TMP, after: true }))).toThrow(/ECRASH/);
+    env.restart();
+    expect(both(env)).toEqual(OLD);
+    expect(env.listIn('.journal').length).toBe(1);
+    const { err } = quiet(() => env.store().transaction(['ledger', 'plans'], (tx: any) => expect(tx.get('plans')).toEqual(NEW.plans)));
+    expect(err).toMatch(/finished/);
+    expect(both(env)).toEqual(NEW);
+    clean(env);
+  });
+
+  it('a crash after the first rename: recovery finishes the rest', () => {
+    const env = seeded();
+    expect(() => commitBoth(env.crashStore({ op: 'rename', match: TMP_OF('catalog-accepted.json'), after: true }))).toThrow(/ECRASH/);
+    env.restart();
+    expect(both(env)).toEqual({ ledger: NEW.ledger, plans: OLD.plans }); // out of step
+    const r = env.store().recover();
+    expect(r.results.map((x: any) => x.outcome)).toEqual(['forward']);
+    expect(both(env)).toEqual(NEW);
+    clean(env);
+  });
+
+  it('a crash before the journal delete: recovery only removes the journal', () => {
+    const env = seeded();
+    // Every target is in place when the journal delete crashes: the commit itself only warns (on stderr).
+    quiet(() => commitBoth(env.crashStore({ op: 'rm', match: JOURNAL_FILE })));
+    env.restart();
+    expect(env.listIn('.journal').length).toBe(1);
+    expect(both(env)).toEqual(NEW);
+    expect(env.store().recover().results.map((x: any) => x.outcome)).toEqual(['done']);
+    expect(both(env)).toEqual(NEW);
+    clean(env);
+  });
+
+  it('a later write over a kept journal is never written over: the recovery leaves it, keeps the journal and says so', () => {
+    const env = seeded();
+    expect(() => commitBoth(env.crashStore({ op: 'rename', match: JOURNAL_TMP, after: true }))).toThrow(/ECRASH/);
+    env.restart();
+    // A write that did not go through the transaction (another writer, a hand edit) lands on plans.json first.
+    const LATER = { entries: [{ id: 'PL-LATER' }] };
+    env.write('plans.json', JSON.stringify(LATER));
+    const st = env.store();
+    const listed = st.journals();
+    expect(listed[0]).toMatchObject({ plan: 'failed' });
+    expect(listed[0].reason).toMatch(/plans\.json was changed by a later write/);
+    const r = st.recover();
+    expect(r.results[0].outcome).toBe('failed');
+    expect(r.results[0].reason).toMatch(/plans\.json was changed by a later write/);
+    expect(JSON.parse(env.read('plans.json')!)).toEqual(LATER);
+    // Nothing else is finished without it either, and the journal stays for the owner.
+    expect(JSON.parse(env.read('catalog-accepted.json')!)).toEqual(OLD.ledger);
+    expect(env.listIn('.journal').length).toBe(1);
+  });
+
+  it('a later write after a complete commit: the recovery only removes the journal and keeps the later write', () => {
+    const env = seeded();
+    quiet(() => commitBoth(env.crashStore({ op: 'rm', match: JOURNAL_FILE })));
+    env.restart();
+    const LATER = { entries: [{ id: 'PL-LATER' }] };
+    env.write('plans.json', JSON.stringify(LATER));
+    expect(env.store().recover().results.map((x: any) => x.outcome)).toEqual(['done']);
+    expect(JSON.parse(env.read('plans.json')!)).toEqual(LATER);
+    expect(JSON.parse(env.read('catalog-accepted.json')!)).toEqual(NEW.ledger);
+    clean(env);
+  });
+
+  it('nothing can be finished (a tmp file is gone): the before-state comes back from .prev where the hash matches', () => {
+    const env = seeded();
+    expect(() => commitBoth(env.crashStore({ op: 'rename', match: TMP_OF('catalog-accepted.json'), after: true }))).toThrow(/ECRASH/);
+    env.restart();
+    const lost = env.list().filter((n) => /^plans\.json\.\d+\.[0-9a-f]+\.tmp$/.test(n));
+    expect(lost.length).toBe(1);
+    rmIn(env, lost[0]);
+    const r = env.store().recover();
+    expect(r.results[0].outcome).toBe('back');
+    expect(both(env)).toEqual(OLD);
+    clean(env);
+  });
+
+  it('a recovery that fails keeps the journal, never blocks reads, and is listed for doctor', () => {
+    const env = seeded();
+    const st0 = env.crashStore({ op: 'rename', match: TMP_OF('owner-log.json'), after: true });
+    expect(() =>
+      st0.transaction(['owner-log', 'plans'], (tx: any) => {
+        tx.put('owner-log', { version: 1, since: null, entries: [] });
+        tx.put('plans', NEW.plans);
+      }),
+    ).toThrow(/ECRASH/);
+    env.restart();
+    for (const n of env.list().filter((x) => /^plans\.json\..+\.tmp$/.test(x))) rmIn(env, n);
+    const st = env.store();
+    // owner-log.json had no file before and keeps no .prev: it cannot be put back, so the recovery fails.
+    const r = st.recover();
+    expect(r.results[0].outcome).toBe('failed');
+    expect(r.results[0].reason).toMatch(/owner-log\.json/);
+    expect(env.listIn('.journal').length).toBe(1);
+    expect(st.readJson('plans')).toEqual(OLD.plans);
+    const listed = st.journals();
+    expect(listed.length).toBe(1);
+    expect(listed[0]).toMatchObject({ families: ['owner-log', 'plans'], plan: 'failed' });
+    // A later transaction on the same families is never stopped by it, and says nothing: the journal is marked failed
+    // (fix round jrn-r2, L2), so only doctor shows it from now on.
+    const { err } = quiet(() => st.transaction(['plans'], (tx: any) => tx.put('plans', NEW.plans)));
+    expect(err).not.toMatch(/could not be finished/);
+    expect(JSON.parse(env.read('plans.json')!)).toEqual(NEW.plans);
+  });
+
+  // Fix round jrn-r2, L2: a failed journal was worked out again at every lock take (the targets hashed, a warning), and
+  // a target put back to its bytes from before (a snapshot restore) flipped it back to forward: the stale tmp file was
+  // renamed over the restore.
+  it('a journal its recovery cannot finish is marked failed and stays failed; drop sets it aside, never deletes', () => {
+    const env = seeded();
+    expect(() => commitBoth(env.crashStore({ op: 'rename', match: JOURNAL_TMP, after: true }))).toThrow(/ECRASH/);
+    env.restart();
+    const restore = env.read('plans.json')!;
+    env.write('plans.json', JSON.stringify({ entries: [{ id: 'PL-LATER' }] }));
+    const st = env.store();
+    const [file] = env.listIn('.journal').filter((n) => n.endsWith('.json'));
+    const id = file.replace(/\.json$/, '');
+    expect(st.recover().results.map((x: any) => x.outcome)).toEqual(['failed']);
+    const journal = JSON.parse(env.read(`.journal/${file}`)!);
+    expect(journal.failed.reason).toMatch(/plans\.json was changed by a later write/);
+    expect(typeof journal.failed.at).toBe('string');
+    // The owner puts plans.json back to its bytes from before the commit: the journal stays failed, nothing renamed.
+    env.write('plans.json', restore);
+    expect(st.recover().results).toEqual([]);
+    expect(env.read('plans.json')).toBe(restore);
+    expect(st.journals()).toMatchObject([{ id, plan: 'failed', marked: true }]);
+    const { err } = quiet(() => st.transaction(['ledger'], (tx: any) => tx.put('ledger', NEW.ledger)));
+    expect(err).toBe('');
+    // An open journal is never dropped; a failed one moves to .journal/failed/ with the tmp files it names.
+    expect(st.dropJournal('no-such-id')).toMatchObject({ ok: false });
+    const tmps = journal.targets.map((t: any) => path.basename(t.tmp));
+    const r = st.dropJournal(id);
+    expect(r).toMatchObject({ ok: true });
+    expect(env.listIn('.journal')).toEqual(['failed']);
+    expect(env.listIn('.journal/failed')).toEqual([file, ...tmps].sort());
+    expect(st.journals()).toEqual([]);
+    expect(tmpLeft(env)).toEqual([]);
+  });
+
+  it('drop refuses a journal a recovery can still finish', () => {
+    const env = seeded();
+    expect(() => commitBoth(env.crashStore({ op: 'rename', match: JOURNAL_TMP, after: true }))).toThrow(/ECRASH/);
+    env.restart();
+    const id = env.listIn('.journal').find((n) => n.endsWith('.json'))!.replace(/\.json$/, '');
+    const r = env.store().dropJournal(id);
+    expect(r).toMatchObject({ ok: false });
+    expect(r.error).toMatch(/doctor --fix/);
+    expect(env.listIn('.journal').filter((n) => n.endsWith('.json')).length).toBe(1);
+  });
+
+  it('journalRecover report: a transaction on those families refuses (never writes past the journal); recover() finishes it', () => {
+    const env = seeded();
+    expect(() => commitBoth(env.crashStore({ op: 'rename', match: JOURNAL_TMP, after: true }))).toThrow(/ECRASH/);
+    env.restart();
+    const st = env.store({ journalRecover: 'report' });
+    let ran = false;
+    expect(() =>
+      st.transaction(['ledger'], (tx: any) => {
+        ran = true;
+        tx.put('ledger', { version: 1, decisions: {} });
+      }),
+    ).toThrow(/journal .* store\.journalRecover is report.*doctor --fix/s);
+    expect(ran).toBe(false);
+    expect(both(env)).toEqual(OLD);
+    expect(env.listIn('.journal').length).toBe(1);
+    expect(st.recover().results[0].outcome).toBe('forward');
+    expect(both(env)).toEqual(NEW);
+    clean(env);
+  });
+
+  it("pending 'refuse' (a caller that computed its writes before the lock-time recovery): refuses, never recovers in between", () => {
+    const env = seeded();
+    expect(() => commitBoth(env.crashStore({ op: 'rename', match: JOURNAL_TMP, after: true }))).toThrow(/ECRASH/);
+    env.restart();
+    const st = env.store();
+    expect(() => st.transaction(['plans'], (tx: any) => tx.put('plans', { entries: [] }), { pending: 'refuse' })).toThrow(/doctor --fix/);
+    expect(both(env)).toEqual(OLD);
+    expect(env.listIn('.journal').length).toBe(1);
+  });
+
+  it('the commit order comes from the register: an archive and the owner log before the queue that drops or records', () => {
+    const env = make();
+    env.write('queue.json', JSON.stringify({ tasks: [{ id: 'D-1' }] }));
+    const st0 = env.crashStore({ op: 'rename', match: TMP_OF('queue-archive.json'), after: true });
+    expect(() =>
+      st0.transaction(['queue', 'queue-archive', 'owner-log'], (tx: any) => {
+        tx.put('queue', { tasks: [] });
+        tx.put('queue-archive', { version: 1, tasks: [{ id: 'D-1' }] });
+        tx.put('owner-log', { version: 1, since: null, entries: [] });
+      }),
+    ).toThrow(/ECRASH/);
+    env.restart();
+    const journal = JSON.parse(env.read(`.journal/${env.listIn('.journal').find((n) => n.endsWith('.json'))}`)!);
+    expect(journal.targets.map((t: any) => t.family)).toEqual(['owner-log', 'queue-archive', 'queue']);
+    // The archive is in place and the queue still holds D-1: in one file or both, never in neither.
+    expect(JSON.parse(env.read('queue.json')!).tasks).toEqual([{ id: 'D-1' }]);
+    expect(JSON.parse(env.read('queue-archive.json')!).tasks).toEqual([{ id: 'D-1' }]);
+    expect(env.store().recover().results[0].outcome).toBe('forward');
+    expect(JSON.parse(env.read('queue.json')!).tasks).toEqual([]);
+    // The handover note lets go of its lines only after the month file has them.
+    env.write('handover-ongoing.md', 'a\nb\n');
+    const st1 = env.crashStore({ op: 'rename', match: TMP_OF('2026-11.md'), after: true });
+    expect(() =>
+      st1.transaction(['handover', 'handover-archive'], (tx: any) => {
+        tx.put('handover', 'a\n');
+        tx.append('handover-archive', '2026-11.md', 'b\n');
+      }),
+    ).toThrow(/ECRASH/);
+    env.restart();
+    expect(env.read('handover-ongoing.md')).toBe('a\nb\n');
+    expect(env.read('handover-archive/2026-11.md')).toBe('b\n');
+  });
+
+  it('append, remove and a collection member by id', () => {
+    const env = seeded();
+    env.write('handover-ongoing.md', 'a\n');
+    env.write('handover-archive/2026-10.md', 'old\n');
+    const st = env.store();
+    st.transaction(['handover', 'handover-archive'], (tx: any) => {
+      expect(tx.text('handover')).toBe('a\n');
+      tx.append('handover-archive', '2026-11.md', 'one\n');
+      tx.append('handover-archive', '2026-11.md', 'two\n');
+      tx.remove('handover-archive', '2026-10.md');
+      tx.put('handover', 'b\n');
+    });
+    expect(env.read('handover-ongoing.md')).toBe('b\n');
+    expect(env.read('handover-archive/2026-11.md')).toBe('one\ntwo\n');
+    expect(env.read('handover-archive/2026-10.md')).toBeNull();
+    expect(() => st.transaction(['handover-archive'], (tx: any) => tx.put('handover-archive', '../x.md', 'x'))).toThrow(/id/);
+    clean(env);
+  });
+
+  it('the locks: a live holder of one of them stops the transaction before fn runs', () => {
+    const env = seeded();
+    env.holdLock(true);
+    let ran = false;
+    expect(() =>
+      env.store().transaction(['plans', 'ledger'], () => {
+        ran = true;
+      }),
+    ).toThrow(/store lock/);
+    expect(ran).toBe(false);
+  });
+
+  it('an outer holder of the queue lock (cli/context.mjs) is used, not waited on', () => {
+    const env = seeded();
+    const io = env.name === 'memory' ? (env as any).mem.io() : null;
+    const LK = io ? QL.lockOn(io) : QL;
+    const dir = path.join(env.folder, '.lockState');
+    const got = LK.acquire(dir, { waitMs: 0 });
+    expect(got.ok).toBe(true);
+    const st = env.store({ ...(io ? { io } : {}), outerLocks: { queue: () => got.me } });
+    st.transaction(['plans'], (tx: any) => tx.put('plans', NEW.plans));
+    expect(JSON.parse(env.read('plans.json')!)).toEqual(NEW.plans);
+    // Still held by the outer holder: the transaction never released a lock it did not take.
+    expect(LK.isHeld(dir, got.me)).toBe(true);
+    LK.release(dir, got.me);
+  });
+});
+
+describe('memory backend: crash points', () => {
+  it('crash() before and after an op; while crashed every call throws; restart() ends it', () => {
+    const mem = createMemory();
+    mem.fs.mkdirSync(path.resolve('/c'), { recursive: true });
+    mem.crash({ op: 'write', match: /a\.txt$/, after: true });
+    expect(() => mem.fs.writeFileSync(path.resolve('/c/a.txt'), 'x')).toThrow(/ECRASH/);
+    expect(mem.text('/c/a.txt')).toBe('x');
+    expect(() => mem.fs.readFileSync(path.resolve('/c/a.txt'), 'utf8')).toThrow(/ECRASH/);
+    mem.restart();
+    mem.crash({ op: 'rename', match: /a\.txt$/ });
+    expect(() => mem.fs.renameSync(path.resolve('/c/a.txt'), path.resolve('/c/b.txt'))).toThrow(/ECRASH/);
+    mem.restart();
+    expect(mem.text('/c/a.txt')).toBe('x');
+    expect(mem.text('/c/b.txt')).toBeNull();
   });
 });
 

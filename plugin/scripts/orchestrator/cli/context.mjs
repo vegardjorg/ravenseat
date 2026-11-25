@@ -326,6 +326,44 @@ export function queueBranchId() {
 }
 
 // ---- Lock and storage --------------------------------------------------------------------------------------
+// The store for the families written with the queue (lib/store/index.js transaction, step 7): it uses the queue lock
+// this process holds (outerLocks) instead of waiting on itself. store.journalRecover: auto finishes a commit that stopped
+// part way, report only says so (and write() then stops instead of writing past it).
+const QUEUE_STORE = ST.openStore({ folder: FOLDER, outerLocks: { queue: () => held }, journalRecover: CONFIG.store?.journalRecover });
+/** The families the queue lock covers (a journal on them is finished as soon as the lock is held, before any read). */
+const QUEUE_LOCK_FAMILIES = ST.families.all().filter((f) => f.lock === 'queue').map((f) => f.name);
+/**
+ * Right after the queue lock is taken: a store commit on the queue's families that stopped part way is finished first,
+ * so this command reads what that commit wrote, never the half state (and never writes over it). Never stops the command.
+ */
+function finishStoppedCommits() {
+  try {
+    if (CONFIG.store?.journalRecover === 'report') return; // the transaction says so; doctor --fix finishes it
+    const r = QUEUE_STORE.recover(QUEUE_LOCK_FAMILIES);
+    for (const x of r.results) {
+      const what = `journal ${x.id} (${(x.families ?? []).join(', ')})`;
+      if (x.outcome === 'failed')
+        console.error(`WARNING: a store commit that stopped part way could not be finished (${x.reason}): ${what}. It is kept; ${CLI} doctor shows it.`);
+      else console.error(`NOTE: finished a store commit that stopped part way (${x.outcome === 'back' ? 'put back the state before it' : 'completed'}): ${what}.`);
+    }
+  } catch (e) {
+    console.error(`WARNING: the store journal could not be checked (${e?.message ?? e}).`);
+  }
+}
+/**
+ * Right after finishStoppedCommits: a journal on the queue's families that is still open (store.journalRecover report,
+ * or a recovery that did not get through) stops the command BEFORE its work runs (fix round jrn-r2, L1), with the same
+ * ESTOREJOURNAL line as write(). write() keeps its own check as a second net. A journal nothing can finish any more
+ * (failed) lets the command go on. Only the check itself failing lets it go on too, with a warning.
+ */
+function refuseOpenJournal() {
+  try {
+    QUEUE_STORE.refuseOpen(QUEUE_LOCK_FAMILIES);
+  } catch (e) {
+    if (e?.code === 'ESTOREJOURNAL') die(e.message.replace(/\bravenseat (?=doctor)/g, `${CLI} `));
+    console.error(`WARNING: the store journal could not be checked (${e?.message ?? e}).`);
+  }
+}
 export function withLock(fn) {
   fs.mkdirSync(FOLDER, { recursive: true });
   const got = QL.acquire(LOCK, { waitMs: QL.waitMsFrom(process.env.QUEUE_LOCK_WAIT_MS) });
@@ -335,6 +373,8 @@ export function withLock(fn) {
     releaseOnExit = true;
     process.on('exit', releaseLock);
   }
+  finishStoppedCommits();
+  refuseOpenJournal();
   try {
     return fn();
   } finally {
@@ -394,17 +434,56 @@ export function parallelWarning() {
 // The owner log (lib/ownerLog.js, owner decision B2): the owner rows this write adds (in `queue`, not in the file on
 // disk just before, read here under the lock) are recorded, so receive and merge can tell them from a row written into
 // queue.json some other way. A write from a track worktree records nothing. Never stops the write.
+//
+// ONE UNIT (step 7): the archive, queue.json and the owner log are committed together in one store transaction
+// (lib/store/index.js): the three are computed first, under the queue lock, and the transaction only stages them. A
+// crash or a full disk in between used to leave queue.json written without its owner rows recorded (receive and merge
+// then stop on rows the queue wrote itself); now a commit that stopped part way is finished by the next command that
+// takes the queue lock (finishStoppedCommits), or by doctor --fix. The commit renames the archive and the owner log
+// before queue.json (commitFirst in lib/store/families.js), so a stop in between never leaves a task in neither file.
+// A journal still open on these families when this write commits (store.journalRecover report, or a recovery at the
+// lock that did not get through) stops the write with the way on (pending 'refuse', fix round jrn-r1): what is staged
+// here was computed from the half state, so it is never written past the journal, nor over what a recovery just wrote.
 export function write(queue) {
   stopIfLockLost('queue.json');
   queue.changed = new Date().toISOString();
-  keepArchiveConsistent(queue);
+  const staged = { archive: null, ownerLog: null };
+  keepArchiveConsistent(queue, (tasks) => (staged.archive = tasks));
   const before = ownerKeysOnDisk();
   // A restored task's owner rows are not new (they were recorded when they were written, and the owner log keeps them):
   // they count as on disk, so a row put into the archive file by hand is still missing at a check.
   if (before) for (const id of restoredNow) for (const r of OL.rowsOf(queue, id)) before.add(r.key);
   restoredNow.clear();
-  SF.writeState(FILE, JSON.stringify(queue, null, 2) + '\n', { snapshots: SNAPSHOT_TIERS });
-  if (before) OL.recordWrite(FOLDER, { before, after: queue, inTrack: queueBranchId() !== null });
+  const text = JSON.stringify(queue, null, 2) + '\n';
+  if (before) OL.recordWrite(FOLDER, { before, after: queue, inTrack: queueBranchId() !== null, save: (log) => (staged.ownerLog = OL.logText(log)) });
+  // Pure: it only stages what was computed above (a database backend may run it again).
+  const stage = (tx) => {
+    if (staged.archive) tx.put('queue-archive', QA.archiveText(staged.archive));
+    tx.put('queue', text);
+    if (staged.ownerLog) tx.put('owner-log', staged.ownerLog);
+  };
+  try {
+    QUEUE_STORE.transaction(['owner-log', 'queue', 'queue-archive'], stage, { snapshots: { queue: SNAPSHOT_TIERS }, pending: 'refuse' });
+  } catch (e) {
+    if (e?.code === 'ESTOREJOURNAL') die(e.message.replace(/\bravenseat (?=doctor)/g, `${CLI} `));
+    throw e;
+  }
+}
+/**
+ * Saves the owner log on its own (owner-log accept, the first check's baseline: lib/ownerLog.js check and accept take
+ * this as their `save`), through the same store as write() (fix round jrn-r2, M1). Before, they wrote owner-log.json
+ * straight with FileBackend, past a journal still open on it (store.journalRecover report, or a recovery at the lock
+ * that failed): the journal then found the owner log changed and could never be finished. Now a journal still open on
+ * the owner log stops the command with the doctor --fix line, as a queue write does (pending 'refuse': the log was
+ * computed from reads made before the transaction). Takes the queue lock itself when the caller does not hold it.
+ */
+export function saveOwnerLog(log) {
+  try {
+    QUEUE_STORE.transaction(['owner-log'], (tx) => tx.put('owner-log', OL.logText(log)), { pending: 'refuse' });
+  } catch (e) {
+    if (e?.code === 'ESTOREJOURNAL') die(e.message.replace(/\bravenseat (?=doctor)/g, `${CLI} `));
+    throw e;
+  }
 }
 const OL = require('./lib/ownerLog.js');
 // The archive of done tasks (lib/queueArchive.js, history.archiveDoneAfterDays, owner decision B5). Every queue write,
@@ -439,7 +518,7 @@ export const namedIds = (tasks) =>
     .flatMap((o) => [o.depends_on, o.fixes, o.qa_original].flat())
     .filter((id) => id != null && id !== '')
     .map(String);
-function keepArchiveConsistent(queue) {
+function keepArchiveConsistent(queue, save) {
   if (!Array.isArray(queue?.tasks)) return;
   // A read-only view (withArchive marks its archived tasks archived: true) never writes them back into queue.json.
   if (queue.tasks.some((o) => o?.archived === true)) queue.tasks = queue.tasks.filter((o) => o?.archived !== true);
@@ -449,7 +528,7 @@ function keepArchiveConsistent(queue) {
     for (const id of inQueue) if (queue.archived?.[id] !== undefined) delete queue.archived[id];
   }
   if (ARCHIVE_DAYS == null || queueBranchId() !== null) return;
-  const r = QA.archiveDone(queue, { folder: FOLDER, days: ARCHIVE_DAYS });
+  const r = QA.archiveDone(queue, { folder: FOLDER, days: ARCHIVE_DAYS, save });
   if (r.error) console.error(`WARNING: done tasks were not archived: ${r.error}`);
 }
 /** The owner row keys in queue.json as it is on disk now (an empty set when there is no file yet), or null on an error. */

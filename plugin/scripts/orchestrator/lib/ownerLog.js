@@ -131,9 +131,11 @@ function load(folder) {
 
 /** Writes the log atomically (lib/store/fileBackend.js: a unique tmp file and a rename, the tmp removed on a failure). */
 function save(folder, log) {
-  // Compact JSON on one line, as before (the log can hold 20000 entries).
-  FB.writeText(logFile(folder), `${JSON.stringify({ ...log, entries: log.entries.slice(-MAX_ENTRIES) })}\n`, { json: true });
+  FB.writeText(logFile(folder), logText(log), { json: true });
 }
+
+/** The log file's text: compact JSON on one line, as before (the log can hold 20000 entries). */
+const logText = (log) => `${JSON.stringify({ ...log, entries: log.entries.slice(-MAX_ENTRIES) })}\n`;
 
 /** The log with every owner row of the queue added (the first use). */
 function baselineOf(queue) {
@@ -150,13 +152,15 @@ function baselineOf(queue) {
  * worktree (`inTrack`) records nothing. Never throws.
  * @returns {{ recorded: number }}
  */
-function recordWrite(folder, { before, after, inTrack = false }) {
+function recordWrite(folder, { before, after, inTrack = false, save: saveTo = null }) {
+  // saveTo: where the new log goes instead of the file (cli/context.mjs write stages it in its store transaction).
+  const put = (log) => (typeof saveTo === 'function' ? saveTo(log) : save(folder, log));
   try {
     if (inTrack || !folder) return { recorded: 0 };
     const { state, log } = load(folder);
     if (state === 'missing') {
       const base = baselineOf(after);
-      save(folder, base);
+      put(base);
       return { recorded: base.entries.length };
     }
     const had = new Set(log.entries.map((e) => e.key));
@@ -171,7 +175,7 @@ function recordWrite(folder, { before, after, inTrack = false }) {
         recorded++;
       }
     }
-    if (recorded) save(folder, log);
+    if (recorded) put(log);
     return { recorded };
   } catch {
     return { recorded: 0 }; // error-ignored: a row left out is missing at receive and merge, the owner accepts it
@@ -181,14 +185,17 @@ function recordWrite(folder, { before, after, inTrack = false }) {
 /**
  * The owner rows of task `id` the log does not have. The first use (no file) records every row there is and reports
  * none missing; a broken file reports every row missing.
+ * save: where the baseline goes instead of the file (cli/context.mjs saveOwnerLog: a store transaction, so it never
+ * writes past a store journal left open on the owner log; fix round jrn-r2). Its ESTOREJOURNAL error is thrown on.
  * @returns {{ baseline: boolean, missing: { key: string, kind: string, label: string, task: string }[] }}
  */
-function check(folder, queue, id) {
+function check(folder, queue, id, { save: saveTo = null } = {}) {
   const { state, log } = load(folder);
   if (state === 'missing') {
     try {
-      save(folder, baselineOf(queue));
-    } catch {
+      (typeof saveTo === 'function' ? saveTo : (l) => save(folder, l))(baselineOf(queue));
+    } catch (e) {
+      if (e?.code === 'ESTOREJOURNAL') throw e; // an open store journal: the caller stops with the way on
       return { baseline: false, missing: rowsOf(queue, id) }; // no log could be written: nothing is confirmed
     }
     return { baseline: true, missing: [] };
@@ -200,13 +207,15 @@ function check(folder, queue, id) {
 /**
  * The owner confirms the missing rows of task `id` as theirs (`ravenseat owner-log accept <id> --by owner`). Only
  * `by` owner or theBoard. A broken file is replaced by a log with these rows (the other tasks' rows are then missing).
+ * save: as for check (cli/context.mjs saveOwnerLog); its error is thrown on.
  * @returns {{ ok: boolean, accepted: number, error?: string }}
  */
-function accept(folder, queue, id, by) {
+function accept(folder, queue, id, by, { save: saveTo = null } = {}) {
   if (!isOwner(by)) return { ok: false, accepted: 0, error: 'only the owner accepts owner rows (--by owner)' };
+  const put = (log) => (typeof saveTo === 'function' ? saveTo(log) : save(folder, log));
   const { state, log } = load(folder);
   if (state === 'missing') {
-    save(folder, baselineOf(queue));
+    put(baselineOf(queue));
     return { ok: true, accepted: 0 };
   }
   const had = new Set(log.entries.map((e) => e.key));
@@ -217,7 +226,7 @@ function accept(folder, queue, id, by) {
     log.entries.push({ key: r.key, task: r.task, kind: r.kind, at, accepted_by: String(by).trim() });
     accepted++;
   }
-  if (accepted || state === 'broken') save(folder, { ...log, since: log.since ?? at });
+  if (accepted || state === 'broken') put({ ...log, since: log.since ?? at });
   return { ok: true, accepted };
 }
 
@@ -234,4 +243,4 @@ function stopMessage({ id, missing, ravenseat = 'ravenseat', again, file }) {
   ].join('\n');
 }
 
-module.exports = { FILE_NAME, MAX_ENTRIES, OWNER_BY, logFile, rowsOf, keySet, load, recordWrite, check, accept, stopMessage };
+module.exports = { FILE_NAME, MAX_ENTRIES, OWNER_BY, logFile, logText, rowsOf, keySet, load, recordWrite, check, accept, stopMessage };

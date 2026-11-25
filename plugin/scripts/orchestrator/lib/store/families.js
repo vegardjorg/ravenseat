@@ -26,6 +26,13 @@
 //   empty      the value a reader gets when the file is missing (doc families)
 //   owner      the module that owns the file's format and writes it (null when the note says it)
 //   pathSetting the queue.config.json key that moves a tree family's file (treeFileOf reads it), or null
+//   lock       the lock a write of the family is made under: 'queue' (<dataFolder>/.lockState, the queue lock
+//              cli/context.mjs takes: the queue and what is written with it) or 'store' (<dataFolder>/.storeLock).
+//              store.transaction() takes the locks of its families in one fixed order, LOCK_ORDER (step 7)
+//   commitFirst true for a family that holds what another family in the same transaction lets go of or records (the
+//              queue's archive, the owner log, the handover month files): a transaction's commit renames these first,
+//              so a commit that stops part way never leaves a task or a line in neither file (lib/queueArchive.js THE
+//              ORDER). The rest follow, by family name
 //
 // ADDING A STATE FILE: add a family here (and use lib/store/index.js to read and write it). Doctor names any data folder
 // entry this register does not know as an INFO row, so a forgotten family shows up the first time it is written, and
@@ -60,20 +67,25 @@ const BASE = Object.freeze({
   match: [],
   owner: null,
   pathSetting: null,
+  lock: 'store',
+  commitFirst: false,
 });
+
+/** The order transaction() takes the locks in: the queue lock first, then the store lock (lib/store/index.js). */
+const LOCK_ORDER = Object.freeze(['queue', 'store']);
 
 /** @type {object[]} */
 const LIST = [
   // ---- The queue and what is written with it ----------------------------------------------------------------------
-  { name: 'queue', file: 'queue.json', writers: ['main', 'track', 'board'], backup: 'tiers', onCorrupt: 'fail', note: 'the queue (cli/context.mjs read/write, lib/stateFile.js)' },
+  { name: 'queue', file: 'queue.json', writers: ['main', 'track', 'board'], backup: 'tiers', onCorrupt: 'fail', lock: 'queue', note: 'the queue (cli/context.mjs read/write, lib/stateFile.js)' },
   { name: 'queue-snapshots', dir: 'snapshots', kind: 'collection', note: 'rolling copies of queue.json (lib/stateSnapshots.js)' },
-  { name: 'queue-archive', file: 'queue-archive.json', writers: ['main'], onCorrupt: 'broken', note: 'done tasks moved out of the queue (lib/queueArchive.js)' },
-  { name: 'plans', file: 'plans.json', writers: ['main', 'track', 'board'], backup: 'prev', onCorrupt: 'fail', empty: null, note: 'the plan register (cli/context.mjs readPlans/writePlans)' },
-  { name: 'follow', file: 'follow.json', writers: ['main'], onCorrupt: 'fail', note: 'follow up entries (lib/queueFollow.js)' },
+  { name: 'queue-archive', file: 'queue-archive.json', writers: ['main'], backup: 'prev', onCorrupt: 'broken', lock: 'queue', commitFirst: true, note: 'done tasks moved out of the queue (lib/queueArchive.js)' },
+  { name: 'plans', file: 'plans.json', writers: ['main', 'track', 'board'], backup: 'prev', onCorrupt: 'fail', empty: null, lock: 'queue', note: 'the plan register (cli/context.mjs readPlans/writePlans)' },
+  { name: 'follow', file: 'follow.json', writers: ['main'], onCorrupt: 'fail', lock: 'queue', note: 'follow up entries (lib/queueFollow.js)' },
   { name: 'follow-reports', dir: 'follow', kind: 'blob', backend: 'file-only', note: 'follow up reports' },
   { name: 'missions', dir: 'mission', kind: 'blob', backend: 'file-only', writers: ['main'], share: 'never', note: 'long missions, <id>.md (agents read them by path)' },
   { name: 'missions-legacy', dir: 'missions', kind: 'blob', backend: 'file-only', share: 'never', note: 'the older folder name of mission/ (naming drift, plan part 2 point 11)' },
-  { name: 'owner-log', file: 'owner-log.json', writers: ['main'], onCorrupt: 'broken', share: 'never', owner: 'lib/ownerLog.js', note: 'owner rows the queue recorded (lib/ownerLog.js)' },
+  { name: 'owner-log', file: 'owner-log.json', writers: ['main'], onCorrupt: 'broken', share: 'never', owner: 'lib/ownerLog.js', lock: 'queue', commitFirst: true, note: 'owner rows the queue recorded (lib/ownerLog.js)' },
   { name: 'owner-mark-key', file: 'owner-mark.key', kind: 'cache', onCorrupt: 'skip', share: 'never', owner: 'lib/ownerMark.js', note: 'the key of the owner mark (lib/ownerMark.js)' },
   // ---- Catalog, ids and guards ---------------------------------------------------------------------------------------
   { name: 'ledger', file: 'catalog-accepted.json', writers: ['main', 'board'], backup: 'prev', onCorrupt: 'empty', empty: { version: 1, decisions: {} }, note: "the owner's record of accepted design choices (cli/catalog.mjs)" },
@@ -109,13 +121,15 @@ const LIST = [
   { name: 'wait-runs', dir: 'runs', kind: 'collection', share: 'never', note: 'wait mode runs: output, done files, key pointers and their locks (lib/waitMode.js)' },
   // ---- Handover, release notes, ask ---------------------------------------------------------------------------------
   { name: 'handover', file: 'handover-ongoing.md', kind: 'blob', backend: 'file-only', onCorrupt: 'skip', share: 'never', match: ['handover.md'], note: 'the ongoing handover note (lib/queueHandover.js)' },
-  { name: 'handover-archive', dir: 'handover-archive', kind: 'blob', backend: 'file-only', share: 'never', note: 'monthly handover archives' },
+  { name: 'handover-archive', dir: 'handover-archive', kind: 'blob', backend: 'file-only', share: 'never', commitFirst: true, note: 'monthly handover archives' },
   { name: 'wave-active', file: 'wave-active', kind: 'cache', onCorrupt: 'skip', share: 'never', note: 'the wave id the orchestrator set at wave start, one line of text (hook-time.mjs, hook-track-context.mjs)' },
   { name: 'release-notes', dir: 'release-notes', kind: 'blob', backend: 'file-only', note: 'release notes drafts' },
   { name: 'ask', dir: 'ask', kind: 'blob', backend: 'file-only', note: 'ask bundles per task' },
   { name: 'issues', dir: 'issues', kind: 'blob', backend: 'file-only', note: 'issue bodies (cli/issues.mjs)' },
   { name: 'suggestions', dir: 'suggestions', kind: 'collection', note: 'suggestions' },
   { name: 'demo', dir: 'demo', kind: 'collection', share: 'never', note: 'the demo board, a data folder of its own (lib/demoMode.js)' },
+  // ---- The transaction journal (step 7) ------------------------------------------------------------------------------
+  { name: 'journal', dir: '.journal', kind: 'collection', share: 'never', onCorrupt: 'skip', owner: 'lib/store/index.js', note: 'a commit of store.transaction() in progress, <txid>.json; one left behind is recovered (lib/store/index.js)' },
   // ---- Locks ------------------------------------------------------------------------------------------------------
   { name: 'locks', kind: 'lock', share: 'never', onCorrupt: 'skip', match: ['.lockState', '.storeLock', '.mergeLock', '.waitLock', 'merge.lock', 'wait.lock', /\.lock$/], note: 'locks: lib/queueLock.js folders (queue, store, merge, waiter) and the lock files of older versions' },
   // ---- Small state files and caches (one family each would be noise; they hold one small JSON each) ------------------
@@ -203,4 +217,4 @@ function formatId(scheme, n) {
   return `${s.prefix}${s.pad ? String(n).padStart(s.pad, '0') : String(n)}`;
 }
 
-module.exports = { ID_SCHEMES, all, family, classify, treeFileOf, isTmpName, tmpPid, formatId };
+module.exports = { ID_SCHEMES, LOCK_ORDER, all, family, classify, treeFileOf, isTmpName, tmpPid, formatId };
