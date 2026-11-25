@@ -508,17 +508,67 @@ describe.each([['file', fileEnv], ['memory', memoryEnv]] as const)('store transa
     expect(JSON.parse(env.read('plans.json')!)).toEqual(NEW.plans);
   });
 
-  it('journalRecover report: the transaction leaves the journal and says so; recover() finishes it', () => {
+  it('journalRecover report: a transaction on those families refuses (never writes past the journal); recover() finishes it', () => {
     const env = seeded();
     expect(() => commitBoth(env.crashStore({ op: 'rename', match: JOURNAL_TMP, after: true }))).toThrow(/ECRASH/);
     env.restart();
     const st = env.store({ journalRecover: 'report' });
-    const { err } = quiet(() => st.transaction(['ledger'], (tx: any) => expect(tx.get('ledger')).toEqual(OLD.ledger)));
-    expect(err).toMatch(/journal/);
+    let ran = false;
+    expect(() =>
+      st.transaction(['ledger'], (tx: any) => {
+        ran = true;
+        tx.put('ledger', { version: 1, decisions: {} });
+      }),
+    ).toThrow(/journal .* store\.journalRecover is report.*doctor --fix/s);
+    expect(ran).toBe(false);
+    expect(both(env)).toEqual(OLD);
     expect(env.listIn('.journal').length).toBe(1);
     expect(st.recover().results[0].outcome).toBe('forward');
     expect(both(env)).toEqual(NEW);
     clean(env);
+  });
+
+  it("pending 'refuse' (a caller that computed its writes before the lock-time recovery): refuses, never recovers in between", () => {
+    const env = seeded();
+    expect(() => commitBoth(env.crashStore({ op: 'rename', match: JOURNAL_TMP, after: true }))).toThrow(/ECRASH/);
+    env.restart();
+    const st = env.store();
+    expect(() => st.transaction(['plans'], (tx: any) => tx.put('plans', { entries: [] }), { pending: 'refuse' })).toThrow(/doctor --fix/);
+    expect(both(env)).toEqual(OLD);
+    expect(env.listIn('.journal').length).toBe(1);
+  });
+
+  it('the commit order comes from the register: an archive and the owner log before the queue that drops or records', () => {
+    const env = make();
+    env.write('queue.json', JSON.stringify({ tasks: [{ id: 'D-1' }] }));
+    const st0 = env.crashStore({ op: 'rename', match: TMP_OF('queue-archive.json'), after: true });
+    expect(() =>
+      st0.transaction(['queue', 'queue-archive', 'owner-log'], (tx: any) => {
+        tx.put('queue', { tasks: [] });
+        tx.put('queue-archive', { version: 1, tasks: [{ id: 'D-1' }] });
+        tx.put('owner-log', { version: 1, since: null, entries: [] });
+      }),
+    ).toThrow(/ECRASH/);
+    env.restart();
+    const journal = JSON.parse(env.read(`.journal/${env.listIn('.journal').find((n) => n.endsWith('.json'))}`)!);
+    expect(journal.targets.map((t: any) => t.family)).toEqual(['owner-log', 'queue-archive', 'queue']);
+    // The archive is in place and the queue still holds D-1: in one file or both, never in neither.
+    expect(JSON.parse(env.read('queue.json')!).tasks).toEqual([{ id: 'D-1' }]);
+    expect(JSON.parse(env.read('queue-archive.json')!).tasks).toEqual([{ id: 'D-1' }]);
+    expect(env.store().recover().results[0].outcome).toBe('forward');
+    expect(JSON.parse(env.read('queue.json')!).tasks).toEqual([]);
+    // The handover note lets go of its lines only after the month file has them.
+    env.write('handover-ongoing.md', 'a\nb\n');
+    const st1 = env.crashStore({ op: 'rename', match: TMP_OF('2026-11.md'), after: true });
+    expect(() =>
+      st1.transaction(['handover', 'handover-archive'], (tx: any) => {
+        tx.put('handover', 'a\n');
+        tx.append('handover-archive', '2026-11.md', 'b\n');
+      }),
+    ).toThrow(/ECRASH/);
+    env.restart();
+    expect(env.read('handover-ongoing.md')).toBe('a\nb\n');
+    expect(env.read('handover-archive/2026-11.md')).toBe('b\n');
   });
 
   it('append, remove and a collection member by id', () => {

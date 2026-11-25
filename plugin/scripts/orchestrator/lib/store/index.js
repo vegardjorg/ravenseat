@@ -426,9 +426,10 @@ function openStore({ folder, tree = null, lockWaitMs, now, pidAlive, io = null, 
   }
 
   /**
-   * transaction(families, fn, { snapshots }): writes several families as one unit. Takes the families' locks in
-   * LOCK_ORDER, recovers a journal left behind on them (journalRecover auto; report only says so), runs fn(tx), and
-   * commits what fn staged. fn MUST BE PURE: it may only read through tx and stage writes, because a database backend may
+   * transaction(families, fn, { snapshots, pending }): writes several families as one unit. Takes the families' locks
+   * in LOCK_ORDER, finishes a journal left behind on them first or refuses (settlePending: journalRecover report, or
+   * pending 'refuse', refuses with ESTOREJOURNAL before fn runs), runs fn(tx), and commits what fn staged in the
+   * register's commit order (commitFirst families first). fn MUST BE PURE: it may only read through tx and stage writes, because a database backend may
    * run it again; a throw inside it writes nothing. Returns what fn returns.
    *   tx.get(fam, id?)            the value (a staged one first), with the family's empty value and onCorrupt rule
    *   tx.text(fam, id?)           the text, or null when missing
@@ -444,22 +445,51 @@ function openStore({ folder, tree = null, lockWaitMs, now, pidAlive, io = null, 
     for (const n of fams) FAM.family(n);
     if (typeof fn !== 'function') throw new Error('transaction needs a function');
     return underLocks(kindsOf(fams), () => {
-      const pending = journalFiles().length ? journals().filter((j) => j.families.some((n) => fams.includes(n))) : [];
-      if (pending.length) {
-        if (recoverMode === 'auto') sayRecovered(recover(fams).results);
-        else
-          for (const j of pending)
-            console.error(
-              `WARNING: journal ${j.id} (${j.families.join(', ')}) is left by a store commit that stopped part way; ` +
-                'store.journalRecover is report, so it is not finished now. Run ravenseat doctor, then ravenseat doctor --fix.',
-            );
-      }
+      settlePending(fams, o);
       const staged = new Map();
       const tx = stager(fams, staged);
       const out = fn(tx);
       commit(fams, staged, o);
       return out;
     });
+  }
+
+  /**
+   * A journal left behind on these families, before a transaction writes them (fix round jrn-r1, M1): it is finished
+   * first (journalRecover auto), or the transaction REFUSES. It never writes past a journal that can still be finished:
+   * that write would read the half state, and the journal's renames could later land over it, or find their targets
+   * changed and stop for good (a task the commit archived then in neither file). Only a journal whose recovery can no
+   * longer finish anything (plan failed: kept for the owner) lets the write go on, with a warning.
+   *   o.pending 'refuse': never recover here, only refuse. For a caller that computed its writes from reads made before
+   *   the transaction (cli/context.mjs write: it recovers right after it takes the queue lock, before it reads), so a
+   *   recovery in between would be written over with content computed from the half state.
+   */
+  function settlePending(fams, o) {
+    if (!journalFiles().length) return;
+    const on = () => journals().filter((j) => j.families.some((n) => fams.includes(n)));
+    let pending = on();
+    if (!pending.length) return;
+    const recoverHere = recoverMode === 'auto' && o.pending !== 'refuse';
+    if (recoverHere) {
+      sayRecovered(recover(fams).results);
+      pending = on();
+    } else if (recoverMode === 'report')
+      for (const j of pending.filter((x) => x.plan === 'failed'))
+        console.error(`WARNING: journal ${j.id} (${j.families.join(', ')}) is left by a store commit that stopped part way and cannot be finished (${j.reason}); ravenseat doctor shows it.`);
+    const open = pending.filter((j) => j.plan !== 'failed' && j.plan !== 'done');
+    if (!open.length) return;
+    const why =
+      recoverMode === 'report'
+        ? 'store.journalRecover is report, so it is not finished now'
+        : 'its recovery did not get through yet';
+    const list = open.map((j) => `journal ${j.id} (${j.families.join(', ')})`).join(', ');
+    throw Object.assign(
+      new Error(
+        `${list} is left by a store commit that stopped part way, and ${why}. Nothing is written: this write would go ` +
+          'past it. Run ravenseat doctor --fix to finish it (ravenseat doctor shows what it does), then run the command again.',
+      ),
+      { code: 'ESTOREJOURNAL' },
+    );
   }
 
   /** The tx object of one transaction: reads see the staged writes, writes only stage. */
@@ -526,7 +556,10 @@ function openStore({ folder, tree = null, lockWaitMs, now, pidAlive, io = null, 
     if (!staged.size) return;
     const txid = `${now()}-${pid}-${crypto.randomBytes(4).toString('hex')}`;
     const file = path.join(journalDir, `${txid}.json`);
-    const list = [...staged.values()].sort((x, y) => x.family.localeCompare(y.family) || x.path.localeCompare(y.path));
+    // The commit order: the families marked commitFirst in the register (an archive, the owner log) before the rest,
+    // then by family name and path. The journal keeps this order, and a recovery renames in it too.
+    const rank = (s) => (FAM.family(s.family).commitFirst ? 0 : 1);
+    const list = [...staged.values()].sort((x, y) => rank(x) - rank(y) || x.family.localeCompare(y.family) || x.path.localeCompare(y.path));
     const targets = [];
     try {
       for (const s of list) {

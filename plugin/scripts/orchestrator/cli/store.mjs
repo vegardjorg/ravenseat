@@ -68,7 +68,7 @@ export function storeJournalRows(warn) {
       if (j.plan === 'failed')
         return warn('store journal', `${what}; it cannot be finished: ${j.reason}`, `look at the files it names; ${path.relative(FOLDER, j.file)} stays until you remove it (doctor --fix tries again)`);
       const how = j.plan === 'back' ? `the state before it comes back from .prev (${j.reason})` : j.plan === 'forward' ? 'the rest of its renames are made' : 'only the journal is left to remove';
-      return warn('store journal', `${what}; a recovery finishes it: ${how}`, `${CLI} doctor --fix finishes it now (the next command on those families does it too, unless store.journalRecover is report)`);
+      return warn('store journal', `${what}; a recovery finishes it: ${how}`, `${CLI} doctor --fix finishes it now (the next command on those families does it too; with store.journalRecover report, a write to them stops until then)`);
     });
 }
 

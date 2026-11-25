@@ -78,13 +78,19 @@ export function handoverCommand() {
     // One store transaction (step 7): the note and the month files change together or not at all, under the store lock,
     // and a commit of them that stopped part way is finished first (the note is then read again inside it). Before, a
     // crash after the appends left the lines in both files, and the next run appended them a second time.
-    ST.openStore({ folder: FOLDER, journalRecover: CONFIG.store?.journalRecover }).transaction(['handover', 'handover-archive'], (tx) => {
-      text = tx.text('handover') ?? text;
-      r = HO.archive(text, now);
-      if (r.moved <= 0) return;
-      for (const m of Object.keys(r.archive)) tx.append('handover-archive', `${m}.md`, HO.archiveAddition(r.archive[m], now));
-      tx.put('handover', r.keep);
-    });
+    // A journal it cannot finish now (store.journalRecover report) stops it with the way on, never a write past it.
+    try {
+      ST.openStore({ folder: FOLDER, journalRecover: CONFIG.store?.journalRecover }).transaction(['handover', 'handover-archive'], (tx) => {
+        text = tx.text('handover') ?? text;
+        r = HO.archive(text, now);
+        if (r.moved <= 0) return;
+        for (const m of Object.keys(r.archive)) tx.append('handover-archive', `${m}.md`, HO.archiveAddition(r.archive[m], now));
+        tx.put('handover', r.keep);
+      });
+    } catch (e) {
+      if (e?.code === 'ESTOREJOURNAL') die(e.message.replace(/\bravenseat (?=doctor)/g, `${CLI} `));
+      throw e;
+    }
   }
   const months = Object.keys(r.archive).sort();
   const before = text.replace(/\r\n/g, '\n').split('\n').length;

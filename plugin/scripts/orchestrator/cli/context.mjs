@@ -328,7 +328,7 @@ export function queueBranchId() {
 // ---- Lock and storage --------------------------------------------------------------------------------------
 // The store for the families written with the queue (lib/store/index.js transaction, step 7): it uses the queue lock
 // this process holds (outerLocks) instead of waiting on itself. store.journalRecover: auto finishes a commit that stopped
-// part way, report only says so.
+// part way, report only says so (and write() then stops instead of writing past it).
 const QUEUE_STORE = ST.openStore({ folder: FOLDER, outerLocks: { queue: () => held }, journalRecover: CONFIG.store?.journalRecover });
 /** The families the queue lock covers (a journal on them is finished as soon as the lock is held, before any read). */
 const QUEUE_LOCK_FAMILIES = ST.families.all().filter((f) => f.lock === 'queue').map((f) => f.name);
@@ -424,7 +424,11 @@ export function parallelWarning() {
 // (lib/store/index.js): the three are computed first, under the queue lock, and the transaction only stages them. A
 // crash or a full disk in between used to leave queue.json written without its owner rows recorded (receive and merge
 // then stop on rows the queue wrote itself); now a commit that stopped part way is finished by the next command that
-// takes the queue lock (finishStoppedCommits), or by doctor --fix.
+// takes the queue lock (finishStoppedCommits), or by doctor --fix. The commit renames the archive and the owner log
+// before queue.json (commitFirst in lib/store/families.js), so a stop in between never leaves a task in neither file.
+// A journal still open on these families when this write commits (store.journalRecover report, or a recovery at the
+// lock that did not get through) stops the write with the way on (pending 'refuse', fix round jrn-r1): what is staged
+// here was computed from the half state, so it is never written past the journal, nor over what a recovery just wrote.
 export function write(queue) {
   stopIfLockLost('queue.json');
   queue.changed = new Date().toISOString();
@@ -443,7 +447,12 @@ export function write(queue) {
     tx.put('queue', text);
     if (staged.ownerLog) tx.put('owner-log', staged.ownerLog);
   };
-  QUEUE_STORE.transaction(['owner-log', 'queue', 'queue-archive'], stage, { snapshots: { queue: SNAPSHOT_TIERS } });
+  try {
+    QUEUE_STORE.transaction(['owner-log', 'queue', 'queue-archive'], stage, { snapshots: { queue: SNAPSHOT_TIERS }, pending: 'refuse' });
+  } catch (e) {
+    if (e?.code === 'ESTOREJOURNAL') die(e.message.replace(/\bravenseat (?=doctor)/g, `${CLI} `));
+    throw e;
+  }
 }
 const OL = require('./lib/ownerLog.js');
 // The archive of done tasks (lib/queueArchive.js, history.archiveDoneAfterDays, owner decision B5). Every queue write,
