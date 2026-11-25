@@ -10,7 +10,8 @@
 // approvals.ask): Claude Code's dialog with the path in the reason, a deny in dontAsk and bypassPermissions.
 // It also denies them a write to the main tree's control files (lib/controlFiles.js, controlFiles.guard): queue.config.json,
 // .claude/ (not .claude/worktrees/), CLAUDE*.md, .git/hooks/, .git/config and the plugin's own scripts (this folder).
-// Every denial is one row in the time log (lib/guardLog.js, guardLog.enabled): guard, rule, agent type, task.
+// Every denial is one row in the time log (lib/guardLog.js, guardLog.enabled): guard, rule, agent type, task. The
+// time-out deny too (rule "timeout"), written after the deny is flushed so a failing log never undoes the block.
 // A track (track, track-d) also gets a soft warning, never a denial, for a write the merge guard or receive flags later:
 // a protected path the task does not own, a new skip or focus marker in a test file, a test file that loses its last
 // assertion (lib/writeWarn.js), and with scopeNotes.driftWarn on (off by default) a file outside the task's files and
@@ -37,6 +38,24 @@ if (!PR.queueActive()) process.exit(0);
 // budget (the tests use it); it can never make the guard wait past Claude Code's own limit.
 const BUDGET_MS = Math.min(8000, Math.max(50, Number(process.env.WRITE_GUARD_BUDGET_MS) || 8000));
 let answered = false;
+// The payload once main() has read it (null while stdin is still open): the time-out row names the agent when it can.
+let seenInput = null;
+
+/**
+ * The time-out deny as one guard log row, like every other deny (lib/guardLog.js): guard "write", rule "timeout", the
+ * agent type and task when the payload was read ("unknown" when not), never the path or the content. Called only after
+ * the deny is on its way, and it never throws: a log that cannot be written leaves the block standing.
+ */
+function logTimeout() {
+  try {
+    const GL = require('./lib/guardLog.js');
+    if (seenInput) GL.recordHook({ guard: 'write', rule: 'timeout', decision: 'deny', input: seenInput });
+    else GL.record({ guard: 'write', rule: 'timeout', decision: 'deny', agentType: 'unknown' });
+  } catch {
+    // error-ignored: the row is measurement; the deny stands without it
+  }
+}
+
 const guard = setTimeout(() => {
   if (answered) return;
   answered = true;
@@ -57,11 +76,18 @@ const guard = setTimeout(() => {
     text = JSON.stringify(require('./lib/clients/claude/hookInput.js').deny('PreToolUse', reason));
   } catch {
     // The adapter would not load: exit 2 with the reason on stderr, which also blocks the call (fail-closed).
-    process.stderr.write(reason, () => process.exit(2));
+    process.stderr.write(reason, () => {
+      logTimeout();
+      process.exit(2);
+    });
     return;
   }
   // Exit only once stdout is flushed; if it never flushes, Claude Code's own limit blocks the call (onFailure block).
-  process.stdout.write(text, () => process.exit(0));
+  // The guard log row comes after the deny is flushed, so a slow or failing log can never hold back or undo the block.
+  process.stdout.write(text, () => {
+    logTimeout();
+    process.exit(0);
+  });
 }, BUDGET_MS);
 guard.unref();
 
@@ -83,6 +109,7 @@ async function main() {
   // The hook payload in the core's names and the hook answers (lib/clients/claude/hookInput.js).
   const HK = require('./lib/clients/index.js').clientFor().hooks;
   const input = HK.read(await readIn());
+  seenInput = input;
   const agentType = PR.bareAgentType(input.agent.type);
   // The main session (no agent_id): never denied by the agent rules below, but a direct write to a main tree control
   // file asks (lib/approvalAsk.js, approvals.ask).

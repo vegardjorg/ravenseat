@@ -58,7 +58,7 @@ afterAll(() => {
 });
 
 /** Runs the write guard with stdin left open (a slow path), and resolves with its exit code and stdout. */
-function slowWriteGuard(config: object | null): Promise<{ code: number | null; out: string }> {
+function slowWriteGuard(config: object | null, timeLog?: string, head?: string): Promise<{ code: number | null; out: string }> {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-wg-slow-'));
   temporary.push(root);
   const folder = path.join(root, 'q');
@@ -66,13 +66,14 @@ function slowWriteGuard(config: object | null): Promise<{ code: number | null; o
   fs.writeFileSync(path.join(folder, 'queue.json'), JSON.stringify({ tasks: [] }));
   const configFile = path.join(root, 'queue.config.json');
   if (config) fs.writeFileSync(configFile, JSON.stringify(config));
-  const env = { ...process.env, QUEUE_ROOT: root, QUEUE_FOLDER: folder, QUEUE_CONFIG: configFile, WRITE_GUARD_BUDGET_MS: '300' };
+  const env = { ...process.env, QUEUE_ROOT: root, QUEUE_FOLDER: folder, QUEUE_CONFIG: configFile, WRITE_GUARD_BUDGET_MS: '300' } as Record<string, string | undefined>;
+  if (timeLog) env.QUEUE_TIME_LOG = timeLog;
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [path.join(ORCH, 'hook-write-guard.mjs')], { cwd: root, env, stdio: ['pipe', 'pipe', 'ignore'] });
     let out = '';
     child.stdout.on('data', (d) => (out += d));
     // Half a payload and no end: the guard waits for the rest, as on a stalled pipe or a machine under load.
-    child.stdin.write('{"agent_type":"track","tool_name":"Write",');
+    child.stdin.write(head ?? '{"agent_type":"track","tool_name":"Write",');
     const stop = setTimeout(() => child.kill(), 20000);
     child.on('exit', (code) => {
       clearTimeout(stop);
@@ -89,6 +90,30 @@ describe('the write guard on a slow path', () => {
     expect(answer.permissionDecision).toBe('deny');
     expect(answer.permissionDecisionReason).toMatch(/did not finish/);
     expect(answer.permissionDecisionReason).toMatch(/again/);
+  }, 30000);
+
+  it('the time-out deny writes one guard log row (rule timeout), never the path or the content', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-wg-log-'));
+    temporary.push(dir);
+    const log = path.join(dir, 'time-log.jsonl');
+    // A fake secret built at run time, in the half payload: it must never reach the row.
+    const secret = ['tok', 'en', '-', 'x'.repeat(6), '9'].join('');
+    const head = `{"agent_type":"track","tool_name":"Write","tool_input":{"file_path":"/x/${secret}.env","content":"${secret}"},`;
+    const r = await slowWriteGuard(null, log, head);
+    expect(JSON.parse(r.out).hookSpecificOutput.permissionDecision).toBe('deny');
+    const rows = fs.readFileSync(log, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ wave: 'guard', event: 'guard-deny', guard: 'write', rule: 'timeout' });
+    expect(JSON.stringify(rows)).not.toContain(secret);
+  }, 30000);
+
+  it('still denies when the guard log row cannot be written', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ravenseat-wg-log-'));
+    temporary.push(dir);
+    // The log path is a folder: the append fails, the block must stand.
+    const r = await slowWriteGuard(null, dir);
+    expect(r.code).toBe(0);
+    expect(JSON.parse(r.out).hookSpecificOutput.permissionDecision).toBe('deny');
   }, 30000);
 
   it('gives no answer with guards.onHookFailure allow', async () => {
