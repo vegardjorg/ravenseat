@@ -136,6 +136,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **CI: rerunning a failed Windows shard turns the shard check green again.** Each shard report carries its run attempt, and the check reads only the newest one per shard.
 - **No more hangs on a silent remote or tool: `cloud done`'s fetch, the cloud branch delete, `gh` in gates and the CI watch, and `qa auto --run` now have time limits.** QA uses `gates.timeoutSec` (null = `baseGate.timeoutSec`, 900 s).
 - **`undo <id>` finds the merge on a base log over 1 MB, and says when the log cannot be read instead of "merge not found".**
+- **receive tells a file missing at a commit from a failed `git show` (bad object, time-out): the failure is a WARN line naming the file, never "missing".** No setting: a bug fix with no friction.
 - **Dragging a Timeline bar with the mouse no longer selects text: a ghost follows the pointer and the landing row, insertion mark and place are shown.** Rides on `board.timelineDrag`, no new setting.
 - **The owner-question examples in the add-to-queue, review and plans skills carry the card fields, so a copied example is no longer refused.** No setting: they are examples.
 - Board settings: the "How to use the board" and "Keyboard shortcuts" buttons have a gap between them.

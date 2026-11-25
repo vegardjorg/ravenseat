@@ -19,7 +19,7 @@ import { spawnSync } from 'node:child_process';
 import {
   BASE, CLI, CONFIG, die, edit, FOLDER, git, GIT_ROOT, L, pulseCursor, read, require, TIME_LOG, val,
 } from '../context.mjs';
-import { controlWhere, gitLarge, logTime, readTimeLog, syncAttempts } from '../tracks.mjs';
+import { controlWhere, gitLarge, gitShowAt, logTime, readTimeLog, syncAttempts } from '../tracks.mjs';
 import { catalogRules, stackChoicesNow } from '../catalog.mjs';
 import { brokenGate, doneCommandRed, GE_MODE, receiveGates, runDoneCommand, trackWordGates } from './evidence.mjs';
 
@@ -291,7 +291,9 @@ export function scopeNotesFor(o, { branch, base, diff, changedNames, all = false
       readFile: (side, p) => {
         const rev = side === 'base' ? base : branch;
         if (!rev) return null;
-        const t = gitLarge(['show', `${rev}:${p}`]);
+        // null only when the path is not in the commit; a git failure throws (lib/gitShow.js), and scopeNotes skips
+        // that part with a line in its errors instead of reading the file as missing.
+        const t = gitShowAt(rev, p);
         return t == null ? null : String(t);
       },
     };

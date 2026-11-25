@@ -341,6 +341,13 @@ export function gitLarge(args, { buffer = false } = {}) {
     return null;
   }
 }
+/**
+ * One file at a commit (lib/gitShow.js): the text (a Buffer with buffer), null when the commit is fine and the path is
+ * not in it, and a thrown GitReadError for any other git failure (a bad object, a time-out), never read as missing.
+ */
+export function gitShowAt(rev, filePath, { buffer = false } = {}) {
+  return require('./lib/gitShow.js').showAt(rev, filePath, { cwd: GIT_ROOT, buffer });
+}
 /** The orchestrator's scratchpad: --scratchpad, otherwise QUEUE_SCRATCHPAD, otherwise `reserve` (saved on the task). */
 export function scratchpadFor(reserve = null) {
   const s = val('--scratchpad') ?? process.env.QUEUE_SCRATCHPAD ?? reserve;
