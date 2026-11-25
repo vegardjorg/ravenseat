@@ -78,8 +78,7 @@ export const { tree: ROOT, main: MAIN_TREE } = require('./lib/projectRoot.js').r
 // The command to write in hints: `ravenseat` (plugin) or `node scripts/orchestrator/ravenseat.mjs` (vendored install).
 export const CLI = require('./lib/projectRoot.js').cliCommand();
 export const FOLDER = KK.dataFolder();
-// queue.json from the storage register (family 'queue'), as ownerKeysOnDisk and every reader of FILE expect.
-export const FILE = path.join(FOLDER, require('./lib/store/families.js').family('queue').file);
+export const FILE = path.join(FOLDER, 'queue.json');
 export const LOCK = path.join(FOLDER, '.lockState');
 // The "Follow up" entries (queue.mjs follow; the rules in lib/queueFollow.js) and their reports.
 export const FOLLOW_FILE = path.join(FOLDER, 'follow.json');
