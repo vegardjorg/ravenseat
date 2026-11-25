@@ -137,7 +137,8 @@ const STANDARD = Object.freeze({
   // The inspection queue (lib/inspection.js, `ravenseat inspection`): the same failure signature (lib/failureSignature.js)
   // in at least minRepeats incidents within windowDays days becomes ONE proposal to build a guard. mode on or off.
   // registryFile = the tracked guard registry (lib/guardRegistry.js), relative to the project root.
-  inspection: { mode: 'on', minRepeats: 2, windowDays: 30, registryFile: '.ravenseat/guards.json' },
+  // The default path comes from the storage register (lib/store/families.js, family 'guards').
+  inspection: { mode: 'on', minRepeats: 2, windowDays: 30, registryFile: require('./store/families.js').family('guards').file },
   // The repeat count on class and area over the finding log (lib/findingRepeats.js, step 7 of the finding format).
   // repeats: the count itself (plain JS, no output of its own). windowDays, areaRepeats, projectRepeats: due at 2
   // incidents in one area or 3 across the project within 90 days (an untested fix weighs twice). guardFailedMarker:

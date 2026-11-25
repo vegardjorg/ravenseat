@@ -39,8 +39,8 @@ const fs = require('node:fs');
 const FB = require('./store/fileBackend.js');
 const path = require('node:path');
 
-/** The log's file name in the data folder. */
-const FILE_NAME = 'owner-log.json';
+/** The log's file name in the data folder, from the register (family 'owner-log'). */
+const FILE_NAME = require('./store/families.js').family('owner-log').file;
 /** Entries kept (the oldest dropped first; an old task's row dropped here is missing again and asks for an accept). */
 const MAX_ENTRIES = 20000;
 /** Who is the owner in a row's `by` (the board calls the CLI with --by theBoard). */

@@ -16,7 +16,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { a, BASE, branchFor, branchInfo, CLI, CONFIG, die, edit, git, HELP, L, MAIN_TREE, MIGR, positional, read, require, val } from '../context.mjs';
-import { attemptRows, gitLarge, lastTrackReply, missionMark, scratchpadFor, taskAgents, trackReport } from '../tracks.mjs';
+import { attemptRows, gitLarge, gitShowAt, lastTrackReply, missionMark, scratchpadFor, taskAgents, trackReport } from '../tracks.mjs';
 import { notBuildingLines } from '../notBuilding.mjs';
 import { stopOnDrift, stopOnOwnerRows } from './evidence.mjs';
 import {
@@ -285,10 +285,24 @@ export function receivePackage({
     }
   }
   const copied = [];
+  // Reads at a commit that git failed (lib/gitShow.js): a bad object or a time-out is never read as a missing file. One
+  // WARN line below names them, so the owner knows a check ran without that file.
+  const readErrors = [];
+  const noteReadError = (e) => {
+    if (e?.name !== 'GitReadError') throw e;
+    if (readErrors.length < 20) readErrors.push(e);
+  };
   for (const filePath of shown.copy) {
-    const content = gitLarge(['show', `${branch}:${filePath}`], { buffer: true });
+    let content = null;
+    try {
+      content = gitShowAt(branch, filePath, { buffer: true });
+    } catch (e) {
+      noteReadError(e);
+      shown.skipped.push({ path: filePath, reason: `git could not read it from the branch (${e.reason}), not a missing file` });
+      continue;
+    }
     if (content == null) {
-      shown.skipped.push({ path: filePath, reason: 'could not be read from the branch' });
+      shown.skipped.push({ path: filePath, reason: 'not in the branch tip' });
       continue;
     }
     const templateFile = path.join(folder, 'files', ...filePath.split('/'));
@@ -306,7 +320,16 @@ export function receivePackage({
     CONFIG.testWeakening?.enabled === false
       ? null
       : TW.assess(diff, CONFIG.testWeakening, {
-          read: (side, p) => (side === 'base' && !weakBase ? null : git(['show', `${side === 'base' ? weakBase : branch}:${p}`])),
+          // A git failure throws: testWeakening skips that file (no text, no warning), and the WARN line names it.
+          read: (side, p) => {
+            if (side === 'base' && !weakBase) return null;
+            try {
+              return gitShowAt(side === 'base' ? weakBase : branch, p);
+            } catch (e) {
+              noteReadError(e);
+              throw e;
+            }
+          },
         });
   const weakLine = weak && TW.summaryLine(weak);
   if (weakLine) console.log(weakLine);
@@ -323,7 +346,16 @@ export function receivePackage({
             diff,
             migrations: MIGR,
             testPaths: CONFIG.testWeakening?.testPaths ?? [],
-            read: (side, p) => (side === 'base' && !weakBase ? null : git(['show', `${side === 'base' ? weakBase : branch}:${p}`])),
+            // A git failure reads as "cannot be told" (null: the item says "<file> changed"), and the WARN line names it.
+            read: (side, p) => {
+              if (side === 'base' && !weakBase) return null;
+              try {
+                return gitShowAt(side === 'base' ? weakBase : branch, p);
+              } catch (e) {
+                noteReadError(e);
+                return null;
+              }
+            },
             setup: CONFIG.decisionSignals ?? {},
             report: {
               assumptions,
@@ -335,6 +367,12 @@ export function receivePackage({
         );
   const signalLine = DSIG.receiveLine(id, signalRecord);
   if (signalLine) console.log(signalLine);
+  if (readErrors.length)
+    console.log(
+      `WARN git could not read ${readErrors.length} file(s) at a commit, so the checks above ran without them (an error, ` +
+        `not a missing file): ${readErrors.map((e) => `${e.path} (${e.reason})`).join('; ')}. Check with \`git show <commit>:<path>\` ` +
+        'and receive again.',
+    );
   // One time log row per delivery (a second receive of the same tip adds none), read before the edit below replaces it.
   const signalNew = signalRecord && DSIG.isNewDelivery(o0.decision_signals ?? null, signalRecord);
   // Door and blast radius (lib/mergeDanger.js, MS-1): the track's two lines, from the report, else the reply. One DOOR

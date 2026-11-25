@@ -48,7 +48,8 @@ const DAY_MS = 86_400_000;
 const PULSE_EVERY_MS = 60 * 60_000;
 
 const setup = () => I.setupOf(CONFIG);
-const registryRel = () => String(CONFIG.inspection?.registryFile || GR.DEFAULT_FILE);
+// The register resolves the setting (lib/store/families.js treeFileOf, family 'guards'); its default is GR.DEFAULT_FILE.
+const registryRel = () => String(require('./lib/store/families.js').treeFileOf('guards', CONFIG) || GR.DEFAULT_FILE);
 /**
  * How a gate task ends with `guards add` (lib/knownBugGate.js gateTask record): the command and the registry file the
  * track writes in its worktree, so every gate task is recorded in the registry (0i section 3.7 point 5).
