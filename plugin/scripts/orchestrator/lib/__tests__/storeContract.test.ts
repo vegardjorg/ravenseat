@@ -502,10 +502,56 @@ describe.each([['file', fileEnv], ['memory', memoryEnv]] as const)('store transa
     const listed = st.journals();
     expect(listed.length).toBe(1);
     expect(listed[0]).toMatchObject({ families: ['owner-log', 'plans'], plan: 'failed' });
-    // A later transaction on the same families is never stopped by it.
+    // A later transaction on the same families is never stopped by it, and says nothing: the journal is marked failed
+    // (fix round jrn-r2, L2), so only doctor shows it from now on.
     const { err } = quiet(() => st.transaction(['plans'], (tx: any) => tx.put('plans', NEW.plans)));
-    expect(err).toMatch(/could not be finished/);
+    expect(err).not.toMatch(/could not be finished/);
     expect(JSON.parse(env.read('plans.json')!)).toEqual(NEW.plans);
+  });
+
+  // Fix round jrn-r2, L2: a failed journal was worked out again at every lock take (the targets hashed, a warning), and
+  // a target put back to its bytes from before (a snapshot restore) flipped it back to forward: the stale tmp file was
+  // renamed over the restore.
+  it('a journal its recovery cannot finish is marked failed and stays failed; drop sets it aside, never deletes', () => {
+    const env = seeded();
+    expect(() => commitBoth(env.crashStore({ op: 'rename', match: JOURNAL_TMP, after: true }))).toThrow(/ECRASH/);
+    env.restart();
+    const restore = env.read('plans.json')!;
+    env.write('plans.json', JSON.stringify({ entries: [{ id: 'PL-LATER' }] }));
+    const st = env.store();
+    const [file] = env.listIn('.journal').filter((n) => n.endsWith('.json'));
+    const id = file.replace(/\.json$/, '');
+    expect(st.recover().results.map((x: any) => x.outcome)).toEqual(['failed']);
+    const journal = JSON.parse(env.read(`.journal/${file}`)!);
+    expect(journal.failed.reason).toMatch(/plans\.json was changed by a later write/);
+    expect(typeof journal.failed.at).toBe('string');
+    // The owner puts plans.json back to its bytes from before the commit: the journal stays failed, nothing renamed.
+    env.write('plans.json', restore);
+    expect(st.recover().results).toEqual([]);
+    expect(env.read('plans.json')).toBe(restore);
+    expect(st.journals()).toMatchObject([{ id, plan: 'failed', marked: true }]);
+    const { err } = quiet(() => st.transaction(['ledger'], (tx: any) => tx.put('ledger', NEW.ledger)));
+    expect(err).toBe('');
+    // An open journal is never dropped; a failed one moves to .journal/failed/ with the tmp files it names.
+    expect(st.dropJournal('no-such-id')).toMatchObject({ ok: false });
+    const tmps = journal.targets.map((t: any) => path.basename(t.tmp));
+    const r = st.dropJournal(id);
+    expect(r).toMatchObject({ ok: true });
+    expect(env.listIn('.journal')).toEqual(['failed']);
+    expect(env.listIn('.journal/failed')).toEqual([file, ...tmps].sort());
+    expect(st.journals()).toEqual([]);
+    expect(tmpLeft(env)).toEqual([]);
+  });
+
+  it('drop refuses a journal a recovery can still finish', () => {
+    const env = seeded();
+    expect(() => commitBoth(env.crashStore({ op: 'rename', match: JOURNAL_TMP, after: true }))).toThrow(/ECRASH/);
+    env.restart();
+    const id = env.listIn('.journal').find((n) => n.endsWith('.json'))!.replace(/\.json$/, '');
+    const r = env.store().dropJournal(id);
+    expect(r).toMatchObject({ ok: false });
+    expect(r.error).toMatch(/doctor --fix/);
+    expect(env.listIn('.journal').filter((n) => n.endsWith('.json')).length).toBe(1);
   });
 
   it('journalRecover report: a transaction on those families refuses (never writes past the journal); recover() finishes it', () => {

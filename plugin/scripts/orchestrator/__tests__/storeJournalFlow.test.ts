@@ -316,5 +316,28 @@ describe('the real queue write, killed at each point of its commit', () => {
     expect(r.code, r.all).toBe(0);
     expect(ids(p.data)).toEqual(['T-9', 'T-2']); // D-1 is archived by this write
     consistent(p.data);
+    // Fix round jrn-r2, L2: the journal is marked failed; nothing tries it again, the write said nothing about it, and
+    // only doctor shows it, with the way to set it aside.
+    expect(r.all).not.toMatch(/store commit/);
+    const id = p.journal()[0].replace(/\.json$/, '');
+    expect(readJson(p.data, `.journal/${id}.json`).failed.reason).toMatch(/queue\.json was changed by a later write/);
+    expect(p.run(['doctor', '--fix']).all).not.toMatch(/doctor --fix: store journal/); // not tried again (its row stays)
+    const d2 = p.run(['doctor']);
+    expect(d2.all).toContain(`store journal drop ${id}`);
+    const drop = p.run(['store', 'journal', 'drop', id]);
+    expect(drop.code, drop.all).toBe(0);
+    expect(p.journal()).toEqual([]);
+    expect(fs.readdirSync(path.join(p.data, '.journal', 'failed'))).toContain(`${id}.json`);
+    expect(p.run(['doctor']).all).not.toMatch(/store journal/);
+  });
+
+  it('store journal drop refuses a journal a recovery can still finish', () => {
+    const p = archiving({ store: { journalRecover: 'report' } });
+    p.run(FIRST, 'journal');
+    const id = p.journal()[0].replace(/\.json$/, '');
+    const r = p.run(['store', 'journal', 'drop', id]);
+    expect(r.code, r.all).not.toBe(0);
+    expect(r.all).toMatch(/doctor --fix finishes it/);
+    expect(p.journal().length).toBe(1);
   });
 });

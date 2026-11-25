@@ -499,6 +499,8 @@
 //                                                                  lib/store/, cli/store.mjs)
 //   node scripts/orchestrator/queue.mjs store sweep --tmp [--dry] [--json]   (removes those orphaned tmp files; --dry lists
 //                                                                  only. Refused from a track worktree)
+//   node scripts/orchestrator/queue.mjs store journal drop <id>   (sets a failed store journal aside in .journal/failed/,
+//                                                                  nothing deleted. Refused from a track worktree)
 //   node scripts/orchestrator/queue.mjs unlock [--force --by owner]   (the queue lock: prints the holder; with both flags
 //                                                                  releases it. Refused from a track worktree; the guard
 //                                                                  denies it to queue agents. lib/queueLock.js)

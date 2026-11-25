@@ -218,9 +218,9 @@ const ROWS = Object.freeze([
   // then stops until doctor --fix (reads go on).
   row('store.journalRecover', 'history', 'choice', 'Finish a stopped store commit',
     'When a command that writes several files as one unit stopped part way (a crash, a kill, a full disk), auto finishes ' +
-    'it or puts the state before it back, the next time a command takes the same lock; report only says so, a write to ' +
+    'it or puts the state before it back, the next time a command takes the same lock; report only says so, a command on ' +
     'those files stops until then, and ' +
-    '`ravenseat doctor --fix` finishes it. Doctor names every journal left behind either way.', { choices: ['auto', 'report'] }),
+    '`ravenseat doctor --fix` finishes it. Doctor names every journal left behind either way; one that cannot be finished is marked failed, never tried again, and `ravenseat store journal drop <id>` sets it aside.', { choices: ['auto', 'report'] }),
   row('metrics.idleGapMin', 'history', 'integer', 'Idle gap (minutes)',
     'A gap longer than this between two transcript entries is idle and not counted as active time.'),
   // Friction: low, a CPU reading twice per sample and one time log row; only while the board runs. Off by default: the

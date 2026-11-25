@@ -17,7 +17,9 @@
 //   st.transaction([famA, famB], tx => ...)    several families written as one unit (step 7, TRANSACTIONS in the code):
 //                                              the families' locks in LOCK_ORDER (queue, then store), writes staged in
 //                                              tx, the commit through <dataFolder>/.journal/<txid>.json. fn must be pure
-//   st.recover(families?) / st.journals()      finishes (or lists, for doctor) a commit that stopped part way
+//   st.recover(families?) / st.journals()      finishes (or lists, for doctor) a commit that stopped part way; one that
+//                                              cannot be finished is marked failed and skipped from then on
+//   st.dropJournal(id)                         sets a failed journal aside in .journal/failed/ (the owner's command)
 //   st.scan()                                  data folder entries the register does not know, and orphaned tmp files
 //   st.sweepTmp({ dry })                       removes the orphaned tmp files (dry: lists only)
 //
@@ -48,6 +50,8 @@ const LOCK_DIR = '.storeLock';
 const LOCK_DIRS = Object.freeze({ queue: '.lockState', store: LOCK_DIR });
 /** The journal folder of transaction() (the 'journal' family). */
 const JOURNAL_DIR = FAM.family('journal').dir;
+/** Where `ravenseat store journal drop` sets a failed journal aside, inside the journal folder (never recovered or swept). */
+const FAILED_DIR = 'failed';
 const sha = (buf) => crypto.createHash('sha256').update(buf).digest('hex');
 /** A tmp file younger than this is left alone even when its pid looks dead (pid reuse, a clock step). */
 const ORPHAN_AGE_MS = 10 * 60_000;
@@ -296,6 +300,13 @@ function openStore({ folder, tree = null, lockWaitMs, now, pidAlive, io = null, 
     } catch (e) {
       return { id: path.basename(file, '.json'), file, families: [], targets: [], plan: 'failed', reason: `the journal cannot be read (${e?.code ?? e?.message ?? e})` };
     }
+    // Marked failed by an earlier recovery (fix round jrn-r2, L2): it stays failed, and nothing is hashed again. A target
+    // put back to its bytes from before (a snapshot restore) never turns it back into a roll forward over that restore.
+    if (j.failed)
+      return {
+        id: j.id ?? path.basename(file, '.json'), file, at: j.at ?? null, pid: j.pid ?? null, families: j.families, targets: j.targets, states: [],
+        plan: 'failed', marked: true, failedAt: j.failed.at ?? null, reason: String(j.failed.reason ?? 'marked failed'),
+      };
     const states = j.targets.map((t) => {
       const cur = hashFile(t.path);
       if (t.op === 'remove') {
@@ -339,7 +350,10 @@ function openStore({ folder, tree = null, lockWaitMs, now, pidAlive, io = null, 
     let a;
     try {
       a = analyse(file);
-      if (a.plan === 'failed') return { ...a, outcome: 'failed' };
+      if (a.plan === 'failed') {
+        if (!a.marked) markFailed(file, a.reason);
+        return { ...a, outcome: 'failed' };
+      }
       if (a.plan === 'forward') a.targets.forEach((t, i) => a.states[i] === 'ready' && applyTarget(t));
       if (a.plan === 'back')
         a.targets.forEach((t, i) => {
@@ -356,6 +370,24 @@ function openStore({ folder, tree = null, lockWaitMs, now, pidAlive, io = null, 
       return { ...a, outcome: a.plan };
     } catch (e) {
       return { ...(a ?? { id: path.basename(file, '.json'), file, families: [] }), outcome: 'failed', reason: `the recovery stopped: ${e?.code ?? e?.message ?? e}` };
+    }
+  }
+
+  /**
+   * Marks a journal its recovery cannot finish (plan failed) as failed, in its own file: { failed: { reason, at } } (fix
+   * round jrn-r2, L2). From then on a recovery skips it without hashing its targets (queue.json is about 12 MB) and
+   * without a warning at every lock take; doctor shows it, doctor --fix leaves it, and the owner sets it aside with
+   * `ravenseat store journal drop <id>` (dropJournal). Only a plan analyse found failed is marked: a recovery that
+   * stopped on an error (a rename Windows refused) is tried again. A journal that cannot be read is never rewritten.
+   */
+  function markFailed(file, reason) {
+    try {
+      const j = JSON.parse(String(f.readFileSync(file, 'utf8')));
+      if (!j || typeof j !== 'object' || j.failed) return;
+      j.failed = { reason, at: new Date(now()).toISOString() };
+      FB.writeText(file, `${JSON.stringify(j, null, 2)}\n`, { fs: f, pid, json: true });
+    } catch {
+      /* left unmarked: the next recovery works it out again */
     }
   }
 
@@ -410,17 +442,21 @@ function openStore({ folder, tree = null, lockWaitMs, now, pidAlive, io = null, 
   /**
    * Recovers the journals left behind (all, or those that share a family with `families`), under the locks of their
    * families. Returns { results: [{ id, file, families, outcome: forward|back|done|failed, reason? }] }. Never throws for
-   * a journal: a failed one is kept, with its reason.
+   * a journal: a failed one is kept, with its reason, and marked failed (markFailed): later recoveries skip it.
    */
   function recover(families = null) {
     const results = [];
     for (const file of journalFiles()) {
       let fams = [];
+      let marked = false;
       try {
-        fams = JSON.parse(String(f.readFileSync(file, 'utf8'))).families ?? [];
+        const j = JSON.parse(String(f.readFileSync(file, 'utf8')));
+        fams = j.families ?? [];
+        marked = !!j.failed;
       } catch {
         fams = [];
       }
+      if (marked) continue; // failed for good (markFailed): only doctor shows it, nothing tries it again
       if (families && !fams.some((n) => families.includes(n))) continue;
       try {
         results.push(underLocks(kindsOf(fams.length ? fams : ['queue']), () => recoverFile(file)));
@@ -479,9 +515,13 @@ function openStore({ folder, tree = null, lockWaitMs, now, pidAlive, io = null, 
     if (recoverHere) {
       sayRecovered(recover(fams).results);
       pending = on();
-    } else if (recoverMode === 'report')
-      for (const j of pending.filter((x) => x.plan === 'failed'))
-        console.error(`WARNING: journal ${j.id} (${j.families.join(', ')}) is left by a store commit that stopped part way and cannot be finished (${j.reason}); ravenseat doctor shows it.`);
+    }
+    // A failed one not marked yet (report, or pending 'refuse': no recovery ran here) is marked now and said once;
+    // a marked one is doctor's alone (fix round jrn-r2, L2).
+    for (const j of pending.filter((x) => x.plan === 'failed' && !x.marked)) {
+      markFailed(j.file, j.reason);
+      console.error(`WARNING: journal ${j.id} (${j.families.join(', ')}) is left by a store commit that stopped part way and cannot be finished (${j.reason}); ravenseat doctor shows it.`);
+    }
     const open = pending.filter((j) => j.plan !== 'failed' && j.plan !== 'done');
     if (!open.length) return;
     const why =
@@ -661,7 +701,9 @@ function openStore({ folder, tree = null, lockWaitMs, now, pidAlive, io = null, 
         const r = rel ? `${rel}/${e.name}` : e.name;
         if (e.isDirectory()) {
           // The lock folders hold tokens, not data; demo/ is a data folder of its own (its own scan).
-          if (depth < SCAN_DEPTH && !(depth === 0 && (e.name === LOCK_DIR || e.name === '.lockState' || e.name === 'demo'))) walk(abs, r, depth + 1);
+          // .journal/failed/ holds what the owner set aside (dropJournal): kept as it is, never an orphan to sweep.
+          const setAside = depth === 1 && rel === JOURNAL_DIR && e.name === FAILED_DIR;
+          if (depth < SCAN_DEPTH && !setAside && !(depth === 0 && (e.name === LOCK_DIR || e.name === '.lockState' || e.name === 'demo'))) walk(abs, r, depth + 1);
           continue;
         }
         if (!FAM.isTmpName(e.name)) continue;
@@ -711,7 +753,40 @@ function openStore({ folder, tree = null, lockWaitMs, now, pidAlive, io = null, 
    */
   const refuseOpen = (families) => settlePending([...new Set(families)].sort(), { pending: 'refuse' });
 
-  return { folder, tree, path: pathOf, readJson, writeJson, update, withLock, nextId, scan, sweepTmp, transaction, recover, journals, refuseOpen };
+  /**
+   * `ravenseat store journal drop <id>` (fix round jrn-r2, L2): sets a FAILED journal aside, on the owner's command,
+   * under the locks of its families. The journal, the tmp files it names (the new content that never landed) and its
+   * removed copies move to <dataFolder>/.journal/failed/: nothing is deleted, and nothing there is recovered or swept.
+   * A journal a recovery can still finish is refused (doctor --fix finishes it). Returns { ok, moved, error? }.
+   */
+  function dropJournal(id) {
+    const file = journalFiles().find((p) => path.basename(p, '.json') === String(id));
+    if (!file) return { ok: false, moved: [], error: `no store journal ${id} in ${journalDir}` };
+    let fams = [];
+    try {
+      fams = JSON.parse(String(f.readFileSync(file, 'utf8'))).families ?? [];
+    } catch {
+      fams = [];
+    }
+    return underLocks(kindsOf(fams.length ? fams : ['queue']), () => {
+      const a = analyse(file);
+      if (a.plan !== 'failed')
+        return { ok: false, moved: [], error: `store journal ${id} can still be finished (${a.plan}): ravenseat doctor --fix finishes it; only a failed journal is set aside` };
+      const failedDir = path.join(journalDir, FAILED_DIR);
+      f.mkdirSync(failedDir, { recursive: true });
+      const moved = [];
+      const move = (p) => {
+        const to = path.join(failedDir, path.basename(p));
+        SF.renameWithRetry(p, to, { fs: f });
+        moved.push(rel(to));
+      };
+      for (const t of a.targets ?? []) for (const p of [t.tmp, t.trash]) if (p && bytesAt(p) !== null) move(p);
+      move(file);
+      return { ok: true, moved };
+    });
+  }
+
+  return { folder, tree, path: pathOf, readJson, writeJson, update, withLock, nextId, scan, sweepTmp, transaction, recover, journals, refuseOpen, dropJournal };
 }
 
 /** "3.2 MB", "12 KB", "512 B". */
