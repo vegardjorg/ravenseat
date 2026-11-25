@@ -5,7 +5,6 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 
 ## Unreleased
 
-- **Commands that write several files as one unit commit them through a journal**: the queue write (queue.json, its archive and the owner log) and `handover archive` (the note and its month files). A crash, kill or full disk midway is finished, or the state before it put back, by the next command that takes the same lock; `ravenseat doctor` names a journal left behind and `doctor --fix` finishes it. A file changed by a later write is never written over: the journal is kept and doctor names the file. The archive and the owner log are renamed before queue.json, and a write never goes past a journal that can still be finished (with `report` it stops until `doctor --fix`). New setting `store.journalRecover` (`auto` by default, or `report`).
 ### Added
 - **Doctor, the pulse check and the Checks tab name processes Ravenseat started that outlived their starter or their time budget, with the stop command, and tracks far over their estimate.** `processGuard.sweep` on, `processGuard.autoKill` `false`, `tracks.overtimeFactor` `2`.
 - **`ravenseat secrets scan [--history]` finds keys already in tracked files or old commits, names file, line, rule and a hash, never the value, and changes nothing.** `secretScan.historyDepth` `200`, `secretScan.rescanDays` `14`.
@@ -160,6 +159,7 @@ All notable changes to Ravenseat (called `cq` up to 0.8.23, and claude-code-queu
 - **Checks: suggestion groups with one card sit side by side and use the width instead of one narrow column.**
 - **A deleted or concurrent `catalog propose` no longer reuses or shares a D-id, concurrent `catalog accept`s keep every record, and two branches never get the same G-id from `guards add`.**
 ### Hardened
+- **The queue write and `handover archive` commit their files through a journal, so a crash midway is finished or put back by the next command.** `store.journalRecover` `auto`; `store journal drop <id>` sets a failed one aside.
 - **Gate, done and base runs register themselves while they run and carry `RAVENSEAT_TRACK`, and can run at below normal priority.** `processGuard.register` on, `processGuard.lowerPriority` off.
 - **The key scan's hash is salted per data folder, so a short password cannot be guessed back from `secret-scan.json`, and a false alarm stays set aside by that hash.**
 - **Every atomic write retries a rename Windows refuses for a moment, not only queue.json.** A guard test keeps new raw renames out.
